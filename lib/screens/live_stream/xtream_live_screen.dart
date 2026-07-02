@@ -803,6 +803,9 @@ class _XtreamLiveScreenState extends State<XtreamLiveScreen>
         'XtreamLiveScreen: Returned from fullscreen, resuming preview and EPG',
       );
       if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) FocusScope.of(context).requestFocus();
+        });
         if (_focusedChannel != null) {
           _fetchEpg(_focusedChannel!);
         }

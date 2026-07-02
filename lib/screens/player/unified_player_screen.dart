@@ -54,6 +54,13 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
   Timer? _sideSlidersTimer;
   int _lastHistorySaveSecond = -1;
   String? _lastOverlayState;
+  final FocusNode _playerFocusNode = FocusNode(debugLabel: 'fullscreenPlayer');
+  final FocusNode _playPauseFocusNode = FocusNode(
+    debugLabel: 'fullscreenPlayPause',
+  );
+  final FocusScopeNode _controlsFocusScope = FocusScopeNode(
+    debugLabel: 'fullscreenControls',
+  );
 
   @override
   void initState() {
@@ -71,6 +78,11 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     _startControlsTimer();
     _checkFavorite();
     _loadInitialSettings();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _playerFocusNode.requestFocus();
+    });
+    HardwareKeyboard.instance.addHandler(_handleGlobalFullscreenKeyEvent);
   }
 
   Future<void> _loadInitialSettings() async {
@@ -265,7 +277,10 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
   void _startControlsTimer() {
     _controlsTimer?.cancel();
     _controlsTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted && _playerController.isPlaying && _showControls) {
+      if (mounted &&
+          _playerController.isPlaying &&
+          _showControls &&
+          !_controlsFocusScope.hasFocus) {
         setState(() {
           _showControls = false;
         });
@@ -279,9 +294,11 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
       _showControls = !_showControls;
       if (_showControls) {
         _showChannelList = false;
+        _focusPlayPause();
         _startControlsTimer();
       } else {
         _controlsTimer?.cancel();
+        _playerFocusNode.requestFocus();
       }
     });
   }
@@ -303,6 +320,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
         _showControls = true;
         _showChannelList = false;
       });
+      _focusPlayPause();
     }
     _startControlsTimer();
   }
@@ -313,6 +331,23 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
         _showControls = false;
       });
       _controlsTimer?.cancel();
+      _playerFocusNode.requestFocus();
+    }
+  }
+
+  void _focusPlayPause() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_showControls) return;
+      _playPauseFocusNode.requestFocus();
+    });
+  }
+
+  void _exitFullscreen() {
+    if (!mounted) return;
+    debugPrint('UnifiedPlayer: Exiting fullscreen');
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
     }
   }
 
@@ -389,6 +424,121 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     _showControlsTemporarily();
   }
 
+  bool _handleGlobalFullscreenKeyEvent(KeyEvent event) {
+    return _handleFullscreenKey(event) == KeyEventResult.handled;
+  }
+
+  KeyEventResult _handleFullscreenKeyEvent(FocusNode node, KeyEvent event) {
+    return _handleFullscreenKey(event);
+  }
+
+  KeyEventResult _handleFullscreenKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final key = event.logicalKey;
+    debugPrint('UnifiedPlayer Key: ${key.keyLabel} (${key.keyId})');
+
+    final isBack =
+        key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.goBack ||
+        key == LogicalKeyboardKey.browserBack;
+    final isSelect =
+        key == LogicalKeyboardKey.select ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.gameButtonA;
+    final focusedChild =
+        _showControls &&
+        _controlsFocusScope.hasFocus &&
+        !_playerFocusNode.hasPrimaryFocus;
+
+    if (isBack) {
+      if (_showChannelList) {
+        setState(() => _showChannelList = false);
+        _showControlsTemporarily();
+        return KeyEventResult.handled;
+      }
+      _exitFullscreen();
+      return KeyEventResult.handled;
+    }
+
+    if (isSelect) {
+      if (!_showControls) {
+        _showControlsTemporarily();
+        return KeyEventResult.handled;
+      }
+      if (focusedChild) return KeyEventResult.ignored;
+      _togglePlayPause();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.mediaPlayPause) {
+      _togglePlayPause();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.mediaRewind) {
+      _seekRelative(-10);
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.mediaFastForward) {
+      _seekRelative(30);
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.channelUp) {
+      _switchChannel(1);
+      _showControlsTemporarily();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.channelDown) {
+      _switchChannel(-1);
+      _showControlsTemporarily();
+      return KeyEventResult.handled;
+    }
+
+    if (!_showControls) {
+      if (key == LogicalKeyboardKey.arrowLeft) {
+        _seekRelative(-10);
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowRight) {
+        _seekRelative(30);
+        return KeyEventResult.handled;
+      }
+      if (key == LogicalKeyboardKey.arrowUp ||
+          key == LogicalKeyboardKey.arrowDown) {
+        _showControlsTemporarily();
+        return KeyEventResult.handled;
+      }
+    }
+
+    if (_showControls &&
+        (key == LogicalKeyboardKey.arrowUp ||
+            key == LogicalKeyboardKey.arrowDown ||
+            key == LogicalKeyboardKey.arrowLeft ||
+            key == LogicalKeyboardKey.arrowRight)) {
+      _startControlsTimer();
+      return KeyEventResult.ignored;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _togglePlayPause() {
+    if (hasError) return;
+    _showControlsTemporarily();
+    if (_playerController.isPlaying) {
+      _playerController.pause();
+    } else {
+      _playerController.play();
+    }
+    _startControlsTimer();
+  }
+
   bool get hasError =>
       _playerController.error != null && !_playerController.isPlaying;
   bool get hasFatalPlaybackError => hasError;
@@ -423,6 +573,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalFullscreenKeyEvent);
     _controlsTimer?.cancel();
     _sideSlidersTimer?.cancel();
     if (_currentPlaybackItem.contentType != ContentType.liveStream) {
@@ -432,6 +583,9 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     if (widget.externalController == null) {
       _playerController.dispose();
     }
+    _playerFocusNode.dispose();
+    _playPauseFocusNode.dispose();
+    _controlsFocusScope.dispose();
     super.dispose();
   }
 
@@ -441,60 +595,32 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: PopScope(
-        canPop: !_showControls && !_showChannelList,
+        canPop: !_showChannelList,
         onPopInvokedWithResult: (didPop, result) {
           if (didPop) return;
           if (_showChannelList) {
             setState(() => _showChannelList = false);
-            return;
-          }
-          if (_showControls) {
-            _hideControls();
-            return;
+            _showControlsTemporarily();
           }
         },
         child: Shortcuts(
           shortcuts: const {
-            SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-            SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-            SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
             SingleActivator(LogicalKeyboardKey.space): _PlayPauseIntent(),
             SingleActivator(LogicalKeyboardKey.keyK): _PlayPauseIntent(),
             SingleActivator(LogicalKeyboardKey.keyJ): _SeekBackIntent(),
             SingleActivator(LogicalKeyboardKey.keyL): _SeekForwardIntent(),
-            SingleActivator(LogicalKeyboardKey.mediaPlayPause):
-                _PlayPauseIntent(),
             SingleActivator(LogicalKeyboardKey.mediaPlay): _PlayPauseIntent(),
             SingleActivator(LogicalKeyboardKey.mediaPause): _PlayPauseIntent(),
-            SingleActivator(LogicalKeyboardKey.mediaRewind): _SeekBackIntent(),
-            SingleActivator(LogicalKeyboardKey.mediaFastForward):
-                _SeekForwardIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowUp): _ShowControlsIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowDown):
-                _ShowControlsIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowLeft): _SeekBackIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowRight):
-                _SeekForwardIntent(),
-            SingleActivator(LogicalKeyboardKey.channelUp): _ChannelUpIntent(),
-            SingleActivator(LogicalKeyboardKey.channelDown):
-                _ChannelDownIntent(),
-            SingleActivator(LogicalKeyboardKey.escape): _HideControlsIntent(),
           },
           child: Actions(
             actions: {
               ActivateIntent: CallbackAction<ActivateIntent>(
                 onInvoke: (_) {
                   if (hasError) return null;
-                  if (_showChannelList) return null;
                   if (!_showControls) {
                     _showControlsTemporarily();
                   } else {
-                    if (_playerController.isPlaying) {
-                      _playerController.pause();
-                    } else {
-                      _playerController.play();
-                    }
-                    _startControlsTimer();
+                    _togglePlayPause();
                   }
                   return null;
                 },
@@ -502,12 +628,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
               _PlayPauseIntent: CallbackAction<_PlayPauseIntent>(
                 onInvoke: (_) {
                   if (hasError) return null;
-                  _showControlsTemporarily();
-                  if (_playerController.isPlaying) {
-                    _playerController.pause();
-                  } else {
-                    _playerController.play();
-                  }
+                  _togglePlayPause();
                   return null;
                 },
               ),
@@ -554,94 +675,93 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
                 },
               ),
             },
-            child: Focus(
-              autofocus: true,
-              onKeyEvent: (node, event) {
-                if (event is KeyDownEvent) {
-                  _showControlsTemporarily();
-                }
-                return KeyEventResult.ignored;
-              },
-              child: Stack(
-                children: [
-                  // VIDEO LAYER (Always visible)
-                  Positioned.fill(
-                    child: MouseRegion(
-                      onHover: (_) => _showControlsTemporarily(),
-                      child: GestureDetector(
-                        onTap: _toggleControls,
-                        onDoubleTap: _toggleDesktopFullscreen,
-                        behavior: HitTestBehavior.opaque,
-                        child: _playerController.buildPlayerView(context),
-                      ),
-                    ),
-                  ),
-
-                  if (_overlayState == 'connecting' ||
-                      _overlayState == 'buffering' ||
-                      _overlayState == 'buffering-video')
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(
-                            color: Color(0xFFC12CFF),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            _overlayState == 'connecting'
-                                ? 'Connecting...'
-                                : 'Buffering Video...',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  if (hasFatalPlaybackError) _buildErrorOverlay(),
-
-                  // Sidebar Sliders - TiviMate style: only when adjusting
-                  if (_showSideSliders && !hasFatalPlaybackError) ...[
-                    _buildSideSlider(true), // Brightness
-                    _buildSideSlider(false), // Volume
-                  ],
-
-                  // CONTROLS LAYER (Overlay with fade)
-                  AnimatedOpacity(
-                    opacity: (_showControls && !hasFatalPlaybackError)
-                        ? 1.0
-                        : 0.0,
-                    duration: const Duration(milliseconds: 300),
-                    child: IgnorePointer(
-                      ignoring: !_showControls || hasFatalPlaybackError,
-                      child: Stack(
-                        children: [
-                          // Background Dark Overlay
-                          Positioned.fill(
-                            child: GestureDetector(
-                              onTap: _hideControls,
-                              behavior: HitTestBehavior.opaque,
-                              child: Container(
-                                color: Colors.black.withValues(alpha: 0.3),
-                              ),
-                            ),
-                          ),
-                          _buildPremiumUI(),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  if (_showChannelList) _buildChannelListOverlay(),
-                ],
+            child: FocusTraversalGroup(
+              policy: OrderedTraversalPolicy(),
+              child: Focus(
+                focusNode: _playerFocusNode,
+                autofocus: true,
+                onKeyEvent: _handleFullscreenKeyEvent,
+                child: _buildPlayerStack(),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPlayerStack() {
+    return Stack(
+      children: [
+        // VIDEO LAYER (Always visible)
+        Positioned.fill(
+          child: MouseRegion(
+            onHover: (_) => _showControlsTemporarily(),
+            child: GestureDetector(
+              onTap: _toggleControls,
+              onDoubleTap: _toggleDesktopFullscreen,
+              behavior: HitTestBehavior.opaque,
+              child: _playerController.buildPlayerView(context),
+            ),
+          ),
+        ),
+
+        if (_overlayState == 'connecting' ||
+            _overlayState == 'buffering' ||
+            _overlayState == 'buffering-video')
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(color: Color(0xFFC12CFF)),
+                const SizedBox(height: 12),
+                Text(
+                  _overlayState == 'connecting'
+                      ? 'Connecting...'
+                      : 'Buffering Video...',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        if (hasFatalPlaybackError) _buildErrorOverlay(),
+
+        // Sidebar Sliders - TiviMate style: only when adjusting
+        if (_showSideSliders && !hasFatalPlaybackError) ...[
+          _buildSideSlider(true), // Brightness
+          _buildSideSlider(false), // Volume
+        ],
+
+        // CONTROLS LAYER (Overlay with fade)
+        AnimatedOpacity(
+          opacity: (_showControls && !hasFatalPlaybackError) ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 300),
+          child: IgnorePointer(
+            ignoring: !_showControls || hasFatalPlaybackError,
+            child: Stack(
+              children: [
+                // Background Dark Overlay
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: _hideControls,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.3),
+                    ),
+                  ),
+                ),
+                FocusScope(node: _controlsFocusScope, child: _buildPremiumUI()),
+              ],
+            ),
+          ),
+        ),
+
+        if (_showChannelList) _buildChannelListOverlay(),
+      ],
     );
   }
 
@@ -692,7 +812,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
           _CircleBtn(
             icon: Icons.arrow_back_rounded,
             size: isLargeScreen ? 44 : 36,
-            onTap: () => Navigator.pop(context),
+            onTap: _exitFullscreen,
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -770,13 +890,9 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
               : Icons.play_arrow_rounded,
           size: btnSize,
           isPrimary: true,
+          focusNode: _playPauseFocusNode,
           onTap: () {
-            if (_playerController.isPlaying) {
-              _playerController.pause();
-            } else {
-              _playerController.play();
-            }
-            _startControlsTimer();
+            _togglePlayPause();
           },
         ),
         const SizedBox(width: 32),
@@ -1670,11 +1786,13 @@ class _LargeControlBtn extends StatefulWidget {
   final VoidCallback onTap;
   final double size;
   final bool isPrimary;
+  final FocusNode? focusNode;
   const _LargeControlBtn({
     required this.icon,
     required this.onTap,
     this.size = 64,
     this.isPrimary = false,
+    this.focusNode,
   });
   @override
   State<_LargeControlBtn> createState() => _LargeControlBtnState();
@@ -1684,6 +1802,7 @@ class _LargeControlBtnState extends State<_LargeControlBtn> {
   bool _isFocused = false;
   @override
   Widget build(BuildContext context) => FocusableActionDetector(
+    focusNode: widget.focusNode,
     onFocusChange: (v) => setState(() => _isFocused = v),
     shortcuts: const {
       SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
