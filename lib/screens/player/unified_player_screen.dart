@@ -58,9 +58,34 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
   final FocusNode _playPauseFocusNode = FocusNode(
     debugLabel: 'fullscreenPlayPause',
   );
+  final FocusNode _backFocusNode = FocusNode(debugLabel: 'fullscreenBack');
+  final FocusNode _topFavoriteFocusNode = FocusNode(
+    debugLabel: 'fullscreenTopFavorite',
+  );
+  final FocusNode _moreFocusNode = FocusNode(debugLabel: 'fullscreenMore');
+  final FocusNode _previousFocusNode = FocusNode(
+    debugLabel: 'fullscreenPrevious',
+  );
+  final FocusNode _nextFocusNode = FocusNode(debugLabel: 'fullscreenNext');
+  final FocusNode _channelsFocusNode = FocusNode(
+    debugLabel: 'fullscreenChannels',
+  );
+  final FocusNode _epgFocusNode = FocusNode(debugLabel: 'fullscreenEpg');
+  final FocusNode _subtitlesFocusNode = FocusNode(
+    debugLabel: 'fullscreenSubtitles',
+  );
+  final FocusNode _audioFocusNode = FocusNode(debugLabel: 'fullscreenAudio');
+  final FocusNode _ratioFocusNode = FocusNode(debugLabel: 'fullscreenRatio');
+  final FocusNode _favoriteFocusNode = FocusNode(
+    debugLabel: 'fullscreenFavorite',
+  );
+  final FocusNode _bottomMoreFocusNode = FocusNode(
+    debugLabel: 'fullscreenBottomMore',
+  );
   final FocusScopeNode _controlsFocusScope = FocusScopeNode(
     debugLabel: 'fullscreenControls',
   );
+  double _lastNonZeroVolume = 0.5;
 
   @override
   void initState() {
@@ -90,6 +115,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     if (mounted) {
       setState(() {
         _volume = (vol / 100.0).clamp(0.0, 1.0);
+        if (_volume > 0) _lastNonZeroVolume = _volume;
       });
     }
   }
@@ -284,6 +310,8 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
         setState(() {
           _showControls = false;
         });
+        _controlsFocusScope.unfocus();
+        _playerFocusNode.requestFocus();
       }
     });
   }
@@ -331,6 +359,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
         _showControls = false;
       });
       _controlsTimer?.cancel();
+      _controlsFocusScope.unfocus();
       _playerFocusNode.requestFocus();
     }
   }
@@ -340,6 +369,84 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
       if (!mounted || !_showControls) return;
       _playPauseFocusNode.requestFocus();
     });
+  }
+
+  List<FocusNode> get _overlayFocusNodes {
+    final nodes = <FocusNode>[
+      _backFocusNode,
+      if (_currentPlaybackItem.isLive) _topFavoriteFocusNode,
+      _moreFocusNode,
+      _previousFocusNode,
+      _playPauseFocusNode,
+      _nextFocusNode,
+      _channelsFocusNode,
+      if (_currentPlaybackItem.isLive) _epgFocusNode,
+      _subtitlesFocusNode,
+      _audioFocusNode,
+      _ratioFocusNode,
+      _favoriteFocusNode,
+      _bottomMoreFocusNode,
+    ];
+    return nodes.where((node) => node.context != null).toList();
+  }
+
+  int _focusedOverlayIndex() {
+    final nodes = _overlayFocusNodes;
+    final index = nodes.indexWhere((node) => node.hasFocus);
+    return index == -1 ? nodes.indexOf(_playPauseFocusNode) : index;
+  }
+
+  void _focusOverlayIndex(int index) {
+    final nodes = _overlayFocusNodes;
+    if (nodes.isEmpty) {
+      _playerFocusNode.requestFocus();
+      return;
+    }
+    nodes[index.clamp(0, nodes.length - 1)].requestFocus();
+  }
+
+  void _moveOverlayFocus(int delta) {
+    _showControlsTemporarily();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final nodes = _overlayFocusNodes;
+      if (nodes.isEmpty) return;
+      final current = _focusedOverlayIndex();
+      _focusOverlayIndex((current + delta) % nodes.length);
+    });
+  }
+
+  void _focusUpperOverlay() {
+    _showControlsTemporarily();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_moreFocusNode.context != null) {
+        _moreFocusNode.requestFocus();
+      } else {
+        _backFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _focusLowerOverlay() {
+    _showControlsTemporarily();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_channelsFocusNode.context != null) {
+        _channelsFocusNode.requestFocus();
+      } else {
+        _playPauseFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _toggleMute() {
+    final targetVolume = _volume > 0 ? 0.0 : _lastNonZeroVolume;
+    if (_volume > 0) _lastNonZeroVolume = _volume;
+    setState(() => _volume = targetVolume);
+    _playerController.setVolume(targetVolume * 100);
+    _showSliders();
+    _showControlsTemporarily();
   }
 
   void _exitFullscreen() {
@@ -442,12 +549,19 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
 
     final isBack =
         key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.backspace ||
         key == LogicalKeyboardKey.goBack ||
         key == LogicalKeyboardKey.browserBack;
     final isSelect =
         key == LogicalKeyboardKey.select ||
         key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.space ||
         key == LogicalKeyboardKey.gameButtonA;
+    final isShiftPressed = HardwareKeyboard.instance.logicalKeysPressed.any(
+      (pressed) =>
+          pressed == LogicalKeyboardKey.shiftLeft ||
+          pressed == LogicalKeyboardKey.shiftRight,
+    );
     final focusedChild =
         _showControls &&
         _controlsFocusScope.hasFocus &&
@@ -463,6 +577,43 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
       return KeyEventResult.handled;
     }
 
+    if (key == LogicalKeyboardKey.keyF) {
+      _exitFullscreen();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.keyM) {
+      _toggleMute();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.keyK ||
+        key == LogicalKeyboardKey.mediaPlayPause) {
+      _togglePlayPause();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.keyJ ||
+        key == LogicalKeyboardKey.mediaRewind) {
+      _seekRelative(-10);
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.keyL ||
+        key == LogicalKeyboardKey.mediaFastForward) {
+      _seekRelative(30);
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.tab) {
+      if (!_showControls) {
+        _showControlsTemporarily();
+        return KeyEventResult.handled;
+      }
+      _moveOverlayFocus(isShiftPressed ? -1 : 1);
+      return KeyEventResult.handled;
+    }
+
     if (isSelect) {
       if (!_showControls) {
         _showControlsTemporarily();
@@ -470,21 +621,6 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
       }
       if (focusedChild) return KeyEventResult.ignored;
       _togglePlayPause();
-      return KeyEventResult.handled;
-    }
-
-    if (key == LogicalKeyboardKey.mediaPlayPause) {
-      _togglePlayPause();
-      return KeyEventResult.handled;
-    }
-
-    if (key == LogicalKeyboardKey.mediaRewind) {
-      _seekRelative(-10);
-      return KeyEventResult.handled;
-    }
-
-    if (key == LogicalKeyboardKey.mediaFastForward) {
-      _seekRelative(30);
       return KeyEventResult.handled;
     }
 
@@ -511,18 +647,33 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
       }
       if (key == LogicalKeyboardKey.arrowUp ||
           key == LogicalKeyboardKey.arrowDown) {
-        _showControlsTemporarily();
+        if (key == LogicalKeyboardKey.arrowUp) {
+          _focusUpperOverlay();
+        } else {
+          _focusLowerOverlay();
+        }
         return KeyEventResult.handled;
       }
     }
 
-    if (_showControls &&
-        (key == LogicalKeyboardKey.arrowUp ||
-            key == LogicalKeyboardKey.arrowDown ||
-            key == LogicalKeyboardKey.arrowLeft ||
-            key == LogicalKeyboardKey.arrowRight)) {
-      _startControlsTimer();
-      return KeyEventResult.ignored;
+    if (_showControls && key == LogicalKeyboardKey.arrowLeft) {
+      _moveOverlayFocus(-1);
+      return KeyEventResult.handled;
+    }
+
+    if (_showControls && key == LogicalKeyboardKey.arrowRight) {
+      _moveOverlayFocus(1);
+      return KeyEventResult.handled;
+    }
+
+    if (_showControls && key == LogicalKeyboardKey.arrowUp) {
+      _focusUpperOverlay();
+      return KeyEventResult.handled;
+    }
+
+    if (_showControls && key == LogicalKeyboardKey.arrowDown) {
+      _focusLowerOverlay();
+      return KeyEventResult.handled;
     }
 
     return KeyEventResult.ignored;
@@ -585,6 +736,18 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     }
     _playerFocusNode.dispose();
     _playPauseFocusNode.dispose();
+    _backFocusNode.dispose();
+    _topFavoriteFocusNode.dispose();
+    _moreFocusNode.dispose();
+    _previousFocusNode.dispose();
+    _nextFocusNode.dispose();
+    _channelsFocusNode.dispose();
+    _epgFocusNode.dispose();
+    _subtitlesFocusNode.dispose();
+    _audioFocusNode.dispose();
+    _ratioFocusNode.dispose();
+    _favoriteFocusNode.dispose();
+    _bottomMoreFocusNode.dispose();
     _controlsFocusScope.dispose();
     super.dispose();
   }
@@ -754,7 +917,13 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
                     ),
                   ),
                 ),
-                FocusScope(node: _controlsFocusScope, child: _buildPremiumUI()),
+                FocusTraversalGroup(
+                  policy: OrderedTraversalPolicy(),
+                  child: FocusScope(
+                    node: _controlsFocusScope,
+                    child: _buildPremiumUI(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -812,6 +981,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
           _CircleBtn(
             icon: Icons.arrow_back_rounded,
             size: isLargeScreen ? 44 : 36,
+            focusNode: _backFocusNode,
             onTap: _exitFullscreen,
           ),
           const SizedBox(width: 16),
@@ -850,6 +1020,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
                   ? Icons.favorite_rounded
                   : Icons.favorite_border_rounded,
               iconColor: _isFavorite ? Colors.redAccent : null,
+              focusNode: _topFavoriteFocusNode,
               onTap: _toggleFavorite,
             ),
             const SizedBox(width: 12),
@@ -857,6 +1028,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
           _CircleBtn(
             icon: Icons.more_vert_rounded,
             size: isLargeScreen ? 44 : 36,
+            focusNode: _moreFocusNode,
             onTap: _showMoreMenu,
           ),
         ],
@@ -875,12 +1047,14 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
           _LargeControlBtn(
             icon: Icons.skip_previous_rounded,
             size: btnSize * 0.7,
+            focusNode: _previousFocusNode,
             onTap: () => _switchChannel(-1),
           )
         else
           _LargeControlBtn(
             icon: Icons.replay_10_rounded,
             size: btnSize * 0.7,
+            focusNode: _previousFocusNode,
             onTap: () => _seekRelative(-10),
           ),
         const SizedBox(width: 32),
@@ -900,12 +1074,14 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
           _LargeControlBtn(
             icon: Icons.skip_next_rounded,
             size: btnSize * 0.7,
+            focusNode: _nextFocusNode,
             onTap: () => _switchChannel(1),
           )
         else
           _LargeControlBtn(
             icon: Icons.forward_30_rounded,
             size: btnSize * 0.7,
+            focusNode: _nextFocusNode,
             onTap: () => _seekRelative(30),
           ),
       ],
@@ -1073,27 +1249,32 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
           _ActionBtn(
             icon: Icons.list_rounded,
             label: 'CHANNELS',
+            focusNode: _channelsFocusNode,
             onTap: _toggleChannelList,
           ),
           if (isLive)
             _ActionBtn(
               icon: Icons.calendar_view_day_rounded,
               label: 'EPG',
+              focusNode: _epgFocusNode,
               onTap: _showEpgModal,
             ),
           _ActionBtn(
             icon: Icons.subtitles_rounded,
             label: 'SUBTITLES',
+            focusNode: _subtitlesFocusNode,
             onTap: _showSubtitleMenu,
           ),
           _ActionBtn(
             icon: Icons.audiotrack_rounded,
             label: 'AUDIO',
+            focusNode: _audioFocusNode,
             onTap: _showAudioMenu,
           ),
           _ActionBtn(
             icon: Icons.aspect_ratio_rounded,
             label: 'RATIO',
+            focusNode: _ratioFocusNode,
             onTap: _showAspectRatioMenu,
           ),
           _ActionBtn(
@@ -1102,11 +1283,13 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
                 : Icons.favorite_border_rounded,
             label: 'FAVOURITE',
             iconColor: _isFavorite ? Colors.redAccent : null,
+            focusNode: _favoriteFocusNode,
             onTap: _toggleFavorite,
           ),
           _ActionBtn(
             icon: Icons.settings_rounded,
             label: 'MORE',
+            focusNode: _bottomMoreFocusNode,
             onTap: _showMoreMenu,
           ),
         ],
@@ -1721,12 +1904,14 @@ class _CircleBtn extends StatefulWidget {
   final VoidCallback onTap;
   final Color? iconColor;
   final double size;
+  final FocusNode? focusNode;
 
   const _CircleBtn({
     required this.icon,
     required this.onTap,
     this.iconColor,
     this.size = 36,
+    this.focusNode,
   });
 
   @override
@@ -1738,6 +1923,7 @@ class _CircleBtnState extends State<_CircleBtn> {
 
   @override
   Widget build(BuildContext context) => FocusableActionDetector(
+    focusNode: widget.focusNode,
     onFocusChange: (v) => setState(() => _isFocused = v),
     shortcuts: const {
       SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
@@ -1847,12 +2033,14 @@ class _ActionBtn extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
   final Color? iconColor;
+  final FocusNode? focusNode;
 
   const _ActionBtn({
     required this.icon,
     required this.label,
     required this.onTap,
     this.iconColor,
+    this.focusNode,
   });
 
   @override
@@ -1865,6 +2053,7 @@ class _ActionBtnState extends State<_ActionBtn> {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 12),
     child: FocusableActionDetector(
+      focusNode: widget.focusNode,
       onFocusChange: (v) => setState(() => _isFocused = v),
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
