@@ -7,6 +7,8 @@ import 'package:another_iptv_player/models/playlist_content_model.dart';
 import 'package:another_iptv_player/utils/navigate_by_content_type.dart';
 import 'package:another_iptv_player/shared/widgets/glass_panel.dart';
 import 'package:another_iptv_player/shared/widgets/sidebar_item.dart';
+import 'package:another_iptv_player/widgets/tv_focusable.dart';
+import 'package:another_iptv_player/utils/firestick_performance.dart';
 import '../controllers/category_detail_controller.dart';
 import '../widgets/category_detail/category_app_bar.dart';
 import '../widgets/category_detail/content_states.dart';
@@ -60,7 +62,6 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
                     _searchController.clear();
                   },
                   onSearchChanged: controller.searchContent,
-                  onSortPressed: () => _showSortOptions(controller),
                 ),
                 Expanded(child: _buildBody(controller)),
               ],
@@ -242,51 +243,6 @@ class _CategoryDetailViewState extends State<_CategoryDetailView> {
     );
   }
 
-  void _showSortOptions(CategoryDetailController controller) {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: const Text('A → Z'),
-                onTap: () {
-                  controller.sortItems("ascending");
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                title: const Text('Z → A'),
-                onTap: () {
-                  controller.sortItems("descending");
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.event),
-                title: Text(context.loc.release_date),
-                onTap: () {
-                  controller.sortItems("release_date");
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.star_rate),
-                title: Text(context.loc.rating),
-                onTap: () {
-                  controller.sortItems("rating");
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   String _capitalizeGenre(String genre) {
     if (genre.isEmpty) return genre;
     return genre
@@ -333,11 +289,11 @@ class _LiveChannelList extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           final item = items[index];
-          return GlassPanel(
-            padding: const EdgeInsets.all(10),
-            child: InkWell(
-              onTap: () => onItemTap(item),
-              borderRadius: BorderRadius.circular(8),
+          return TvFocusable(
+            onPressed: () => onItemTap(item),
+            borderRadius: BorderRadius.circular(12),
+            child: GlassPanel(
+              padding: const EdgeInsets.all(10),
               child: Row(
                 children: [
                   _ChannelLogo(url: item.imagePath),
@@ -474,6 +430,12 @@ class _ChannelLogo extends StatelessWidget {
                 child: Image.network(
                   url,
                   fit: BoxFit.contain,
+                  cacheWidth: firestickPerformanceMode
+                      ? (size * 2).round()
+                      : null,
+                  cacheHeight: firestickPerformanceMode
+                      ? (size * 2).round()
+                      : null,
                   errorBuilder: (_, _, _) => const Icon(Icons.live_tv),
                 ),
               ),

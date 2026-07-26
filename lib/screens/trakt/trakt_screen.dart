@@ -178,7 +178,7 @@ class _TraktScreenState extends State<TraktScreen> {
   @override
   Widget build(BuildContext context) {
     return WatchioSettingsScaffold(
-      title: 'MY TRAKT',
+      title: 'MY LIST',
       onBack: () => Navigator.pop(context),
       child: _loading
           ? const Center(child: CircularProgressIndicator())

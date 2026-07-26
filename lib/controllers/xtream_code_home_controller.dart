@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:another_iptv_player/models/api_response.dart';
 import 'package:flutter/material.dart';
 import 'package:another_iptv_player/l10n/localization_extension.dart';
@@ -8,7 +10,7 @@ import 'package:another_iptv_player/models/content_type.dart';
 import 'package:another_iptv_player/models/playlist_content_model.dart';
 import 'package:another_iptv_player/repositories/iptv_repository.dart';
 import 'package:another_iptv_player/services/app_state.dart';
-import '../repositories/user_preferences.dart';
+import 'package:another_iptv_player/services/cache_metadata_service.dart';
 import '../screens/xtream-codes/xtream_code_data_loader_screen.dart';
 
 class XtreamCodeHomeController extends ChangeNotifier {
@@ -17,7 +19,7 @@ class XtreamCodeHomeController extends ChangeNotifier {
 
   ApiResponse? _userInfo;
   int _currentIndex = 0;
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   final List<CategoryViewModel> _liveCategories = [];
   final List<CategoryViewModel> _movieCategories = [];
@@ -25,6 +27,12 @@ class XtreamCodeHomeController extends ChangeNotifier {
 
   final Set<String> _hiddenMovieCategoryIds = {};
   final Set<String> _hiddenSeriesCategoryIds = {};
+  final Set<CategoryType> _refreshingTypes = {};
+  final Map<CategoryType, DateTime> _lastUpdatedByType = {};
+  final Map<CategoryType, int> _cachedItemCountByType = {};
+  final Map<CategoryType, String?> _lastErrorByType = {};
+  final Map<CategoryType, double> _refreshProgressByType = {};
+  final CacheMetadataService _cacheMetadataService = CacheMetadataService();
 
   ApiResponse? get userInfo => _userInfo;
   Set<String> get hiddenMovieCategoryIds => _hiddenMovieCategoryIds;
@@ -62,11 +70,30 @@ class XtreamCodeHomeController extends ChangeNotifier {
   List<CategoryViewModel>? get liveCategories => _liveCategories;
   List<CategoryViewModel> get movieCategories => _movieCategories;
   List<CategoryViewModel> get seriesCategories => _seriesCategories;
+  bool isRefreshing(CategoryType type) => _refreshingTypes.contains(type);
+  DateTime? lastUpdated(CategoryType type) => _lastUpdatedByType[type];
+  int cachedItemCount(CategoryType type) => _cachedItemCountByType[type] ?? 0;
+  String? lastRefreshError(CategoryType type) => _lastErrorByType[type];
+  bool isCacheStale(CategoryType type) {
+    final metadata = CacheMetadata(
+      playlistId: _repository?.playlistId ?? '',
+      section: CacheSectionMapping.fromCategoryType(type),
+      lastUpdated: _lastUpdatedByType[type],
+      lastSuccess: _lastUpdatedByType[type],
+      itemCount: cachedItemCount(type),
+      lastError: _lastErrorByType[type],
+    );
+    return _cacheMetadataService.isStale(metadata);
+  }
 
-  XtreamCodeHomeController(bool all)
+  double refreshProgress(CategoryType type) =>
+      _refreshProgressByType[type] ?? 0;
+
+  XtreamCodeHomeController([bool _ = false])
     : _repository = AppState.xtreamCodeRepository {
     _pageController = PageController();
-    _loadCategories(all);
+    unawaited(_loadCacheMetadata());
+    unawaited(_loadAccountInfo());
   }
 
   @override
@@ -85,6 +112,159 @@ class XtreamCodeHomeController extends ChangeNotifier {
         curve: Curves.easeInOut,
       );
     }
+  }
+
+  Future<void> openContentSection(int index, CategoryType type) async {
+    await loadCachedCategoriesByType(type);
+    onNavigationTap(index);
+  }
+
+  Future<void> _loadAccountInfo() async {
+    if (_repository == null) return;
+
+    final cachedInfo = await _repository.getCachedPlayerInfo();
+    if (cachedInfo != null) {
+      _userInfo = cachedInfo;
+      notifyListeners();
+    }
+
+    final freshInfo = await _repository.getPlayerInfo(forceRefresh: true);
+    if (freshInfo != null) {
+      await _cacheMetadataService.markSuccess(
+        playlistId: _repository.playlistId,
+        section: CacheSection.account,
+        itemCount: 1,
+      );
+      _userInfo = freshInfo;
+      notifyListeners();
+    } else {
+      await _cacheMetadataService.markFailure(
+        playlistId: _repository.playlistId,
+        section: CacheSection.account,
+        error: 'Account refresh failed',
+      );
+    }
+  }
+
+  Future<void> _loadCacheMetadata() async {
+    if (_repository == null) return;
+
+    for (final type in const [
+      CategoryType.live,
+      CategoryType.vod,
+      CategoryType.series,
+    ]) {
+      final section = CacheSectionMapping.fromCategoryType(type);
+      final metadata = await _cacheMetadataService.getSection(
+        _repository.playlistId,
+        section,
+      );
+      final dbCount = await _repository.getCachedItemCount(type);
+      final count = dbCount > 0 ? dbCount : metadata.itemCount;
+
+      if (metadata.lastUpdated != null) {
+        _lastUpdatedByType[type] = metadata.lastUpdated!;
+      }
+      _cachedItemCountByType[type] = count;
+      _lastErrorByType[type] = metadata.lastError;
+    }
+
+    notifyListeners();
+  }
+
+  Future<void> loadCachedCategoriesByType(CategoryType type) async {
+    if (_repository == null) return;
+
+    final cachedCategories = await _repository.getCachedCategories(type);
+    final target = switch (type) {
+      CategoryType.live => _liveCategories,
+      CategoryType.vod => _movieCategories,
+      CategoryType.series => _seriesCategories,
+    };
+
+    target.clear();
+    if (cachedCategories.isNotEmpty) {
+      _addVirtualCategories(type, target);
+      target.addAll(
+        cachedCategories.map(
+          (category) =>
+              CategoryViewModel(category: category, contentItems: const []),
+        ),
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<bool> refreshSection(CategoryType type) async {
+    if (_repository == null || _refreshingTypes.contains(type)) return false;
+
+    _refreshingTypes.add(type);
+    _refreshProgressByType[type] = 0.03;
+    notifyListeners();
+
+    try {
+      switch (type) {
+        case CategoryType.live:
+          await _repository.getLiveCategories(forceRefresh: true);
+          _setRefreshProgress(type, 0.12);
+          await _repository.importLiveStreamsStreamed(
+            onProgress: (_) => _advanceRefreshProgress(type),
+          );
+          break;
+        case CategoryType.vod:
+          await _repository.getVodCategories(forceRefresh: true);
+          _setRefreshProgress(type, 0.12);
+          await _repository.importMoviesStreamed(
+            onProgress: (_) => _advanceRefreshProgress(type),
+          );
+          break;
+        case CategoryType.series:
+          await _repository.getSeriesCategories(forceRefresh: true);
+          _setRefreshProgress(type, 0.12);
+          await _repository.importSeriesStreamed(
+            onProgress: (_) => _advanceRefreshProgress(type),
+          );
+          break;
+      }
+
+      _setRefreshProgress(type, 1);
+      final itemCount = await _repository.getCachedItemCount(type);
+      await _cacheMetadataService.markSuccess(
+        playlistId: _repository.playlistId,
+        section: CacheSectionMapping.fromCategoryType(type),
+        itemCount: itemCount,
+      );
+      _lastUpdatedByType[type] = DateTime.now();
+      _cachedItemCountByType[type] = itemCount;
+      _lastErrorByType.remove(type);
+      await loadCachedCategoriesByType(type);
+      return true;
+    } catch (e) {
+      await _cacheMetadataService.markFailure(
+        playlistId: _repository.playlistId,
+        section: CacheSectionMapping.fromCategoryType(type),
+        error: e,
+      );
+      _lastErrorByType[type] = e.toString();
+      debugPrint('Section refresh failed (${type.value}): $e');
+      return false;
+    } finally {
+      _refreshingTypes.remove(type);
+      _refreshProgressByType.remove(type);
+      notifyListeners();
+    }
+  }
+
+  void _setRefreshProgress(CategoryType type, double value) {
+    _refreshProgressByType[type] = value.clamp(0, 1);
+    notifyListeners();
+  }
+
+  void _advanceRefreshProgress(CategoryType type) {
+    final current = _refreshProgressByType[type] ?? 0.12;
+    if (current >= 0.94) return;
+    _refreshProgressByType[type] = (current + 0.025).clamp(0, 0.94);
+    notifyListeners();
   }
 
   void onPageChanged(int index) {
@@ -112,116 +292,6 @@ class XtreamCodeHomeController extends ChangeNotifier {
       }
     } catch (_) {
       return 'Watchio IPTV';
-    }
-  }
-
-  Future<void> _loadCategories(bool all) async {
-    if (_repository == null) return;
-    try {
-      _isLoading = true;
-      notifyListeners();
-      _userInfo = await _repository.getPlayerInfo();
-
-      // Prepend virtual categories
-      _addVirtualCategories(CategoryType.live, _liveCategories);
-      _addVirtualCategories(CategoryType.vod, _movieCategories);
-      _addVirtualCategories(CategoryType.series, _seriesCategories);
-
-      final liveCats = await _repository.getLiveCategories();
-      if (liveCats != null) {
-        for (var cat in liveCats) {
-          final streams = await _repository.getLiveChannelsByCategoryId(
-            categoryId: cat.categoryId,
-            top: 10,
-          );
-          if (streams == null || streams.isEmpty) continue;
-          final vm = CategoryViewModel(
-            category: cat,
-            contentItems: streams
-                .map(
-                  (x) => ContentItem(
-                    x.streamId,
-                    x.name,
-                    x.streamIcon,
-                    ContentType.liveStream,
-                    liveStream: x,
-                  ),
-                )
-                .toList(),
-          );
-          _liveCategories.add(vm);
-        }
-      }
-
-      final movieCats = await _repository.getVodCategories();
-      if (movieCats != null) {
-        for (var cat in movieCats) {
-          final movies = await _repository.getMovies(
-            categoryId: cat.categoryId,
-            top: 10,
-          );
-          if (movies == null || movies.isEmpty) continue;
-          final vm = CategoryViewModel(
-            category: cat,
-            contentItems: movies
-                .map(
-                  (x) => ContentItem(
-                    x.streamId,
-                    x.name,
-                    x.streamIcon,
-                    ContentType.vod,
-                    containerExtension: x.containerExtension,
-                    vodStream: x,
-                  ),
-                )
-                .toList(),
-          );
-          if (!all) {
-            if (!await UserPreferences.getHiddenCategory(cat.categoryId)) {
-              _movieCategories.add(vm);
-            }
-          } else {
-            _movieCategories.add(vm);
-          }
-        }
-      }
-
-      final seriesCats = await _repository.getSeriesCategories();
-      if (seriesCats != null) {
-        for (var cat in seriesCats) {
-          final series = await _repository.getSeries(
-            categoryId: cat.categoryId,
-            top: 10,
-          );
-          if (series == null || series.isEmpty) continue;
-          final vm = CategoryViewModel(
-            category: cat,
-            contentItems: series
-                .map(
-                  (x) => ContentItem(
-                    x.seriesId,
-                    x.name,
-                    x.cover ?? '',
-                    ContentType.series,
-                    seriesStream: x,
-                  ),
-                )
-                .toList(),
-          );
-          if (!all) {
-            if (!await UserPreferences.getHiddenCategory(cat.categoryId)) {
-              _seriesCategories.add(vm);
-            }
-          } else {
-            _seriesCategories.add(vm);
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint(e.toString());
-    } finally {
-      _isLoading = false;
-      notifyListeners();
     }
   }
 

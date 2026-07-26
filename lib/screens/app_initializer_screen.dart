@@ -1,14 +1,14 @@
 import 'package:another_iptv_player/models/playlist_model.dart';
-
-import 'package:another_iptv_player/screens/playlist_screen.dart';
+import 'package:another_iptv_player/repositories/user_preferences.dart';
+import 'package:another_iptv_player/services/app_state.dart';
+import 'package:another_iptv_player/services/config_service.dart';
+import 'package:another_iptv_player/services/input_mode_controller.dart';
+import 'package:another_iptv_player/services/playlist_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../services/config_service.dart';
-import '../../repositories/user_preferences.dart';
-import '../../services/app_state.dart';
-import '../../services/playlist_service.dart';
-import 'xtream-codes/xtream_code_data_loader_screen.dart';
-import 'm3u/m3u_data_loader_screen.dart';
+import 'onboarding/device_mode_selection_screen.dart';
+import 'xtream-codes/new_xtream_code_playlist_screen.dart';
+import 'xtream-codes/xtream_code_home_screen.dart';
 
 class AppInitializerScreen extends StatefulWidget {
   const AppInitializerScreen({super.key});
@@ -44,7 +44,9 @@ class _AppInitializerScreenState extends State<AppInitializerScreen>
 
     if (lastPlaylistId != null) {
       final playlist = await PlaylistService.getPlaylistById(lastPlaylistId);
-      if (playlist != null) {
+      if (playlist != null &&
+          playlist.type == PlaylistType.xtream &&
+          _hasXtreamCredentials(playlist)) {
         AppState.currentPlaylist = playlist;
         _lastPlaylist = playlist;
       }
@@ -60,11 +62,18 @@ class _AppInitializerScreenState extends State<AppInitializerScreen>
     }
   }
 
+  bool _hasXtreamCredentials(Playlist playlist) {
+    return (playlist.url?.trim().isNotEmpty ?? false) &&
+        (playlist.username?.trim().isNotEmpty ?? false) &&
+        (playlist.password?.trim().isNotEmpty ?? false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final configService = context.watch<ConfigService>();
+    final inputMode = context.watch<InputModeController>();
 
-    if (_isLoading || configService.isLoading) {
+    if (_isLoading || configService.isLoading || !inputMode.isLoaded) {
       return Scaffold(
         backgroundColor: const Color(0xFF050816),
         body: Container(
@@ -217,21 +226,14 @@ class _AppInitializerScreenState extends State<AppInitializerScreen>
       );
     }
 
-    if (_lastPlaylist == null) {
-      return const PlaylistScreen();
-    } else {
-      switch (_lastPlaylist!.type) {
-        case PlaylistType.xtream:
-          return XtreamCodeDataLoaderScreen(playlist: _lastPlaylist!);
-        case PlaylistType.m3u:
-          return M3uDataLoaderScreen(
-            playlist: _lastPlaylist!,
-            m3uItems: const [],
-          );
-        case PlaylistType.stalker:
-          // Fallback to Xtream loader if Stalker specific loader doesn't exist
-          return XtreamCodeDataLoaderScreen(playlist: _lastPlaylist!);
-      }
+    if (!inputMode.hasMode) {
+      return const DeviceModeSelectionScreen();
     }
+
+    if (_lastPlaylist == null) {
+      return const NewXtreamCodePlaylistScreen();
+    }
+
+    return XtreamCodeHomeScreen(playlist: _lastPlaylist!);
   }
 }

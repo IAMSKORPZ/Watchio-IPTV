@@ -184,10 +184,7 @@ class _AppShellState extends State<AppShell> {
                             ),
                           Expanded(
                             child: widget.pages != null
-                                ? IndexedStack(
-                                    index: widget.currentIndex,
-                                    children: widget.pages!,
-                                  )
+                                ? widget.pages![widget.currentIndex]
                                 : (widget.body ?? const SizedBox.shrink()),
                           ),
                         ],

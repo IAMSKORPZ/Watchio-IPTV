@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../controllers/xtream_code_home_controller.dart';
 import '../../core/theme/theme_extensions.dart';
 import '../../core/theme/theme_manager.dart';
+import '../../shared/widgets/watchio_focus_action.dart';
 import 'widgets/watchio_settings_scaffold.dart';
 import 'sections/provider_management_page.dart';
 import 'sections/account_info_page.dart';
@@ -11,6 +12,7 @@ import 'sections/player_settings_page.dart';
 import 'sections/epg_settings_page.dart';
 import 'sections/parental_controls_page.dart';
 import 'sections/stream_format_page.dart';
+import 'sections/input_mode_page.dart';
 import 'sections/appearance_page.dart';
 import 'sections/backup_restore_page.dart';
 import '../update/update_screen.dart';
@@ -78,6 +80,12 @@ class WatchioSettingsScreen extends StatelessWidget {
               onTap: () => _navigate(context, const StreamFormatPage()),
             ),
             SettingsTile(
+              title: 'Input Mode',
+              subtitle: 'Mobile touch or TV remote controls',
+              icon: Icons.devices_other_rounded,
+              onTap: () => _navigate(context, const InputModePage()),
+            ),
+            SettingsTile(
               title: 'Appearance',
               subtitle: 'Theme and visual customization',
               icon: Icons.palette_rounded,
@@ -139,6 +147,15 @@ class _SettingsTileState extends State<SettingsTile> {
 
         return FocusableActionDetector(
           onFocusChange: (value) => setState(() => _isFocused = value),
+          shortcuts: WatchioFocusAction.activationShortcuts,
+          actions: {
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                widget.onTap();
+                return null;
+              },
+            ),
+          },
           child: AnimatedScale(
             scale: themeManager.animationsEnabled && _isFocused ? 1.05 : 1.0,
             duration: themeManager.animationsEnabled

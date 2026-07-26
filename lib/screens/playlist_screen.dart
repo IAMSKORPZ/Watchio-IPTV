@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/playlist_controller.dart';
 import '../../models/playlist_model.dart';
+import 'xtream-codes/new_xtream_code_playlist_screen.dart';
 import '../../widgets/playlist_card.dart';
 import '../../widgets/playlist_states.dart';
-import 'playlist_type_screen.dart';
 
 class PlaylistScreen extends StatefulWidget {
   const PlaylistScreen({super.key});
@@ -55,7 +55,7 @@ class PlaylistScreenState extends State<PlaylistScreen> {
 
           // 3. No Playlists Found (Redesign UI)
           if (controller.playlists.isEmpty) {
-            return const PlaylistTypeScreen();
+            return const NewXtreamCodePlaylistScreen();
           }
 
           // 4. List of Playlists (Standard UI)
@@ -105,7 +105,9 @@ class PlaylistScreenState extends State<PlaylistScreen> {
   void _navigateToCreatePlaylist(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const PlaylistTypeScreen()),
+      MaterialPageRoute(
+        builder: (context) => const NewXtreamCodePlaylistScreen(),
+      ),
     );
   }
 

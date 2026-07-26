@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'focus_wrapper.dart';
 
 class EpisodeCard extends StatelessWidget {
   final String title;
@@ -25,8 +26,8 @@ class EpisodeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return InkWell(
-      onTap: onTap,
+    return FocusWrapper(
+      onPressed: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,7 +46,9 @@ class EpisodeCard extends StatelessWidget {
                           width: 140,
                           height: 80,
                           color: Colors.grey.withValues(alpha: 0.1),
-                          child: const Center(child: CircularProgressIndicator()),
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
                         ),
                         errorWidget: (context, url, error) => Container(
                           width: 140,
@@ -70,7 +73,9 @@ class EpisodeCard extends StatelessWidget {
                     height: 4,
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                      borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(12),
+                      ),
                     ),
                     child: FractionallySizedBox(
                       alignment: Alignment.centerLeft,
@@ -78,7 +83,9 @@ class EpisodeCard extends StatelessWidget {
                       child: Container(
                         decoration: BoxDecoration(
                           color: colorScheme.primary,
-                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(12),
+                          ),
                         ),
                       ),
                     ),

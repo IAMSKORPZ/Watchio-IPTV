@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../../services/input_mode_controller.dart';
 import '../../utils/firestick_performance.dart';
 import 'watchio_focus_action.dart';
 
@@ -33,6 +35,7 @@ class _FocusWrapperState extends State<FocusWrapper> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final inputMode = context.watch<InputModeController>();
 
     return Focus(
       autofocus: widget.autofocus,
@@ -55,7 +58,7 @@ class _FocusWrapperState extends State<FocusWrapper> {
         return KeyEventResult.ignored;
       },
       child: GestureDetector(
-        onTap: widget.onPressed,
+        onTap: inputMode.allowPointerInput ? widget.onPressed : null,
         child: AnimatedScale(
           scale: _isFocused ? perfScale(widget.scale) : 1.0,
           duration: perfDuration(const Duration(milliseconds: 200)),

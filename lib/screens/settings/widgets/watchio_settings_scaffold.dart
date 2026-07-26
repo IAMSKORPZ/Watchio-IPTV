@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../services/config_service.dart';
 import '../../../core/theme/theme_manager.dart';
 import '../../../shared/widgets/watchio_focus_action.dart';
+import '../../../utils/firestick_performance.dart';
 
 class WatchioSettingsScaffold extends StatefulWidget {
   final String title;
@@ -33,7 +34,7 @@ class _WatchioSettingsScaffoldState extends State<WatchioSettingsScaffold> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() => _now = DateTime.now());
     });
     _loadVersion();
@@ -67,7 +68,7 @@ class _WatchioSettingsScaffoldState extends State<WatchioSettingsScaffold> {
                 color: const Color(0xFF050812),
                 image: DecorationImage(
                   image: (themeManager.showBackgroundImage && homeBg.isNotEmpty)
-                      ? NetworkImage(homeBg)
+                      ? perfNetworkImage(homeBg)
                       : const AssetImage('assets/images/background.png')
                             as ImageProvider,
                   fit: BoxFit.cover,

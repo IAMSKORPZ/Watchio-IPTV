@@ -104,15 +104,13 @@ class ExoPlayerController extends AppPlayerController {
 
     final uri = Uri.tryParse(item.url);
     if (uri == null || !uri.hasScheme || !uri.scheme.startsWith('http')) {
-      debugPrint(
-        'ExoPlayer: Playback Error -> Invalid stream URL: ${item.url}',
-      );
+      debugPrint('ExoPlayer: Playback Error -> Invalid stream URL');
       _error = 'Invalid stream URL';
       notifyListeners();
       return;
     }
 
-    debugPrint('ExoPlayer: Initializing Source -> ${item.url}');
+    debugPrint('ExoPlayer: Initializing Source -> [redacted]');
     final newController = VideoPlayerController.networkUrl(
       uri,
       httpHeaders: item.headers,
@@ -186,9 +184,15 @@ class ExoPlayerController extends AppPlayerController {
 
     final value = _controller!.value;
 
-    _hasVideoTrack = value.size.width > 0 && value.size.height > 0;
+    _hasVideoTrack =
+        value.size.width > 0 ||
+        value.size.height > 0 ||
+        value.isInitialized && value.duration > Duration.zero ||
+        value.isPlaying && value.position > Duration.zero;
     _hasAudioTrack = value.isInitialized;
-    if (!_hasRenderedFirstFrame && _hasVideoTrack && value.isPlaying) {
+    if (!_hasRenderedFirstFrame &&
+        _hasVideoTrack &&
+        (value.isPlaying || value.position > Duration.zero)) {
       _hasRenderedFirstFrame = true;
       debugPrint('ExoPlayer: First video frame rendered');
     }
@@ -332,8 +336,12 @@ class ExoPlayerController extends AppPlayerController {
           fit: fit,
           clipBehavior: Clip.hardEdge,
           child: SizedBox(
-            width: _controller!.value.size.width,
-            height: _controller!.value.size.height,
+            width: _controller!.value.size.width > 0
+                ? _controller!.value.size.width
+                : 16,
+            height: _controller!.value.size.height > 0
+                ? _controller!.value.size.height
+                : 9,
             child: player,
           ),
         ),

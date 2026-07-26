@@ -272,6 +272,34 @@ LIMIT 1
       debugPrint('EPG Storage: Cleared EPG data for playlist $playlistId');
     }
   }
+
+  Future<int> prunePrograms({
+    required String playlistId,
+    Duration keepPast = const Duration(hours: 48),
+    Duration keepFuture = const Duration(hours: 72),
+  }) async {
+    await ensureSchema();
+    final now = DateTime.now().toUtc();
+    final minEnd = now.subtract(keepPast).millisecondsSinceEpoch;
+    final maxStart = now.add(keepFuture).millisecondsSinceEpoch;
+    final removed = await database.customUpdate(
+      '''
+DELETE FROM epg_programs
+WHERE playlist_id = ?
+  AND (end_time < ? OR start_time > ?)
+''',
+      variables: [
+        Variable.withString(playlistId),
+        Variable.withInt(minEnd),
+        Variable.withInt(maxStart),
+      ],
+      updates: const {},
+    );
+    if (kDebugMode) {
+      debugPrint('EPG Storage: Pruned $removed old/future programmes');
+    }
+    return removed;
+  }
 }
 
 class EpgProgramWindow {

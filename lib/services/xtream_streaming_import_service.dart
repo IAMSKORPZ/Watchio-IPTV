@@ -30,9 +30,10 @@ class XtreamStreamingImportService {
     this.batchSize = defaultBatchSize,
     ImportRecoveryService? recoveryService,
     SearchRepository? searchRepository,
-  })  : client = client ?? http.Client(),
-        recoveryService = recoveryService ?? ImportRecoveryService(),
-        searchRepository = searchRepository ?? SearchRepository(database: database);
+  }) : client = client ?? http.Client(),
+       recoveryService = recoveryService ?? ImportRecoveryService(),
+       searchRepository =
+           searchRepository ?? SearchRepository(database: database);
 
   Future<ImportProgressModel> importLiveStreams({
     required ApiConfig config,
@@ -44,9 +45,13 @@ class XtreamStreamingImportService {
       config: config,
       playlistId: playlistId,
       action: 'get_live_streams',
-      clearExisting: () => database.deleteLiveStreamsByPlaylistId(playlistId),
+      idField: 'stream_id',
+      tableName: 'live_streams',
+      idColumn: 'stream_id',
       writeJson: (items) {
-        final rows = items.map((json) => LiveStream.fromJson(json, playlistId)).toList();
+        final rows = items
+            .map((json) => LiveStream.fromJson(json, playlistId))
+            .toList();
         return database.insertLiveStreams(rows);
       },
       onProgress: onProgress,
@@ -64,9 +69,13 @@ class XtreamStreamingImportService {
       config: config,
       playlistId: playlistId,
       action: 'get_vod_streams',
-      clearExisting: () => database.deleteVodStreamsByPlaylistId(playlistId),
+      idField: 'stream_id',
+      tableName: 'vod_streams',
+      idColumn: 'stream_id',
       writeJson: (items) {
-        final rows = items.map((json) => VodStream.fromJson(json, playlistId)).toList();
+        final rows = items
+            .map((json) => VodStream.fromJson(json, playlistId))
+            .toList();
         return database.insertVodStreams(rows);
       },
       onProgress: onProgress,
@@ -84,9 +93,13 @@ class XtreamStreamingImportService {
       config: config,
       playlistId: playlistId,
       action: 'get_series',
-      clearExisting: () => database.deleteSeriesStreamsByPlaylistId(playlistId),
+      idField: 'series_id',
+      tableName: 'series_streams',
+      idColumn: 'series_id',
       writeJson: (items) {
-        final rows = items.map((json) => SeriesStream.fromJson(json, playlistId)).toList();
+        final rows = items
+            .map((json) => SeriesStream.fromJson(json, playlistId))
+            .toList();
         return database.insertSeriesStreams(rows);
       },
       onProgress: onProgress,
@@ -98,7 +111,9 @@ class XtreamStreamingImportService {
     required ApiConfig config,
     required String playlistId,
     required String action,
-    required Future<void> Function() clearExisting,
+    required String idField,
+    required String tableName,
+    required String idColumn,
     required Future<void> Function(List<Map<String, dynamic>> items) writeJson,
     ImportProgressCallback? onProgress,
     ImportCancellationToken? cancellationToken,
@@ -115,11 +130,14 @@ class XtreamStreamingImportService {
     final params = Map<String, String>.from(config.baseParams)
       ..['action'] = action
       ..['_t'] = DateTime.now().millisecondsSinceEpoch.toString();
-    final uri = Uri.parse('${config.baseUrl}/player_api.php')
-        .replace(queryParameters: params);
+    final uri = Uri.parse(
+      '${config.baseUrl}/player_api.php',
+    ).replace(queryParameters: params);
     final request = http.Request('GET', uri)
       ..headers['Content-Type'] = 'application/json';
-    final response = await client.send(request).timeout(const Duration(minutes: 2));
+    final response = await client
+        .send(request)
+        .timeout(const Duration(minutes: 2));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       await recoveryService.markFailed(
         session.id,
@@ -128,24 +146,26 @@ class XtreamStreamingImportService {
       throw Exception('HTTP ${response.statusCode}: Xtream import failed');
     }
 
-    await clearExisting();
     final batch = <Map<String, dynamic>>[];
     var processed = 0;
     final textStream = response.stream.transform(utf8.decoder);
+    await _ensureSeenTable();
 
     try {
       await for (final item in _decoder.decodeObjects(textStream)) {
         cancellationToken?.throwIfCancelled();
         batch.add(item);
         processed++;
-        
+
         // Provide feedback every 50 items or when batch is full
         if (processed % 50 == 0 || batch.length >= batchSize) {
           if (batch.length >= batchSize) {
-            await writeJson(List<Map<String, dynamic>>.from(batch));
+            final copy = List<Map<String, dynamic>>.from(batch);
+            await _recordSeen(session.id, copy, idField);
+            await writeJson(copy);
             batch.clear();
           }
-          
+
           onProgress?.call(
             ImportProgressModel(
               currentItem: action,
@@ -157,16 +177,24 @@ class XtreamStreamingImportService {
       }
 
       if (batch.isNotEmpty) {
+        await _recordSeen(session.id, batch, idField);
         await writeJson(batch);
       }
+      await _deleteMissingRows(
+        playlistId: playlistId,
+        sessionId: session.id,
+        tableName: tableName,
+        idColumn: idColumn,
+      );
     } catch (e) {
-      await clearExisting();
       if (e is ImportCancelledException) {
         await recoveryService.markCancelled(session.id);
       } else {
         await recoveryService.markFailed(session.id, e.toString());
       }
       rethrow;
+    } finally {
+      await _clearSeenIds(session.id);
     }
     final done = ImportProgressModel(
       currentItem: action,
@@ -177,5 +205,63 @@ class XtreamStreamingImportService {
     await searchRepository.rebuildProviderIndex(playlistId);
     onProgress?.call(done);
     return done;
+  }
+
+  Future<void> _ensureSeenTable() {
+    return database.customStatement('''
+CREATE TEMP TABLE IF NOT EXISTS xtream_import_seen(
+  import_session_id TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  PRIMARY KEY(import_session_id, item_id)
+)
+''');
+  }
+
+  Future<void> _recordSeen(
+    String sessionId,
+    List<Map<String, dynamic>> items,
+    String idField,
+  ) async {
+    await database.batch((batch) {
+      for (final item in items) {
+        final id = item[idField]?.toString();
+        if (id == null || id.isEmpty) continue;
+        batch.customStatement(
+          '''
+INSERT OR IGNORE INTO xtream_import_seen(import_session_id, item_id)
+VALUES (?, ?)
+''',
+          [sessionId, id],
+        );
+      }
+    });
+  }
+
+  Future<void> _deleteMissingRows({
+    required String playlistId,
+    required String sessionId,
+    required String tableName,
+    required String idColumn,
+  }) {
+    return database.customStatement(
+      '''
+DELETE FROM $tableName
+WHERE playlist_id = ?
+  AND NOT EXISTS (
+    SELECT 1
+    FROM xtream_import_seen seen
+    WHERE seen.import_session_id = ?
+      AND seen.item_id = $tableName.$idColumn
+  )
+''',
+      [playlistId, sessionId],
+    );
+  }
+
+  Future<void> _clearSeenIds(String sessionId) {
+    return database.customStatement(
+      'DELETE FROM xtream_import_seen WHERE import_session_id = ?',
+      [sessionId],
+    );
   }
 }

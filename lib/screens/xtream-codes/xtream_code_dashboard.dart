@@ -65,7 +65,7 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final bool isSmallHeight = constraints.maxHeight < 450;
-            
+
             return SafeArea(
               child: Column(
                 children: [
@@ -74,7 +74,8 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
                     child: SingleChildScrollView(
                       physics: const NeverScrollableScrollPhysics(),
                       child: Container(
-                        height: constraints.maxHeight - (isSmallHeight ? 120 : 180),
+                        height:
+                            constraints.maxHeight - (isSmallHeight ? 120 : 180),
                         padding: EdgeInsets.symmetric(
                           horizontal: 40.0,
                           vertical: isSmallHeight ? 5 : 20,
@@ -108,34 +109,43 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Image.asset('assets/images/App_Logo.png', 
-                  height: isSmallHeight ? 35 : 55, 
-                  errorBuilder: (context, error, stackTrace) => 
-                    Icon(Icons.tv, color: Colors.blue, size: isSmallHeight ? 30 : 40)),
+                Image.asset(
+                  'assets/images/App_Logo.png',
+                  height: isSmallHeight ? 35 : 55,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.tv,
+                    color: Colors.blue,
+                    size: isSmallHeight ? 30 : 40,
+                  ),
+                ),
               ],
             ),
           ),
-          
+
           // Center Section: Time/Date
           Expanded(
             flex: 3,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(DateFormat('hh:mm a').format(_now),
+                Text(
+                  DateFormat('hh:mm a').format(_now),
                   style: TextStyle(
-                    color: Colors.white, 
-                    fontSize: isSmallHeight ? 18 : 28, 
+                    color: Colors.white,
+                    fontSize: isSmallHeight ? 18 : 28,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 1.0,
-                  )),
-                Text(DateFormat('MMM d, yyyy').format(_now),
+                  ),
+                ),
+                Text(
+                  DateFormat('MMM d, yyyy').format(_now),
                   style: TextStyle(
-                    color: const Color(0xFFC12CFF), 
+                    color: const Color(0xFFC12CFF),
                     fontSize: isSmallHeight ? 11 : 14,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
-                  )),
+                  ),
+                ),
               ],
             ),
           ),
@@ -146,12 +156,25 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                _buildHeaderAction(Icons.search, context.loc.search, () => widget.onSearchTap?.call()),
+                _buildHeaderAction(
+                  Icons.search,
+                  context.loc.search,
+                  () => widget.onSearchTap?.call(),
+                ),
                 const SizedBox(width: 15),
-                _buildHeaderAction(Icons.sports_soccer_outlined, '', () => widget.controller.onNavigationTap(6)), // Assuming 6 is Sports
+                _buildHeaderAction(
+                  Icons.sports_soccer_outlined,
+                  '',
+                  () => widget.controller.onNavigationTap(6),
+                ), // Assuming 6 is Sports
                 const SizedBox(width: 15),
                 _buildHeaderAction(Icons.notifications_none_rounded, '', () {
-                   Navigator.push(context, MaterialPageRoute(builder: (_) => const AnnouncementCenterScreen()));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AnnouncementCenterScreen(),
+                    ),
+                  );
                 }),
                 const SizedBox(width: 15),
                 _buildHeaderAction(Icons.info_outline_rounded, '', () {}),
@@ -174,13 +197,15 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
             Icon(icon, color: Colors.white, size: 24),
             if (label.isNotEmpty) ...[
               const SizedBox(width: 10),
-              Text(label.toUpperCase(), 
+              Text(
+                label.toUpperCase(),
                 style: const TextStyle(
-                  color: Colors.white, 
-                  fontSize: 14, 
+                  color: Colors.white,
+                  fontSize: 14,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.2,
-                )),
+                ),
+              ),
             ],
           ],
         ),
@@ -231,9 +256,9 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
             ],
           ),
         ),
-        
+
         const SizedBox(height: 20),
-        
+
         // Bottom Actions Row
         Expanded(
           flex: 1,
@@ -249,8 +274,8 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
               const SizedBox(width: 20),
               Expanded(
                 child: _buildBottomAction(
-                  title: 'REFRESH',
-                  icon: Icons.refresh_rounded,
+                  title: 'TV GUIDE',
+                  icon: Icons.live_tv_rounded,
                   onTap: () => widget.controller.refreshAllData(context),
                 ),
               ),
@@ -316,21 +341,25 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
                 children: [
                   Icon(icon, color: color, size: isSmallHeight ? 40 : 60),
                   const SizedBox(height: 20),
-                  Text(title, 
+                  Text(
+                    title,
                     style: TextStyle(
-                      color: Colors.white, 
-                      fontSize: isSmallHeight ? 18 : 26, 
+                      color: Colors.white,
+                      fontSize: isSmallHeight ? 18 : 26,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.2,
-                    )),
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  Text(subtitle, 
+                  Text(
+                    subtitle,
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white60, 
+                      color: Colors.white60,
                       fontSize: isSmallHeight ? 10 : 12,
                       fontWeight: FontWeight.w500,
-                    )),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -371,13 +400,15 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
                 children: [
                   Icon(icon, color: Colors.white, size: 24),
                   const SizedBox(width: 15),
-                  Text(title, 
+                  Text(
+                    title,
                     style: const TextStyle(
-                      color: Colors.white, 
-                      fontSize: 16, 
+                      color: Colors.white,
+                      fontSize: 16,
                       fontWeight: FontWeight.w900,
                       letterSpacing: 1.0,
-                    )),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -392,37 +423,68 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
     String expiration = 'Lifetime';
     if (userInfo?.userInfo.expDate != null) {
       try {
-        final date = DateTime.fromMillisecondsSinceEpoch(int.parse(userInfo!.userInfo.expDate) * 1000);
+        final date = DateTime.fromMillisecondsSinceEpoch(
+          int.parse(userInfo!.userInfo.expDate) * 1000,
+        );
         expiration = DateFormat('d MMM yyyy').format(date);
       } catch (_) {}
     }
 
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 40.0, vertical: isSmallHeight ? 10 : 30),
+      padding: EdgeInsets.symmetric(
+        horizontal: 40.0,
+        vertical: isSmallHeight ? 10 : 30,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Expiration
           Row(
             children: [
-              const Icon(Icons.verified_rounded, color: Color(0xFF00B7FF), size: 18),
+              const Icon(
+                Icons.verified_rounded,
+                color: Color(0xFF00B7FF),
+                size: 18,
+              ),
               const SizedBox(width: 10),
-              Text('Expiration: $expiration', 
-                style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(
+                'Expiration: $expiration',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
-          
+
           // Version
-          const Text('v0.0.1', 
-            style: TextStyle(color: Colors.white38, fontSize: 12, fontWeight: FontWeight.bold)),
-          
+          const Text(
+            'v0.0.1',
+            style: TextStyle(
+              color: Colors.white38,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
           // User
           Row(
             children: [
-              const Icon(Icons.person_rounded, color: Color(0xFFC12CFF), size: 18),
+              const Icon(
+                Icons.person_rounded,
+                color: Color(0xFFC12CFF),
+                size: 18,
+              ),
               const SizedBox(width: 10),
-              Text('Logged In: ${userInfo?.userInfo.username ?? "Guest"}', 
-                style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(
+                'Logged In: ${userInfo?.userInfo.username ?? "Guest"}',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
         ],

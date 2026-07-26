@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/football_models.dart';
@@ -23,7 +24,7 @@ class _SportsHubScreenState extends State<SportsHubScreen> {
   final FootballDataService _footballService = FootballDataService();
   bool _isLoading = true;
   List<FootballMatch> _allMatches = [];
-  String _selectedSection = 'TODAY';
+  String _selectedSection = 'MATCHES';
 
   late Timer _clockTimer;
   DateTime _now = DateTime.now();
@@ -49,8 +50,10 @@ class _SportsHubScreenState extends State<SportsHubScreen> {
       final List<FootballMatch> matches;
       if (_selectedSection == 'UPCOMING') {
         matches = await _footballService.getUpcomingMatches();
-      } else {
+      } else if (_selectedSection == 'TODAY') {
         matches = await _footballService.getTodayMatches();
+      } else {
+        matches = await _footballService.getCurrentAndNextMatches();
       }
 
       if (mounted) {
@@ -70,31 +73,51 @@ class _SportsHubScreenState extends State<SportsHubScreen> {
   }
 
   List<FootballMatch> get _filteredMatches {
+    final now = DateTime.now();
     switch (_selectedSection) {
       case 'LIVE':
-        return _allMatches.where((m) => m.isLive).toList();
+        return _sortMatchList(_allMatches.where((m) => m.isLive).toList());
       case 'UPCOMING':
-        // getUpcomingMatches already filters for future dates,
-        // but let's be sure it fits the tab logic.
-        return _allMatches
-            .where(
-              (m) =>
-                  m.status == 'TIMED' ||
-                  m.status == 'SCHEDULED' ||
-                  m.utcDate.isAfter(DateTime.now()),
-            )
-            .toList();
+        return _sortMatchList(
+          _allMatches
+              .where((m) => !m.isFinished && m.utcDate.toLocal().isAfter(now))
+              .toList(),
+        );
       case 'TODAY':
+        return _sortMatchList(
+          _allMatches.where((m) => _isSameLocalDay(m.utcDate, now)).toList(),
+        );
+      case 'MATCHES':
       default:
-        // Filter for matches occurring today in local time
-        final today = DateTime.now();
-        return _allMatches.where((m) {
-          final localDate = m.utcDate.toLocal();
-          return localDate.year == today.year &&
-              localDate.month == today.month &&
-              localDate.day == today.day;
-        }).toList();
+        return _sortMatchList(
+          _allMatches.where((m) {
+            if (m.isLive) return true;
+            if (m.isFinished) return false;
+            final localDate = m.utcDate.toLocal();
+            final tomorrow = now.add(const Duration(days: 1));
+            final isTodayOrTomorrow =
+                _isSameLocalDay(localDate, now) ||
+                _isSameLocalDay(localDate, tomorrow);
+            return isTodayOrTomorrow && localDate.isAfter(now);
+          }).toList(),
+        );
     }
+  }
+
+  List<FootballMatch> _sortMatchList(List<FootballMatch> matches) {
+    matches.sort((a, b) {
+      if (a.isLive != b.isLive) return a.isLive ? -1 : 1;
+      return a.utcDate.compareTo(b.utcDate);
+    });
+    return matches;
+  }
+
+  bool _isSameLocalDay(DateTime a, DateTime b) {
+    final left = a.toLocal();
+    final right = b.toLocal();
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
   }
 
   @override
@@ -201,7 +224,7 @@ class _SportsHubScreenState extends State<SportsHubScreen> {
   }
 
   Widget _buildSectionTabs() {
-    final sections = ['TODAY', 'LIVE', 'UPCOMING'];
+    final sections = ['MATCHES', 'LIVE', 'UPCOMING'];
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
@@ -232,10 +255,12 @@ class _SportsHubScreenState extends State<SportsHubScreen> {
             Text(
               _selectedSection == 'TODAY'
                   ? 'No matches today'
+                  : _selectedSection == 'MATCHES'
+                  ? 'No current or upcoming matches'
                   : 'No matches found for $_selectedSection',
               style: const TextStyle(color: Colors.white54, fontSize: 18),
             ),
-            if (_selectedSection == 'TODAY') ...[
+            if (_selectedSection != 'UPCOMING') ...[
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
@@ -312,6 +337,20 @@ class _SectionTabState extends State<_SectionTab> {
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: FocusableActionDetector(
         onFocusChange: (v) => setState(() => _isFocused = v),
+        shortcuts: const {
+          SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+          SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+        },
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onTap();
+              return null;
+            },
+          ),
+        },
         child: InkWell(
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(20),
@@ -522,7 +561,7 @@ class _MatchCardState extends State<_MatchCard> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      widget.match.status,
+                      _statusLabel(widget.match),
                       style: TextStyle(
                         color: widget.match.isLive
                             ? Colors.redAccent
@@ -564,9 +603,7 @@ class _MatchCardState extends State<_MatchCard> {
                               ),
                             )
                           : Text(
-                              DateFormat(
-                                'HH:mm',
-                              ).format(widget.match.utcDate.toLocal()),
+                              _kickoffLabel(widget.match),
                               style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 18,
@@ -691,6 +728,30 @@ class _MatchCardState extends State<_MatchCard> {
     );
   }
 
+  String _statusLabel(FootballMatch match) {
+    if (match.isLive) return 'LIVE NOW';
+    if (match.isFinished) return 'FINISHED';
+    if (match.status == 'TIMED' || match.status == 'SCHEDULED') {
+      return 'UPCOMING';
+    }
+    return match.status;
+  }
+
+  String _kickoffLabel(FootballMatch match) {
+    final local = match.utcDate.toLocal();
+    final now = DateTime.now();
+    final tomorrow = now.add(const Duration(days: 1));
+    final time = DateFormat('HH:mm').format(local);
+
+    if (_sameDay(local, now)) return 'Today $time';
+    if (_sameDay(local, tomorrow)) return 'Tomorrow $time';
+    return DateFormat('EEE d MMM HH:mm').format(local);
+  }
+
+  bool _sameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   Widget _statRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -728,6 +789,20 @@ class _WatchButtonState extends State<_WatchButton> {
   Widget build(BuildContext context) {
     return FocusableActionDetector(
       onFocusChange: (v) => setState(() => _isFocused = v),
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap();
+            return null;
+          },
+        ),
+      },
       child: InkWell(
         onTap: widget.onTap,
         borderRadius: BorderRadius.circular(12),
@@ -777,6 +852,20 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
   Widget build(BuildContext context) {
     return FocusableActionDetector(
       onFocusChange: (v) => setState(() => _isFocused = v),
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap();
+            return null;
+          },
+        ),
+      },
       child: InkWell(
         onTap: widget.onTap,
         borderRadius: BorderRadius.circular(12),

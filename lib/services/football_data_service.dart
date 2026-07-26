@@ -149,6 +149,13 @@ class FootballDataService {
     return getMatches(dateFrom: today, dateTo: today);
   }
 
+  Future<List<FootballMatch>> getCurrentAndNextMatches() async {
+    final now = DateTime.now();
+    final today = _formatDate(now);
+    final tomorrow = _formatDate(now.add(const Duration(days: 1)));
+    return getMatches(dateFrom: today, dateTo: tomorrow);
+  }
+
   Future<List<FootballMatch>> getUpcomingMatches() async {
     final now = DateTime.now();
     final today = _formatDate(now);

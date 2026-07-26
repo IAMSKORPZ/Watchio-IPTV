@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../utils/firestick_performance.dart';
 import 'watchio_focus_action.dart';
 
 class WatchioHeader extends StatefulWidget {
   final VoidCallback onBack;
   final VoidCallback onSearch;
   final VoidCallback? onMenu;
-  final VoidCallback? onSort;
   final VoidCallback? onRefresh;
   final VoidCallback? onRefreshEpg;
   final VoidCallback? onSettings;
@@ -23,7 +23,6 @@ class WatchioHeader extends StatefulWidget {
     required this.onBack,
     required this.onSearch,
     this.onMenu,
-    this.onSort,
     this.onRefresh,
     this.onRefreshEpg,
     this.onSettings,
@@ -46,7 +45,7 @@ class _WatchioHeaderState extends State<WatchioHeader> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) setState(() => _now = DateTime.now());
     });
   }
@@ -173,9 +172,6 @@ class _WatchioHeaderState extends State<WatchioHeader> {
             case 'setup':
               widget.onSetup?.call();
               break;
-            case 'sort':
-              widget.onSort?.call();
-              break;
             case 'refresh':
               widget.onRefresh?.call();
               break;
@@ -222,16 +218,6 @@ class _WatchioHeaderState extends State<WatchioHeader> {
                 ],
               ),
             ),
-          const PopupMenuItem(
-            value: 'sort',
-            child: Row(
-              children: [
-                Icon(Icons.sort_rounded, color: Colors.white70, size: 20),
-                SizedBox(width: 12),
-                Text('Sort Order', style: TextStyle(color: Colors.white)),
-              ],
-            ),
-          ),
           const PopupMenuItem(
             value: 'settings',
             child: Row(
@@ -287,7 +273,7 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
         onTap: widget.onTap,
         borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: perfDuration(const Duration(milliseconds: 200)),
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: _isFocused

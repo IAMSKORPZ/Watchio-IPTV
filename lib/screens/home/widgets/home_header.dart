@@ -7,6 +7,7 @@ class HomeHeader extends StatelessWidget {
   final VoidCallback onSearch;
   final VoidCallback onProfile;
   final VoidCallback onSports;
+  final VoidCallback? onSwitchPlaylist;
   final VoidCallback? onAnnouncements;
 
   const HomeHeader({
@@ -14,6 +15,7 @@ class HomeHeader extends StatelessWidget {
     required this.onSearch,
     required this.onProfile,
     required this.onSports,
+    this.onSwitchPlaylist,
     this.onAnnouncements,
   });
 
@@ -95,7 +97,7 @@ class HomeHeader extends StatelessWidget {
                 child: Row(
                   children: [
                     Icon(
-                      Icons.search_rounded,
+                      Icons.travel_explore_rounded,
                       color: Colors.white,
                       size: iconSize,
                     ),
@@ -115,15 +117,24 @@ class HomeHeader extends StatelessWidget {
             ),
             SizedBox(width: isDesktop ? 12 : 8),
             _ToolbarItem(
+              label: 'SPORTS',
               icon: Icons.sports_soccer_rounded,
               iconSize: iconSize,
               onTap: onSports,
             ),
             _ToolbarItem(
+              label: 'ANNOUNCEMENTS',
               icon: Icons.notifications_rounded,
               iconSize: iconSize,
               onTap: onAnnouncements ?? () {},
             ),
+            if (onSwitchPlaylist != null)
+              _ToolbarItem(
+                label: 'SWITCH PLAYLIST',
+                icon: Icons.switch_account_rounded,
+                iconSize: iconSize,
+                onTap: onSwitchPlaylist!,
+              ),
           ],
         ),
       ],
@@ -220,12 +231,14 @@ class _HeaderButtonState extends State<HeaderButton> {
 
 class _ToolbarItem extends StatefulWidget {
   final IconData? icon;
+  final String? label;
   final Widget? child;
   final VoidCallback onTap;
   final double iconSize;
 
   const _ToolbarItem({
     this.icon,
+    this.label,
     this.child,
     required this.onTap,
     this.iconSize = 22,
@@ -237,51 +250,105 @@ class _ToolbarItem extends StatefulWidget {
 
 class _ToolbarItemState extends State<_ToolbarItem> {
   bool _isFocused = false;
+  bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
+    final showLabel = widget.label != null && (_isFocused || _isHovered);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 8,
-      ), // Further increased spacing for polish
+      padding: EdgeInsets.symmetric(horizontal: widget.child != null ? 8 : 3),
       child: WatchioFocusAction(
         onFocusChange: (val) => setState(() => _isFocused = val),
         onActivate: widget.onTap,
         child: InkWell(
           onTap: widget.onTap,
+          onHover: (val) => setState(() => _isHovered = val),
           borderRadius: BorderRadius.circular(30),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: widget.child != null
-                ? EdgeInsets.zero
-                : const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              shape: widget.child != null
-                  ? BoxShape.rectangle
-                  : BoxShape.circle,
-              color: _isFocused
-                  ? Colors.white.withValues(alpha: 0.15)
-                  : Colors.transparent,
-              borderRadius: widget.child != null
-                  ? BorderRadius.circular(30)
-                  : null,
-              boxShadow: _isFocused
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFFC12CFF).withValues(alpha: 0.3),
-                        blurRadius: 10,
+          child: widget.child != null
+              ? AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: EdgeInsets.zero,
+                  decoration: BoxDecoration(
+                    color: _isFocused
+                        ? Colors.white.withValues(alpha: 0.15)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: _isFocused
+                        ? [
+                            BoxShadow(
+                              color: const Color(
+                                0xFFC12CFF,
+                              ).withValues(alpha: 0.3),
+                              blurRadius: 10,
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: widget.child,
+                )
+              : SizedBox(
+                  width: widget.iconSize + 20,
+                  height: 58,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.topCenter,
+                    children: [
+                      Positioned(
+                        top: 0,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: showLabel
+                                ? Colors.white.withValues(alpha: 0.15)
+                                : Colors.transparent,
+                            boxShadow: showLabel
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFFC12CFF,
+                                      ).withValues(alpha: 0.3),
+                                      blurRadius: 10,
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Icon(
+                            widget.icon,
+                            color: showLabel ? Colors.white : Colors.white70,
+                            size: widget.iconSize,
+                          ),
+                        ),
                       ),
-                    ]
-                  : [],
-            ),
-            child:
-                widget.child ??
-                Icon(
-                  widget.icon,
-                  color: _isFocused ? Colors.white : Colors.white70,
-                  size: widget.iconSize,
+                      Positioned(
+                        top: widget.iconSize + 18,
+                        child: IgnorePointer(
+                          child: AnimatedOpacity(
+                            opacity: showLabel ? 1 : 0,
+                            duration: const Duration(milliseconds: 120),
+                            child: SizedBox(
+                              width: 112,
+                              child: Text(
+                                widget.label ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-          ),
         ),
       ),
     );

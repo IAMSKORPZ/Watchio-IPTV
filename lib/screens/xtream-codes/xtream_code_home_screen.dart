@@ -1,9 +1,10 @@
 import 'dart:async';
 
 import 'package:another_iptv_player/models/api_configuration_model.dart';
+import 'package:another_iptv_player/models/category_type.dart';
 import 'package:another_iptv_player/repositories/iptv_repository.dart';
 import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/services/epg_source_service.dart';
+import 'package:another_iptv_player/services/cache_metadata_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/xtream_code_home_controller.dart';
@@ -23,11 +24,17 @@ import '../live_stream/xtream_live_screen.dart';
 import '../sports/sports_hub_screen.dart';
 import '../settings/watchio_settings_screen.dart';
 import '../trakt/trakt_screen.dart';
+import '../playlist_switch_screen.dart';
 
 class XtreamCodeHomeScreen extends StatefulWidget {
   final Playlist playlist;
+  final bool refreshAfterFirstHomePaint;
 
-  const XtreamCodeHomeScreen({super.key, required this.playlist});
+  const XtreamCodeHomeScreen({
+    super.key,
+    required this.playlist,
+    this.refreshAfterFirstHomePaint = false,
+  });
 
   @override
   State<XtreamCodeHomeScreen> createState() => _XtreamCodeHomeScreenState();
@@ -36,12 +43,14 @@ class XtreamCodeHomeScreen extends StatefulWidget {
 class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
   late XtreamCodeHomeController _controller;
   String _version = '0.0.1';
+  bool _didRunPostLoginRefresh = false;
 
   @override
   void initState() {
     super.initState();
     _initializeController();
     _loadVersion();
+    _schedulePostLoginRefresh();
   }
 
   void _initializeController() {
@@ -55,13 +64,53 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
     );
     AppState.xtreamCodeRepository = repository;
     AppState.currentPlaylist = widget.playlist;
-    unawaited(EpgSourceService.refreshOnStartup(widget.playlist));
     _controller = XtreamCodeHomeController(false);
   }
 
   Future<void> _loadVersion() async {
     final info = await PackageInfo.fromPlatform();
     if (mounted) setState(() => _version = info.version);
+  }
+
+  void _schedulePostLoginRefresh() {
+    if (!widget.refreshAfterFirstHomePaint || _didRunPostLoginRefresh) return;
+    unawaited(_schedulePostLoginRefreshIfNeeded());
+  }
+
+  Future<void> _schedulePostLoginRefreshIfNeeded() async {
+    if (!widget.refreshAfterFirstHomePaint || _didRunPostLoginRefresh) return;
+    final isDone = await CacheMetadataService().isFirstPostLoginRefreshDone(
+      widget.playlist.id,
+    );
+    if (!mounted || isDone) return;
+    _didRunPostLoginRefresh = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_runPostLoginRefresh());
+    });
+  }
+
+  Future<void> _runPostLoginRefresh() async {
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+
+    var allSucceeded = true;
+    for (final type in const [
+      CategoryType.series,
+      CategoryType.vod,
+      CategoryType.live,
+    ]) {
+      if (!mounted) return;
+      final success = await _controller.refreshSection(type);
+      allSucceeded = allSucceeded && success;
+    }
+
+    if (allSucceeded) {
+      await CacheMetadataService().setFirstPostLoginRefreshDone(
+        widget.playlist.id,
+        true,
+      );
+    }
   }
 
   @override
@@ -82,6 +131,13 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const SportsHubScreen()),
+    );
+  }
+
+  void _showPlaylistSwitcher() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PlaylistSwitchScreen()),
     );
   }
 
@@ -112,19 +168,35 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
             currentIndex: controller.currentIndex,
             onIndexChanged: controller.onNavigationTap,
             navItems: navItems,
-            onSearchTap: () => _navigateToSearch(ContentType.liveStream),
-            onRefreshTap: () => controller.refreshAllData(context),
+            onSearchTap: _navigateToSearch,
+            onRefreshTap: () => _showTvGuideComingSoon(context),
             onSettingsTap: () => controller.onNavigationTap(5),
             pages: [
               BingieDashboardHome(
-                onLiveTv: () => controller.onNavigationTap(2),
-                onMovies: () => controller.onNavigationTap(3),
-                onSeries: () => controller.onNavigationTap(4),
+                onLiveTv: () => unawaited(
+                  controller.openContentSection(2, CategoryType.live),
+                ),
+                onMovies: () => unawaited(
+                  controller.openContentSection(3, CategoryType.vod),
+                ),
+                onSeries: () => unawaited(
+                  controller.openContentSection(4, CategoryType.series),
+                ),
+                onRefreshLiveTv: () => unawaited(
+                  _refreshSection(context, controller, CategoryType.live),
+                ),
+                onRefreshMovies: () => unawaited(
+                  _refreshSection(context, controller, CategoryType.vod),
+                ),
+                onRefreshSeries: () => unawaited(
+                  _refreshSection(context, controller, CategoryType.series),
+                ),
                 onAnnouncements: _showAnnouncements,
-                onUpdate: () => controller.refreshAllData(context),
+                onUpdate: () => _showTvGuideComingSoon(context),
                 onSettings: () => controller.onNavigationTap(5),
-                onSearch: () => _navigateToSearch(ContentType.liveStream),
+                onSearch: _navigateToSearch,
                 onSports: _showSportsHub,
+                onSwitchPlaylist: _showPlaylistSwitcher,
                 onProfile: () => controller.onNavigationTap(5),
                 onTrakt: () => Navigator.push(
                   context,
@@ -133,6 +205,30 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
                 username: userInfo?.username ?? 'Guest',
                 expiryDate: userInfo?.expDate ?? 'N/A',
                 version: _version,
+                isLiveTvUpdating: controller.isRefreshing(CategoryType.live),
+                isMoviesUpdating: controller.isRefreshing(CategoryType.vod),
+                isSeriesUpdating: controller.isRefreshing(CategoryType.series),
+                liveTvUpdateProgress: controller.refreshProgress(
+                  CategoryType.live,
+                ),
+                moviesUpdateProgress: controller.refreshProgress(
+                  CategoryType.vod,
+                ),
+                seriesUpdateProgress: controller.refreshProgress(
+                  CategoryType.series,
+                ),
+                liveTvLastUpdatedLabel: _lastUpdatedLabel(
+                  controller,
+                  CategoryType.live,
+                ),
+                moviesLastUpdatedLabel: _lastUpdatedLabel(
+                  controller,
+                  CategoryType.vod,
+                ),
+                seriesLastUpdatedLabel: _lastUpdatedLabel(
+                  controller,
+                  CategoryType.series,
+                ),
               ),
               WatchHistoryScreen(playlistId: widget.playlist.id),
               XtreamLiveScreen(playlist: widget.playlist),
@@ -146,12 +242,95 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
     );
   }
 
-  void _navigateToSearch(ContentType contentType) {
+  void _navigateToSearch([ContentType? contentType]) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SearchScreen(contentType: contentType),
       ),
     );
+  }
+
+  void _showTvGuideComingSoon(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF17112A),
+        elevation: 8,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: const Row(
+          children: [
+            Icon(Icons.live_tv_rounded, color: Color(0xFFC12CFF), size: 22),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'TV Guide coming next. Use Live TV for channels and EPG preview for now.',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _refreshSection(
+    BuildContext context,
+    XtreamCodeHomeController controller,
+    CategoryType type,
+  ) async {
+    final success = await controller.refreshSection(type);
+    if (!context.mounted) return;
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${_sectionLabel(type)} refresh failed.')),
+      );
+    }
+  }
+
+  String _lastUpdatedLabel(
+    XtreamCodeHomeController controller,
+    CategoryType type,
+  ) {
+    final updatedAt = controller.lastUpdated(type);
+    final count = controller.cachedItemCount(type);
+    final error = controller.lastRefreshError(type);
+    final countPrefix = count > 0 ? '$count cached • ' : '';
+
+    if (updatedAt == null) {
+      return error == null
+          ? '${countPrefix}Last updated: never'
+          : '${countPrefix}Last update failed';
+    }
+
+    final seconds = DateTime.now().difference(updatedAt).inSeconds;
+    final age = () {
+      if (seconds < 5) return 'just now';
+      if (seconds < 60) return '$seconds sec ago';
+
+      final minutes = seconds ~/ 60;
+      if (minutes < 60) return '$minutes min ago';
+
+      final hours = minutes ~/ 60;
+      if (hours < 24) return '$hours hr ago';
+
+      final days = hours ~/ 24;
+      return '$days day${days == 1 ? '' : 's'} ago';
+    }();
+
+    if (error != null) return '${countPrefix}Last update failed';
+    final staleSuffix = controller.isCacheStale(type)
+        ? ' • Update available'
+        : '';
+    return '${countPrefix}Last updated: $age$staleSuffix';
+  }
+
+  String _sectionLabel(CategoryType type) {
+    return switch (type) {
+      CategoryType.live => 'Live TV',
+      CategoryType.vod => 'Movies',
+      CategoryType.series => 'Series',
+    };
   }
 }

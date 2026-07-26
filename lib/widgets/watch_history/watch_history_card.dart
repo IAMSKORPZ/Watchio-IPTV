@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:another_iptv_player/models/content_type.dart';
 import 'package:another_iptv_player/models/watch_history.dart';
+import '../tv_focusable.dart';
 
 class WatchHistoryCard extends StatelessWidget {
   final WatchHistory history;
@@ -23,15 +24,19 @@ class WatchHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: width,
       height: height,
-      margin: EdgeInsets.symmetric(horizontal: 4),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: InkWell(
-          onTap: onTap,
+      child: TvFocusable(
+        onPressed: onTap,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        borderRadius: BorderRadius.circular(12),
+        child: Card(
+          clipBehavior: Clip.antiAlias,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Stack(
             children: [
               // Background/Thumbnail
@@ -42,8 +47,9 @@ class WatchHistoryCard extends StatelessWidget {
                 Positioned(
                   top: 8,
                   right: 8,
-                  child: GestureDetector(
-                    onTap: onRemove,
+                  child: TvFocusable(
+                    onPressed: onRemove,
+                    borderRadius: BorderRadius.circular(20),
                     child: Container(
                       padding: EdgeInsets.all(4),
                       decoration: BoxDecoration(

@@ -15,7 +15,9 @@ import 'screens/app_initializer_screen.dart';
 import 'services/cache_policy_service.dart';
 import 'services/performance_service.dart';
 import 'services/config_service.dart';
+import 'services/input_mode_controller.dart';
 import 'services/announcement_service.dart';
+import 'shared/widgets/watchio_focus_action.dart';
 import 'widgets/maintenance_banner.dart';
 import 'widgets/update_startup_check.dart';
 import 'l10n/app_localizations.dart';
@@ -25,6 +27,7 @@ import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  CachePolicyService.configureImageCache(tvMode: true);
   MediaKit.ensureInitialized();
   if (!kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
@@ -55,6 +58,7 @@ Future<void> main() async {
           create: (_) => AnnouncementService()..initialize(),
         ),
         ChangeNotifierProvider(create: (_) => UpdateController()..loadState()),
+        ChangeNotifierProvider(create: (_) => InputModeController()..load()),
       ],
       child: const MyApp(),
     ),
@@ -84,10 +88,39 @@ class MyApp extends StatelessWidget {
       title: config.branding.appName,
       theme: themeManager.currentThemeData,
       themeMode: ThemeMode.dark,
-      builder: (context, child) => FocusTraversalGroup(
-        policy: ReadingOrderTraversalPolicy(),
-        child: child ?? const SizedBox.shrink(),
-      ),
+      builder: (context, child) {
+        final inputMode = context.watch<InputModeController>();
+        CachePolicyService.configureImageCache(
+          tvMode: !inputMode.isLoaded || inputMode.isTvMode,
+        );
+        Widget content = FocusTraversalGroup(
+          policy: ReadingOrderTraversalPolicy(),
+          child: child ?? const SizedBox.shrink(),
+        );
+
+        if (inputMode.isTvMode) {
+          content = AbsorbPointer(absorbing: true, child: content);
+        }
+
+        return Shortcuts(
+          shortcuts: const {
+            ...WatchioFocusAction.activationShortcuts,
+            ...WatchioFocusAction.dismissShortcuts,
+          },
+          child: Actions(
+            actions: {
+              DismissIntent: CallbackAction<DismissIntent>(
+                onInvoke: (_) {
+                  final navigator = Navigator.maybeOf(context);
+                  navigator?.maybePop();
+                  return null;
+                },
+              ),
+            },
+            child: content,
+          ),
+        );
+      },
       home: UpdateStartupCheck(
         child: MaintenanceBanner(child: const AppInitializerScreen()),
       ),

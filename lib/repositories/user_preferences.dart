@@ -28,6 +28,186 @@ class UserPreferences {
   static const String _keyPlayerEngine = 'player_engine';
   static const String _keyHardwareDecoding = 'hardware_decoding';
   static const String _keyAspectRatio = 'player_aspect_ratio';
+  static const String _keyDeviceInputMode = 'device_input_mode';
+  static const String _keyLiveShowChannelNumbers = 'live_show_channel_numbers';
+  static const String _keyLiveShowChannelIcons = 'live_show_channel_icons';
+  static const String _keyLiveShowChannelNames = 'live_show_channel_names';
+  static const String _keyLiveShowCurrentProgram = 'live_show_current_program';
+  static const String _keyLiveRowSize = 'live_row_size';
+  static const String _keyLiveSortOrder = 'live_sort_order';
+
+  static String _liveHiddenCategoriesKey(String playlistId) =>
+      'live_hidden_categories_$playlistId';
+
+  static Future<void> setLiveHiddenCategoryIds(
+    String playlistId,
+    List<String> categoryIds,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _liveHiddenCategoriesKey(playlistId),
+      categoryIds,
+    );
+  }
+
+  static Future<List<String>> getLiveHiddenCategoryIds(
+    String playlistId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_liveHiddenCategoriesKey(playlistId)) ?? [];
+  }
+
+  static Future<void> setLiveShowChannelNumbers(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyLiveShowChannelNumbers, value);
+  }
+
+  static Future<bool> getLiveShowChannelNumbers() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyLiveShowChannelNumbers) ?? true;
+  }
+
+  static Future<void> setLiveShowChannelIcons(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyLiveShowChannelIcons, value);
+  }
+
+  static Future<bool> getLiveShowChannelIcons() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyLiveShowChannelIcons) ?? true;
+  }
+
+  static Future<void> setLiveShowChannelNames(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyLiveShowChannelNames, value);
+  }
+
+  static Future<bool> getLiveShowChannelNames() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyLiveShowChannelNames) ?? true;
+  }
+
+  static Future<void> setLiveShowCurrentProgram(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyLiveShowCurrentProgram, value);
+  }
+
+  static Future<bool> getLiveShowCurrentProgram() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyLiveShowCurrentProgram) ?? true;
+  }
+
+  static Future<void> setLiveRowSize(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyLiveRowSize, value);
+  }
+
+  static Future<String> getLiveRowSize() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyLiveRowSize) ?? 'normal';
+  }
+
+  static Future<void> setLiveSortOrder(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyLiveSortOrder, value);
+  }
+
+  static Future<String?> getLiveSortOrder() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyLiveSortOrder);
+  }
+
+  static String _catalogKey(String kind, String setting) =>
+      'catalog_${kind}_$setting';
+
+  static String _catalogHiddenCategoriesKey(String kind, String playlistId) =>
+      'catalog_${kind}_hidden_categories_$playlistId';
+
+  static Future<void> setCatalogHiddenCategoryIds(
+    String kind,
+    String playlistId,
+    List<String> categoryIds,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _catalogHiddenCategoriesKey(kind, playlistId),
+      categoryIds,
+    );
+  }
+
+  static Future<List<String>> getCatalogHiddenCategoryIds(
+    String kind,
+    String playlistId,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList(_catalogHiddenCategoriesKey(kind, playlistId)) ??
+        [];
+  }
+
+  static Future<void> setCatalogShowPoster(String kind, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_catalogKey(kind, 'show_poster'), value);
+  }
+
+  static Future<bool> getCatalogShowPoster(String kind) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_catalogKey(kind, 'show_poster')) ?? true;
+  }
+
+  static Future<void> setCatalogShowTitle(String kind, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_catalogKey(kind, 'show_title'), value);
+  }
+
+  static Future<bool> getCatalogShowTitle(String kind) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_catalogKey(kind, 'show_title')) ?? true;
+  }
+
+  static Future<void> setCatalogShowRating(String kind, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_catalogKey(kind, 'show_rating'), value);
+  }
+
+  static Future<bool> getCatalogShowRating(String kind) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_catalogKey(kind, 'show_rating')) ?? true;
+  }
+
+  static Future<void> setCatalogPosterSize(String kind, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_catalogKey(kind, 'poster_size'), value);
+  }
+
+  static Future<String> getCatalogPosterSize(String kind) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_catalogKey(kind, 'poster_size')) ?? 'normal';
+  }
+
+  static Future<void> setCatalogSortOrder(String kind, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_catalogKey(kind, 'sort_order'), value);
+  }
+
+  static Future<String?> getCatalogSortOrder(String kind) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_catalogKey(kind, 'sort_order'));
+  }
+
+  static Future<void> setDeviceInputMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyDeviceInputMode, mode);
+  }
+
+  static Future<String?> getDeviceInputMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyDeviceInputMode);
+  }
+
+  static Future<void> removeDeviceInputMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyDeviceInputMode);
+  }
 
   static Future<void> setPlayerEngine(String engine) async {
     final prefs = await SharedPreferences.getInstance();
@@ -249,7 +429,7 @@ class UserPreferences {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList(_hiddenCategoriesKey) ?? [];
   }
-  
+
   static Future<void> setThemeMode(ThemeMode mode) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyThemeMode, mode.toString().split('.').last);

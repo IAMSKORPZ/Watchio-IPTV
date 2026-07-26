@@ -155,7 +155,10 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
       orElse: () => PlayerEngine.auto,
     );
 
-    _playerController = PlayerFactory.create(engine);
+    _playerController = PlayerFactory.create(
+      engine,
+      contentType: _currentPlaybackItem.contentType,
+    );
     await _playerController.initialize();
 
     // Apply default aspect ratio
@@ -200,7 +203,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     debugPrint(
       'Episode ID: ${playItemWithUrl.originalItem?.season != null ? playItemWithUrl.id : "N/A"}',
     );
-    debugPrint('Generated URL: ${playItemWithUrl.url}');
+    debugPrint('Generated URL: [redacted]');
     debugPrint('User-Agent: ${playItemWithUrl.headers['User-Agent']}');
     debugPrint('Referer: ${playItemWithUrl.headers['Referer']}');
     debugPrint('Playback Engine: ${engine.name}');

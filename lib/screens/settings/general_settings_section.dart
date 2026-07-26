@@ -17,6 +17,7 @@ import '../../l10n/supported_languages.dart';
 import '../../models/m3u_item.dart';
 import '../../repositories/user_preferences.dart';
 import '../../services/app_state.dart';
+import '../../services/input_mode_controller.dart';
 import '../../services/m3u_parser.dart';
 import '../../widgets/dropdown_tile_widget.dart';
 import '../../widgets/section_title_widget.dart';
@@ -125,6 +126,7 @@ class _GeneralSettingsWidgetState extends State<GeneralSettingsWidget> {
   @override
   Widget build(BuildContext context) {
     final themeManager = Provider.of<ThemeManager>(context);
+    final inputMode = context.watch<InputModeController>();
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
         : Column(
@@ -377,9 +379,8 @@ class _GeneralSettingsWidgetState extends State<GeneralSettingsWidget> {
                         );
                       },
                     ),
-                    // Player gesture settings - Only show on mobile platforms (Android & iOS)
-                    if (Theme.of(context).platform == TargetPlatform.android ||
-                        Theme.of(context).platform == TargetPlatform.iOS) ...[
+                    // Player gesture settings - only run in Mobile/Touch mode.
+                    if (inputMode.isMobileMode) ...[
                       const Divider(height: 1),
                       SwitchListTile(
                         secondary: const Icon(Icons.brightness_6),

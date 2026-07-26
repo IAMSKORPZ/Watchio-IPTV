@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../controllers/favorites_controller.dart';
 import '../../../services/tmdb_service.dart';
+import '../../../shared/widgets/watchio_focus_action.dart';
 
 class MovieDetailsScreen extends StatefulWidget {
   final ContentItem contentItem;
@@ -22,7 +23,7 @@ class MovieDetailsScreen extends StatefulWidget {
 class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
   late final FavoritesController _favoritesController;
   late final IptvRepository? _repository;
-  
+
   Map<String, dynamic>? _vodInfo;
   bool _isLoading = true;
   bool _isFavorite = false;
@@ -34,20 +35,20 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
   void initState() {
     super.initState();
     _favoritesController = FavoritesController();
-    
+
     if (isXtreamCode && AppState.currentPlaylist != null) {
       _repository = IptvRepository(
         ApiConfig(
-          baseUrl: AppState.currentPlaylist!.url!, 
-          username: AppState.currentPlaylist!.username!, 
-          password: AppState.currentPlaylist!.password!
-        ), 
-        AppState.currentPlaylist!.id
+          baseUrl: AppState.currentPlaylist!.url!,
+          username: AppState.currentPlaylist!.username!,
+          password: AppState.currentPlaylist!.password!,
+        ),
+        AppState.currentPlaylist!.id,
       );
     } else {
       _repository = null;
     }
-    
+
     _loadAllData();
   }
 
@@ -59,14 +60,13 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
 
   Future<void> _loadAllData() async {
     setState(() => _isLoading = true);
-    await Future.wait([
-      _loadVodInfo(),
-      _checkFavoriteStatus(),
-    ]);
+    await Future.wait([_loadVodInfo(), _checkFavoriteStatus()]);
 
     // Try fallback TMDB trailer if provider trailer is missing
     if (_vodInfo != null) {
-      final providerTrailer = widget.contentItem.vodStream?.youtubeTrailer ?? _vodInfo!['info']?['youtube_trailer'];
+      final providerTrailer =
+          widget.contentItem.vodStream?.youtubeTrailer ??
+          _vodInfo!['info']?['youtube_trailer'];
       if (providerTrailer == null || providerTrailer.toString().isEmpty) {
         final tmdbIdStr = _vodInfo!['info']?['tmdb_id'];
         if (tmdbIdStr != null) {
@@ -95,7 +95,9 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
   }
 
   Future<void> _toggleFavorite() async {
-    final result = await _favoritesController.toggleFavorite(widget.contentItem);
+    final result = await _favoritesController.toggleFavorite(
+      widget.contentItem,
+    );
     if (mounted) {
       setState(() => _isFavorite = result);
     }
@@ -111,21 +113,28 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
 
   String? get _posterUrl {
     if (_vodInfo != null) {
-      final cover = _vodInfo!['info']?['movie_image'] ?? _vodInfo!['info']?['cover_big'] ?? _vodInfo!['info']?['cover'];
+      final cover =
+          _vodInfo!['info']?['movie_image'] ??
+          _vodInfo!['info']?['cover_big'] ??
+          _vodInfo!['info']?['cover'];
       if (cover is String && cover.isNotEmpty) return cover;
     }
-    return widget.contentItem.coverPath?.isNotEmpty == true 
-        ? widget.contentItem.coverPath 
-        : widget.contentItem.imagePath.isNotEmpty 
-            ? widget.contentItem.imagePath 
-            : widget.contentItem.vodStream?.streamIcon;
+    return widget.contentItem.coverPath?.isNotEmpty == true
+        ? widget.contentItem.coverPath
+        : widget.contentItem.imagePath.isNotEmpty
+        ? widget.contentItem.imagePath
+        : widget.contentItem.vodStream?.streamIcon;
   }
 
   String? get _backdropUrl {
     if (_vodInfo != null) {
       final backdrop = _vodInfo!['info']?['backdrop_path'];
-      if (backdrop is List && backdrop.isNotEmpty) return backdrop.first.toString();
-      if (backdrop is String && backdrop.isNotEmpty) return backdrop;
+      if (backdrop is List && backdrop.isNotEmpty) {
+        return backdrop.first.toString();
+      }
+      if (backdrop is String && backdrop.isNotEmpty) {
+        return backdrop;
+      }
     }
     return null;
   }
@@ -135,18 +144,23 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
     if (_isLoading) {
       return const Scaffold(
         backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator(color: Color(0xFFC12CFF))),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFC12CFF)),
+        ),
       );
     }
 
     final info = _vodInfo?['info'] ?? {};
-    final year = info['releasedate']?.toString().split('-').first ?? info['year']?.toString() ?? '';
+    final year =
+        info['releasedate']?.toString().split('-').first ??
+        info['year']?.toString() ??
+        '';
     final rating = double.tryParse(info['rating']?.toString() ?? '0') ?? 0.0;
-    
+
     // Title cleanup: Remove duplicated years and quotes
     String title = widget.contentItem.name.trim();
     if (title.startsWith('"') && title.endsWith('"')) {
-       title = title.substring(1, title.length - 1).trim();
+      title = title.substring(1, title.length - 1).trim();
     }
     if (year.isNotEmpty) {
       final yearPattern = '($year)';
@@ -160,15 +174,32 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
         }
       }
     }
-    if (title.endsWith('"')) title = title.substring(0, title.length - 1).trim();
+    if (title.endsWith('"')) {
+      title = title.substring(0, title.length - 1).trim();
+    }
 
     // Defensively handle metadata values
-    final String director = _getSafeValue(info['director'], fallback: 'Unknown');
-    final String releaseDate = _getSafeValue(info['releasedate'] ?? info['releaseDate'] ?? info['year'], fallback: 'Unknown');
-    final String duration = _getSafeValue(info['duration'], fallback: 'Unknown');
-    final String genre = _getSafeValue(info['genre'] ?? widget.contentItem.vodStream?.genre, fallback: 'Unknown');
+    final String director = _getSafeValue(
+      info['director'],
+      fallback: 'Unknown',
+    );
+    final String releaseDate = _getSafeValue(
+      info['releasedate'] ?? info['releaseDate'] ?? info['year'],
+      fallback: 'Unknown',
+    );
+    final String duration = _getSafeValue(
+      info['duration'],
+      fallback: 'Unknown',
+    );
+    final String genre = _getSafeValue(
+      info['genre'] ?? widget.contentItem.vodStream?.genre,
+      fallback: 'Unknown',
+    );
     final String cast = _getSafeValue(info['cast'], fallback: 'Unknown');
-    final String plot = _getSafeValue(info['plot'] ?? widget.contentItem.description, fallback: 'Unknown');
+    final String plot = _getSafeValue(
+      info['plot'] ?? widget.contentItem.description,
+      fallback: 'Unknown',
+    );
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -177,19 +208,22 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
         children: [
           // BACKGROUND
           _buildBackground(),
-          
+
           // CONTENT
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32.0,
+                vertical: 8.0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // TOP BAR: [Back] [Logo] [Center Title]
                   _buildTopBar(title, year),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   // MAIN ROW (2 Columns: Poster, Metadata/Actions)
                   Expanded(
                     child: Row(
@@ -197,23 +231,32 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
                       children: [
                         // LEFT COLUMN (Poster + Stars)
                         _buildPosterColumn(rating),
-                        
+
                         const SizedBox(width: 32),
-                        
+
                         // RIGHT COLUMN (Metadata + Buttons + Description)
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (director != 'Unknown') _buildMetadataRow('Directed By:', director),
-                              if (releaseDate != 'Unknown') _buildMetadataRow('Release Date:', releaseDate),
-                              if (duration != 'Unknown') _buildMetadataRow('Duration:', duration, isBadge: true),
-                              if (genre != 'Unknown') _buildMetadataRow('Genre:', genre),
-                              if (cast != 'Unknown') _buildMetadataRow('Cast:', cast, maxLines: 1),
-                              
+                              if (director != 'Unknown')
+                                _buildMetadataRow('Directed By:', director),
+                              if (releaseDate != 'Unknown')
+                                _buildMetadataRow('Release Date:', releaseDate),
+                              if (duration != 'Unknown')
+                                _buildMetadataRow(
+                                  'Duration:',
+                                  duration,
+                                  isBadge: true,
+                                ),
+                              if (genre != 'Unknown')
+                                _buildMetadataRow('Genre:', genre),
+                              if (cast != 'Unknown')
+                                _buildMetadataRow('Cast:', cast, maxLines: 1),
+
                               const SizedBox(height: 12),
-                              
+
                               // BUTTONS
                               Row(
                                 children: [
@@ -224,7 +267,7 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
                               ),
 
                               const SizedBox(height: 12),
-                              
+
                               // DESCRIPTION (max 2 lines) - respect width of metadata column
                               _buildDescription(plot),
                             ],
@@ -237,7 +280,7 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
               ),
             ),
           ),
-          
+
           // PINNED ACTION COLUMN (Top Right)
           Positioned(
             top: 10, // Requirement 4: Pinned to top-right, moved upward
@@ -263,13 +306,13 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
       children: [
         if (url != null)
           CachedNetworkImage(
-            imageUrl: url, 
-            fit: BoxFit.cover, 
-            errorWidget: (ctx, err, st) => Container(color: Colors.black)
+            imageUrl: url,
+            fit: BoxFit.cover,
+            errorWidget: (ctx, err, st) => Container(color: Colors.black),
           )
         else
           Container(color: Colors.black),
-        
+
         BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(color: Colors.black.withValues(alpha: 0.7)),
@@ -288,10 +331,15 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
             alignment: Alignment.centerLeft,
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center, // Vertically center items
+              crossAxisAlignment:
+                  CrossAxisAlignment.center, // Vertically center items
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 32),
+                  icon: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white,
+                    size: 32,
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 const SizedBox(width: 20), // 20px spacing
@@ -313,7 +361,7 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
               ],
             ),
           ),
-          
+
           // Center part: Title
           Align(
             alignment: Alignment.center,
@@ -339,8 +387,8 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 140, 
-          height: 210, 
+          width: 140,
+          height: 210,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(4),
             border: Border.all(color: Colors.white24, width: 1),
@@ -348,19 +396,20 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.5),
                 blurRadius: 10,
-              )
+              ),
             ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: _posterUrl != null 
-              ? CachedNetworkImage(
-                  imageUrl: _posterUrl!, 
-                  fit: BoxFit.cover,
-                  placeholder: (ctx, url) => Container(color: Colors.white10),
-                  errorWidget: (ctx, url, err) => Container(color: Colors.white10),
-                )
-              : Container(color: Colors.white10),
+            child: _posterUrl != null
+                ? CachedNetworkImage(
+                    imageUrl: _posterUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (ctx, url) => Container(color: Colors.white10),
+                    errorWidget: (ctx, url, err) =>
+                        Container(color: Colors.white10),
+                  )
+                : Container(color: Colors.white10),
           ),
         ),
         const SizedBox(height: 4),
@@ -394,9 +443,14 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
     );
   }
 
-  Widget _buildMetadataRow(String label, String value, {bool isBadge = false, int maxLines = 1}) {
+  Widget _buildMetadataRow(
+    String label,
+    String value, {
+    bool isBadge = false,
+    int maxLines = 1,
+  }) {
     return SizedBox(
-      height: 28, 
+      height: 28,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -405,32 +459,43 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
             width: 140,
             child: Text(
               label,
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           // VALUE COLUMN - Expanded will take remaining width (Requirement 3)
           Expanded(
-            child: isBadge 
-              ? Align(
-                  alignment: Alignment.centerLeft,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.white10,
-                      borderRadius: BorderRadius.circular(4),
+            child: isBadge
+                ? Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        value,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      value,
-                      style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold),
-                    ),
+                  )
+                : Text(
+                    value,
+                    style: const TextStyle(color: Colors.white70, fontSize: 16),
+                    maxLines: maxLines,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                )
-              : Text(
-                  value,
-                  style: const TextStyle(color: Colors.white70, fontSize: 16),
-                  maxLines: maxLines,
-                  overflow: TextOverflow.ellipsis,
-                ),
           ),
         ],
       ),
@@ -466,21 +531,28 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
     return Material(
       color: Colors.white.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(6),
-      child: InkWell(
+      child: WatchioFocusAction(
         focusNode: _playFocusNode,
-        onTap: _openPlayer,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          width: 140,
-          height: 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.white12),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: const Text(
-            'Play',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+        onActivate: _openPlayer,
+        child: InkWell(
+          onTap: _openPlayer,
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            width: 140,
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              'Play',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
       ),
@@ -488,26 +560,38 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
   }
 
   Widget _buildTrailerButton() {
-    final trailerKey = widget.contentItem.vodStream?.youtubeTrailer ?? _vodInfo!['info']?['youtube_trailer'] ?? _tmdbTrailerKey;
-    if (trailerKey == null || trailerKey.toString().isEmpty) return const SizedBox.shrink();
+    final trailerKey =
+        widget.contentItem.vodStream?.youtubeTrailer ??
+        _vodInfo!['info']?['youtube_trailer'] ??
+        _tmdbTrailerKey;
+    if (trailerKey == null || trailerKey.toString().isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Material(
       color: Colors.white.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(6),
-      child: InkWell(
-        onTap: () => _openTrailer(context),
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          width: 150,
-          height: 46, // Height matching Play
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.white12),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: const Text(
-            'Watch Trailer',
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+      child: WatchioFocusAction(
+        onActivate: () => _openTrailer(context),
+        child: InkWell(
+          onTap: () => _openTrailer(context),
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            width: 150,
+            height: 46, // Height matching Play
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.white12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text(
+              'Watch Trailer',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
       ),
@@ -524,21 +608,29 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
   }
 
   Future<void> _openTrailer(BuildContext context) async {
-    final trailerKey = widget.contentItem.vodStream?.youtubeTrailer ?? _vodInfo!['info']?['youtube_trailer'] ?? _tmdbTrailerKey;
-    final urlString = (trailerKey is String && trailerKey.isNotEmpty) 
-        ? 'https://www.youtube.com/watch?v=$trailerKey' 
+    final trailerKey =
+        widget.contentItem.vodStream?.youtubeTrailer ??
+        _vodInfo!['info']?['youtube_trailer'] ??
+        _tmdbTrailerKey;
+    final urlString = (trailerKey is String && trailerKey.isNotEmpty)
+        ? 'https://www.youtube.com/watch?v=$trailerKey'
         : 'https://www.youtube.com/results?search_query=${Uri.encodeQueryComponent('${widget.contentItem.name} trailer')}';
-    try { await launchUrl(Uri.parse(urlString), mode: LaunchMode.externalApplication); } catch (_) {}
+    try {
+      await launchUrl(
+        Uri.parse(urlString),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {}
   }
 
-  void _openPlayer() { 
+  void _openPlayer() {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => UnifiedPlayerScreen(
-          contentItem: widget.contentItem, 
-          queue: [widget.contentItem]
-        )
-      )
+          contentItem: widget.contentItem,
+          queue: [widget.contentItem],
+        ),
+      ),
     );
   }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:another_iptv_player/shared/widgets/watchio_focus_action.dart';
+import 'package:provider/provider.dart';
+import '../services/input_mode_controller.dart';
 import '../utils/firestick_performance.dart';
 
 class TvFocusable extends StatefulWidget {
@@ -28,11 +30,12 @@ class _TvFocusableState extends State<TvFocusable> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final inputMode = context.watch<InputModeController>();
 
     return Padding(
       padding: widget.margin,
       child: GestureDetector(
-        onTap: widget.onPressed,
+        onTap: inputMode.allowPointerInput ? widget.onPressed : null,
         child: WatchioFocusAction(
           autofocus: widget.autofocus,
           mouseCursor: widget.onPressed == null

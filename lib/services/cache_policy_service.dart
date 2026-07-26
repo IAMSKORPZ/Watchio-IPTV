@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/painting.dart';
 import 'package:path_provider/path_provider.dart';
 
 class CachePolicy {
@@ -14,8 +15,19 @@ class CachePolicy {
 
 class CachePolicyService {
   final CachePolicy policy;
+  static bool? _lastTvImageCacheMode;
 
   const CachePolicyService({this.policy = const CachePolicy()});
+
+  static void configureImageCache({required bool tvMode}) {
+    if (_lastTvImageCacheMode == tvMode) return;
+    _lastTvImageCacheMode = tvMode;
+
+    final cache = PaintingBinding.instance.imageCache;
+    cache.maximumSize = tvMode ? 80 : 160;
+    cache.maximumSizeBytes = tvMode ? 48 * 1024 * 1024 : 96 * 1024 * 1024;
+    cache.clearLiveImages();
+  }
 
   Future<int> cleanupTemporaryCache() async {
     final dir = await getTemporaryDirectory();

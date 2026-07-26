@@ -24,6 +24,14 @@ class WatchioFocusAction extends StatelessWidget {
     SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
     SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
     SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+    SingleActivator(LogicalKeyboardKey.gameButtonSelect): ActivateIntent(),
+  };
+
+  static const Map<ShortcutActivator, Intent> dismissShortcuts = {
+    SingleActivator(LogicalKeyboardKey.goBack): DismissIntent(),
+    SingleActivator(LogicalKeyboardKey.browserBack): DismissIntent(),
+    SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+    SingleActivator(LogicalKeyboardKey.gameButtonB): DismissIntent(),
   };
 
   @override

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:another_iptv_player/models/import_progress_model.dart';
+import 'package:another_iptv_player/services/cache_metadata_service.dart';
 import 'package:another_iptv_player/services/epg_storage_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -75,7 +76,6 @@ class EpgImportService {
     ImportCancellationToken? cancellationToken,
   }) async {
     await storage.ensureSchema();
-    await storage.clearEpgData(playlistId);
 
     final startedAt = DateTime.now();
     final programs = <_ProgramRow>[];
@@ -120,26 +120,43 @@ INSERT OR REPLACE INTO epg_programs(
       }
     }
 
-    await for (final rawLine in lines) {
-      cancellationToken?.throwIfCancelled();
-      final line = rawLine.trim();
-      if (line.isEmpty) continue;
+    try {
+      await for (final rawLine in lines) {
+        cancellationToken?.throwIfCancelled();
+        final line = rawLine.trim();
+        if (line.isEmpty) continue;
 
-      if (isFirstChunk) {
-        final preview = line.length > 500 ? line.substring(0, 500) : line;
-        if (kDebugMode) {
-          debugPrint('EPG XMLTV response start: $preview');
+        if (isFirstChunk) {
+          final preview = line.length > 500 ? line.substring(0, 500) : line;
+          if (kDebugMode) {
+            debugPrint('EPG XMLTV response start: $preview');
+          }
+          isFirstChunk = false;
         }
-        isFirstChunk = false;
-      }
 
-      if (line.contains('<channel ')) {
-        channelId = _attr(line, 'id');
-        buffer.clear();
-        buffer.write(line);
-        if (line.contains('</channel>')) {
-          final xml = buffer.toString();
-          if (channelId != null) {
+        if (line.contains('<channel ')) {
+          channelId = _attr(line, 'id');
+          buffer.clear();
+          buffer.write(line);
+          if (line.contains('</channel>')) {
+            final xml = buffer.toString();
+            if (channelId != null) {
+              final displayName = _tag(xml, 'display-name') ?? channelId;
+              await _upsertChannel(
+                playlistId,
+                channelId,
+                displayName,
+                _attr(xml, 'src'),
+              );
+              channelsFound++;
+            }
+            channelId = null;
+            buffer.clear();
+          }
+        } else if (channelId != null) {
+          buffer.write(line);
+          if (line.contains('</channel>')) {
+            final xml = buffer.toString();
             final displayName = _tag(xml, 'display-name') ?? channelId;
             await _upsertChannel(
               playlistId,
@@ -148,78 +165,77 @@ INSERT OR REPLACE INTO epg_programs(
               _attr(xml, 'src'),
             );
             channelsFound++;
+            channelId = null;
+            buffer.clear();
           }
-          channelId = null;
+        } else if (line.contains('<programme ')) {
           buffer.clear();
+          buffer.write(line);
+          if (line.contains('</programme>')) {
+            final row = _parseProgram(buffer.toString());
+            if (row != null) {
+              programs.add(row);
+              programsFound++;
+            } else {
+              programsSkipped++;
+            }
+            buffer.clear();
+          }
+        } else if (buffer.isNotEmpty) {
+          buffer.write(line);
+          if (line.contains('</programme>')) {
+            final row = _parseProgram(buffer.toString());
+            if (row != null) {
+              programs.add(row);
+              programsFound++;
+            } else {
+              programsSkipped++;
+            }
+            buffer.clear();
+          }
         }
-      } else if (channelId != null) {
-        buffer.write(line);
-        if (line.contains('</channel>')) {
-          final xml = buffer.toString();
-          final displayName = _tag(xml, 'display-name') ?? channelId;
-          await _upsertChannel(
-            playlistId,
-            channelId,
-            displayName,
-            _attr(xml, 'src'),
+
+        if (programs.length >= batchSize) {
+          await flushPrograms();
+          onProgress?.call(
+            ImportProgressModel(
+              currentItem: '$channelsFound channels, $programsFound programmes',
+              processedItems: programsFound,
+              startedAt: startedAt,
+            ),
           );
-          channelsFound++;
-          channelId = null;
-          buffer.clear();
-        }
-      } else if (line.contains('<programme ')) {
-        buffer.clear();
-        buffer.write(line);
-        if (line.contains('</programme>')) {
-          final row = _parseProgram(buffer.toString());
-          if (row != null) {
-            programs.add(row);
-            programsFound++;
-          } else {
-            programsSkipped++;
-          }
-          buffer.clear();
-        }
-      } else if (buffer.isNotEmpty) {
-        buffer.write(line);
-        if (line.contains('</programme>')) {
-          final row = _parseProgram(buffer.toString());
-          if (row != null) {
-            programs.add(row);
-            programsFound++;
-          } else {
-            programsSkipped++;
-          }
-          buffer.clear();
         }
       }
 
-      if (programs.length >= batchSize) {
-        await flushPrograms();
-        onProgress?.call(
-          ImportProgressModel(
-            currentItem: '$channelsFound channels, $programsFound programmes',
-            processedItems: programsFound,
-            startedAt: startedAt,
-          ),
+      await flushPrograms();
+      await storage.prunePrograms(playlistId: playlistId);
+      await CacheMetadataService().markSuccess(
+        playlistId: playlistId,
+        section: CacheSection.epg,
+        itemCount: await storage.getProgramCount(playlistId),
+      );
+
+      if (kDebugMode) {
+        debugPrint(
+          'EPG full import complete. Channels: $channelsFound, Programmes: $programsFound, Skipped: $programsSkipped',
         );
       }
-    }
 
-    await flushPrograms();
-    if (kDebugMode) {
-      debugPrint(
-        'EPG full import complete. Channels: $channelsFound, Programmes: $programsFound, Skipped: $programsSkipped',
+      final done = ImportProgressModel(
+        currentItem: '$channelsFound channels, $programsFound programmes',
+        processedItems: programsFound,
+        startedAt: startedAt,
       );
+      onProgress?.call(done);
+      return done;
+    } catch (e) {
+      await CacheMetadataService().markFailure(
+        playlistId: playlistId,
+        section: CacheSection.epg,
+        error: e,
+      );
+      rethrow;
     }
-
-    final done = ImportProgressModel(
-      currentItem: '$channelsFound channels, $programsFound programmes',
-      processedItems: programsFound,
-      startedAt: startedAt,
-    );
-    onProgress?.call(done);
-    return done;
   }
 
   Stream<String> _xmlElements(Stream<String> chunks) async* {

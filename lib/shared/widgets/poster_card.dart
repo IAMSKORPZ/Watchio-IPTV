@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../utils/firestick_performance.dart';
+import 'focus_wrapper.dart';
 
 class PosterCard extends StatelessWidget {
   final String title;
@@ -10,6 +11,9 @@ class PosterCard extends StatelessWidget {
   final String? year;
   final String? metaBadge;
   final bool isFavorite;
+  final bool showImage;
+  final bool showTitle;
+  final bool showRating;
   final VoidCallback onTap;
   final VoidCallback? onFavoriteTap;
 
@@ -22,6 +26,9 @@ class PosterCard extends StatelessWidget {
     this.year,
     this.metaBadge,
     this.isFavorite = false,
+    this.showImage = true,
+    this.showTitle = true,
+    this.showRating = true,
     required this.onTap,
     this.onFavoriteTap,
   });
@@ -29,9 +36,10 @@ class PosterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: InkWell(
-        onTap: onTap,
+      child: FocusWrapper(
+        onPressed: onTap,
         borderRadius: BorderRadius.circular(12),
+        scale: 1.045,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -40,7 +48,7 @@ class PosterCard extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: imageUrl != null && imageUrl!.isNotEmpty
+                    child: showImage && imageUrl != null && imageUrl!.isNotEmpty
                         ? CachedNetworkImage(
                             imageUrl: imageUrl!,
                             fit: BoxFit.cover,
@@ -65,7 +73,7 @@ class PosterCard extends StatelessWidget {
                             child: const Icon(Icons.movie, size: 50),
                           ),
                   ),
-                  if (rating != null)
+                  if (showRating && rating != null)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -128,8 +136,10 @@ class PosterCard extends StatelessWidget {
                     Positioned(
                       bottom: 8,
                       right: 8,
-                      child: GestureDetector(
-                        onTap: onFavoriteTap,
+                      child: FocusWrapper(
+                        onPressed: onFavoriteTap,
+                        borderRadius: BorderRadius.circular(20),
+                        scale: 1.1,
                         child: Container(
                           padding: const EdgeInsets.all(6),
                           decoration: BoxDecoration(
@@ -147,31 +157,36 @@ class PosterCard extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-            if (subtitle != null)
+            if (showTitle) ...[
+              const SizedBox(height: 8),
               Text(
-                subtitle!,
+                title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
-              )
-            else if (year != null)
-              Text(
-                year!,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withValues(alpha: 0.5),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
+              if (subtitle != null)
+                Text(
+                  subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
+                )
+              else if (year != null)
+                Text(
+                  year!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withValues(alpha: 0.5),
+                  ),
+                ),
+            ],
           ],
         ),
       ),

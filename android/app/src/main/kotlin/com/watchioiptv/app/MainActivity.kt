@@ -11,12 +11,16 @@ import android.view.WindowManager
 import androidx.core.content.FileProvider
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : AudioServiceActivity() {
     private val updateInstallerChannel = "watchio/update_installer"
     private val nativePlayerChannel = "watchio/native_player"
+    private val nativeLivePlayerChannel = "watchio/native_live_player"
+    private val nativeLivePlayerEvents = "watchio/native_live_player/events"
+    private val nativeLivePlayerViewType = "watchio/native_live_player_view"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,6 +29,15 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        val nativeLivePlayerManager = NativeLivePlayerManager(applicationContext)
+
+        flutterEngine
+            .platformViewsController
+            .registry
+            .registerViewFactory(
+                nativeLivePlayerViewType,
+                NativeLivePlayerViewFactory(nativeLivePlayerManager)
+            )
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, updateInstallerChannel).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -61,6 +74,14 @@ class MainActivity : AudioServiceActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, nativeLivePlayerChannel)
+            .setMethodCallHandler { call, result ->
+                nativeLivePlayerManager.handle(call, result)
+            }
+
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, nativeLivePlayerEvents)
+            .setStreamHandler(nativeLivePlayerManager)
     }
 
     private fun canInstallPackages(): Boolean {

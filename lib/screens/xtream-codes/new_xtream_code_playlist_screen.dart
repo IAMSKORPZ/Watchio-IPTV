@@ -1,4 +1,3 @@
-import 'package:another_iptv_player/screens/xtream-codes/xtream_code_data_loader_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +6,9 @@ import '../../../../controllers/playlist_controller.dart';
 import '../../../../models/api_configuration_model.dart';
 import '../../../../models/playlist_model.dart';
 import '../../../../repositories/iptv_repository.dart';
+import '../../../../shared/widgets/watchio_focus_action.dart';
+import '../../../../utils/firestick_performance.dart';
+import '../../../../services/playlist_service.dart';
 
 class NewXtreamCodePlaylistScreen extends StatefulWidget {
   const NewXtreamCodePlaylistScreen({super.key});
@@ -81,10 +83,11 @@ class NewXtreamCodePlaylistScreenState
   Widget build(BuildContext context) {
     final config = context.watch<ConfigService>().config;
     final loginBg = config.backgrounds.login;
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return Scaffold(
       backgroundColor: const Color(0xFF050816),
-      resizeToAvoidBottomInset: false, // Keyboard overlays the screen
+      resizeToAvoidBottomInset: true,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final double width = constraints.maxWidth;
@@ -118,7 +121,7 @@ class NewXtreamCodePlaylistScreenState
           double titleFontSize = isMobile ? 20 : 24;
           double spacing = isMobile ? 8 : 12;
 
-          if (height < 450) {
+          if (height < 450 || keyboardOpen) {
             logoWidth *= 0.8;
             fieldHeight *= 0.8;
             buttonHeight *= 0.8;
@@ -145,7 +148,7 @@ class NewXtreamCodePlaylistScreenState
               decoration: BoxDecoration(
                 image: DecorationImage(
                   image: loginBg.isNotEmpty
-                      ? NetworkImage(loginBg)
+                      ? perfNetworkImage(loginBg)
                       : const AssetImage('assets/images/background.png')
                             as ImageProvider,
                   fit: BoxFit.cover,
@@ -158,7 +161,7 @@ class NewXtreamCodePlaylistScreenState
               child: SafeArea(
                 child: Row(
                   children: [
-                    if (!isMobile)
+                    if (!isMobile && !keyboardOpen)
                       Expanded(
                         flex: 4,
                         child: Container(
@@ -232,7 +235,7 @@ class NewXtreamCodePlaylistScreenState
                                   icon: Icons.view_list_rounded,
                                   label: 'LIST PLAYLISTS',
                                   height: 60,
-                                  onTap: () => Navigator.pop(context),
+                                  onTap: _openPlaylistList,
                                 ),
                               ),
                               const SizedBox(height: 30), // Compensatory spacer
@@ -393,8 +396,7 @@ class NewXtreamCodePlaylistScreenState
                                                 Icons.view_list_rounded,
                                                 color: Colors.white70,
                                               ),
-                                              onPressed: () =>
-                                                  Navigator.pop(context),
+                                              onPressed: _openPlaylistList,
                                             ),
                                           ],
                                         ),
@@ -450,7 +452,7 @@ class NewXtreamCodePlaylistScreenState
 
       var playerInfo = await repository.getPlayerInfo(forceRefresh: true);
 
-      if (playerInfo == null) {
+      if (playerInfo == null || playerInfo.userInfo.auth == 0) {
         controller.setError('Invalid credentials or server unavailable');
         return;
       }
@@ -464,15 +466,231 @@ class NewXtreamCodePlaylistScreenState
       );
 
       if (playlist != null && mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                XtreamCodeDataLoaderScreen(playlist: playlist),
+        final savedRepository = IptvRepository(
+          ApiConfig(
+            baseUrl: playlist.url ?? '',
+            username: playlist.username ?? '',
+            password: playlist.password ?? '',
           ),
+          playlist.id,
+        );
+
+        await savedRepository.getPlayerInfo(forceRefresh: true);
+
+        if (!mounted) return;
+        await controller.openPlaylist(
+          context,
+          playlist,
+          refreshAfterFirstHomePaint: true,
         );
       }
     }
+  }
+
+  Future<void> _openPlaylistList() async {
+    final playlists = await PlaylistService.getXStreamPlaylists();
+    if (!mounted) return;
+
+    if (playlists.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No playlists found. You need to add one first.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      FocusScope.of(context).requestFocus(_usernameFocus);
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _SavedXtreamPlaylistScreen(playlists: playlists),
+      ),
+    );
+  }
+}
+
+class _SavedXtreamPlaylistScreen extends StatelessWidget {
+  const _SavedXtreamPlaylistScreen({required this.playlists});
+
+  final List<Playlist> playlists;
+
+  @override
+  Widget build(BuildContext context) {
+    final config = context.watch<ConfigService>().config;
+    final bg = config.backgrounds.login;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF050816),
+      body: Container(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: bg.isNotEmpty
+                ? perfNetworkImage(bg)
+                : const AssetImage('assets/images/background.png')
+                      as ImageProvider,
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(
+              Colors.black.withValues(alpha: 0.55),
+              BlendMode.darken,
+            ),
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 64, vertical: 34),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    WatchioFocusAction(
+                      onActivate: () => Navigator.of(context).maybePop(),
+                      child: IconButton(
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(
+                          Icons.arrow_back_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 18),
+                    Image.asset(
+                      'assets/images/App_Logo.png',
+                      height: 72,
+                      fit: BoxFit.contain,
+                    ),
+                    const Spacer(),
+                    const Text(
+                      'SAVED PLAYLISTS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.8,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: FocusTraversalGroup(
+                    child: ListView.separated(
+                      itemCount: playlists.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 14),
+                      itemBuilder: (context, index) => _SavedPlaylistTile(
+                        playlist: playlists[index],
+                        autofocus: index == 0,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedPlaylistTile extends StatefulWidget {
+  const _SavedPlaylistTile({required this.playlist, this.autofocus = false});
+
+  final Playlist playlist;
+  final bool autofocus;
+
+  @override
+  State<_SavedPlaylistTile> createState() => _SavedPlaylistTileState();
+}
+
+class _SavedPlaylistTileState extends State<_SavedPlaylistTile> {
+  bool _focused = false;
+
+  Future<void> _open() async {
+    await context.read<PlaylistController>().openPlaylist(
+      context,
+      widget.playlist,
+      refreshAfterFirstHomePaint: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WatchioFocusAction(
+      autofocus: widget.autofocus,
+      onActivate: _open,
+      onFocusChange: (focused) => setState(() => _focused = focused),
+      mouseCursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: _open,
+        child: AnimatedContainer(
+          duration: perfDuration(const Duration(milliseconds: 150)),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF21144A).withValues(alpha: 0.92),
+                const Color(0xFF16285C).withValues(alpha: 0.92),
+              ],
+            ),
+            border: Border.all(
+              color: _focused
+                  ? const Color(0xFF00B7FF)
+                  : Colors.white.withValues(alpha: 0.12),
+              width: _focused ? 2.5 : 1.2,
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.vpn_key_rounded,
+                color: Color(0xFF00B7FF),
+                size: 34,
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.playlist.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.playlist.url ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.58),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white70,
+                size: 34,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -504,10 +722,7 @@ class _SideButtonState extends State<_SideButton> {
     return FocusableActionDetector(
       onFocusChange: (val) => setState(() => _isFocused = val),
       onShowHoverHighlight: (val) => setState(() => _isHovered = val),
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-      },
+      shortcuts: WatchioFocusAction.activationShortcuts,
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (_) => widget.onTap(),
@@ -668,10 +883,7 @@ class _XTextFieldState extends State<_XTextField> {
     return FocusableActionDetector(
       focusNode: widget.focusNode,
       onFocusChange: (value) => setState(() => _isFocused = value),
-      shortcuts: const {
-        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-      },
+      shortcuts: WatchioFocusAction.activationShortcuts,
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (_) {
@@ -816,13 +1028,25 @@ class _TextEntryDialogState extends State<_TextEntryDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final keyboardHeight = MediaQuery.viewInsetsOf(context).bottom;
+    final maxDialogHeight = (screenHeight - keyboardHeight - 48)
+        .clamp(160.0, 360.0)
+        .toDouble();
+    final compact = maxDialogHeight < 260;
+
     return Dialog(
       backgroundColor: const Color(0xFF111827),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
+        constraints: BoxConstraints(
+          maxWidth: compact ? 520 : 620,
+          maxHeight: maxDialogHeight,
+        ),
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          padding: EdgeInsets.all(compact ? 16 : 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -835,35 +1059,45 @@ class _TextEntryDialogState extends State<_TextEntryDialog> {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 18),
-              TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                autofocus: true,
-                obscureText: widget.obscure,
-                keyboardType: widget.isPassword
-                    ? TextInputType.visiblePassword
-                    : TextInputType.text,
-                textInputAction: widget.textInputAction,
-                onSubmitted: (_) => _save(),
-                style: const TextStyle(color: Colors.white, fontSize: 20),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFF0F1423),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: Color(0xFFC12CFF)),
+              SizedBox(height: compact ? 10 : 18),
+              SizedBox(
+                height: compact ? 54 : 70,
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  autofocus: true,
+                  obscureText: widget.obscure,
+                  keyboardType: widget.isPassword
+                      ? TextInputType.visiblePassword
+                      : TextInputType.text,
+                  textInputAction: widget.textInputAction,
+                  onSubmitted: (_) => _save(),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: compact ? 16 : 20,
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(
-                      color: Color(0xFFC12CFF),
-                      width: 2,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFF0F1423),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: compact ? 10 : 18,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFC12CFF)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(
+                        color: Color(0xFFC12CFF),
+                        width: 2,
+                      ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 22),
+              SizedBox(height: compact ? 12 : 22),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -908,11 +1142,7 @@ class _AddPlaylistButtonState extends State<_AddPlaylistButton> {
     return FocusableActionDetector(
       focusNode: widget.focusNode,
       onFocusChange: (val) => setState(() => _isFocused = val),
-      shortcuts: {
-        const SingleActivator(LogicalKeyboardKey.enter): const ActivateIntent(),
-        const SingleActivator(LogicalKeyboardKey.select):
-            const ActivateIntent(),
-      },
+      shortcuts: WatchioFocusAction.activationShortcuts,
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
           onInvoke: (_) => widget.onTap?.call(),

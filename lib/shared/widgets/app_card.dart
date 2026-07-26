@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'focus_wrapper.dart';
 import 'glass_panel.dart';
 
 class AppCard extends StatelessWidget {
@@ -32,18 +33,17 @@ class AppCard extends StatelessWidget {
       height: height,
       margin: margin,
       padding: padding ?? const EdgeInsets.all(16),
-      decoration: color != null ? BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(borderRadius),
-      ) : null,
+      decoration: color != null
+          ? BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(borderRadius),
+            )
+          : null,
       child: child,
     );
 
     if (isGlass) {
-      content = GlassPanel(
-        borderRadius: borderRadius,
-        child: content,
-      );
+      content = GlassPanel(borderRadius: borderRadius, child: content);
     } else {
       content = Card(
         color: color,
@@ -55,8 +55,8 @@ class AppCard extends StatelessWidget {
     }
 
     if (onTap != null) {
-      return InkWell(
-        onTap: onTap,
+      return FocusWrapper(
+        onPressed: onTap,
         borderRadius: BorderRadius.circular(borderRadius),
         child: content,
       );

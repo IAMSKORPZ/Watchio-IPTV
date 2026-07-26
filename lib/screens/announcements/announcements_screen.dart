@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/announcement_v2_model.dart';
@@ -67,6 +68,20 @@ class _AnnouncementListCardState extends State<_AnnouncementListCard> {
     final accent = Theme.of(context).colorScheme.primary;
     return FocusableActionDetector(
       onFocusChange: (value) => setState(() => _focused = value),
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onTap();
+            return null;
+          },
+        ),
+      },
       child: InkWell(
         onTap: widget.onTap,
         borderRadius: BorderRadius.circular(16),

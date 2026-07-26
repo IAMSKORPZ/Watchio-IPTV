@@ -8,7 +8,6 @@ class CategoryAppBar extends StatelessWidget {
   final VoidCallback onSearchStart;
   final VoidCallback onSearchStop;
   final ValueChanged<String> onSearchChanged;
-  final VoidCallback? onSortPressed;
 
   const CategoryAppBar({
     super.key,
@@ -18,7 +17,6 @@ class CategoryAppBar extends StatelessWidget {
     required this.onSearchStart,
     required this.onSearchStop,
     required this.onSearchChanged,
-    this.onSortPressed,
   });
 
   @override
@@ -26,16 +24,13 @@ class CategoryAppBar extends StatelessWidget {
     return SliverAppBar(
       floating: true,
       snap: true,
-      title: isSearching ? _buildSearchField(context) : SelectableText(
-        title,
-        style: const TextStyle(fontWeight: FontWeight.bold),
-      ),
+      title: isSearching
+          ? _buildSearchField(context)
+          : SelectableText(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
       actions: [
-        if (onSortPressed != null)
-          IconButton(
-            icon: const Icon(Icons.sort),
-            onPressed: onSortPressed,
-          ),
         IconButton(
           icon: Icon(isSearching ? Icons.clear : Icons.search),
           onPressed: isSearching ? onSearchStop : onSearchStart,
@@ -64,7 +59,6 @@ class CategoryHeader extends StatelessWidget {
   final VoidCallback onSearchStart;
   final VoidCallback onSearchStop;
   final ValueChanged<String> onSearchChanged;
-  final VoidCallback? onSortPressed;
 
   const CategoryHeader({
     super.key,
@@ -74,7 +68,6 @@ class CategoryHeader extends StatelessWidget {
     required this.onSearchStart,
     required this.onSearchStop,
     required this.onSearchChanged,
-    this.onSortPressed,
   });
 
   @override
@@ -103,18 +96,11 @@ class CategoryHeader extends StatelessWidget {
                 : Text(
                     title,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
           ),
-          const SizedBox(width: 8),
-          if (onSortPressed != null)
-            OutlinedButton.icon(
-              onPressed: onSortPressed,
-              icon: const Icon(Icons.sort),
-              label: const Text('Sort'),
-            ),
           const SizedBox(width: 8),
           IconButton(
             icon: Icon(isSearching ? Icons.clear : Icons.search),

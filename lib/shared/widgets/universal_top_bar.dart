@@ -33,7 +33,7 @@ class _UniversalTopBarState extends State<UniversalTopBar> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
       if (mounted) {
         setState(() {
           _now = DateTime.now();
@@ -60,7 +60,10 @@ class _UniversalTopBarState extends State<UniversalTopBar> {
           padding: EdgeInsets.symmetric(horizontal: isSmallHeight ? 16 : 24.0),
           decoration: BoxDecoration(
             border: Border(
-              bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05), width: 1),
+              bottom: BorderSide(
+                color: Colors.white.withValues(alpha: 0.05),
+                width: 1,
+              ),
             ),
           ),
           child: Row(
@@ -82,7 +85,7 @@ class _UniversalTopBarState extends State<UniversalTopBar> {
                       )
                     : _buildLogo(context, isSmallHeight),
               ),
-              
+
               // Center: Time
               if (constraints.maxWidth > 700)
                 Expanded(
@@ -98,20 +101,43 @@ class _UniversalTopBarState extends State<UniversalTopBar> {
                     ),
                   ),
                 ),
-              
+
               // Right: Actions
               Expanded(
                 flex: 5,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    if (widget.onSearchTap != null) _buildAction(Icons.search, isSmallHeight, widget.onSearchTap),
-                    if (widget.onSearchTap != null) SizedBox(width: isSmallHeight ? 8 : 12),
-                    if (widget.onProfileTap != null) _buildAction(Icons.person_outline, isSmallHeight, widget.onProfileTap),
-                    if (widget.onProfileTap != null) SizedBox(width: isSmallHeight ? 8 : 12),
-                    if (widget.onRefreshTap != null) _buildAction(Icons.refresh, isSmallHeight, widget.onRefreshTap),
-                    if (widget.onRefreshTap != null) SizedBox(width: isSmallHeight ? 8 : 12),
-                    if (widget.onSettingsTap != null) _buildAction(Icons.settings_outlined, isSmallHeight, widget.onSettingsTap),
+                    if (widget.onSearchTap != null)
+                      _buildAction(
+                        Icons.search,
+                        isSmallHeight,
+                        widget.onSearchTap,
+                      ),
+                    if (widget.onSearchTap != null)
+                      SizedBox(width: isSmallHeight ? 8 : 12),
+                    if (widget.onProfileTap != null)
+                      _buildAction(
+                        Icons.person_outline,
+                        isSmallHeight,
+                        widget.onProfileTap,
+                      ),
+                    if (widget.onProfileTap != null)
+                      SizedBox(width: isSmallHeight ? 8 : 12),
+                    if (widget.onRefreshTap != null)
+                      _buildAction(
+                        Icons.refresh,
+                        isSmallHeight,
+                        widget.onRefreshTap,
+                      ),
+                    if (widget.onRefreshTap != null)
+                      SizedBox(width: isSmallHeight ? 8 : 12),
+                    if (widget.onSettingsTap != null)
+                      _buildAction(
+                        Icons.settings_outlined,
+                        isSmallHeight,
+                        widget.onSettingsTap,
+                      ),
                   ],
                 ),
               ),
@@ -126,7 +152,11 @@ class _UniversalTopBarState extends State<UniversalTopBar> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.play_arrow_rounded, color: Colors.blue, size: isSmallHeight ? 18 : 22),
+        Icon(
+          Icons.play_arrow_rounded,
+          color: Colors.blue,
+          size: isSmallHeight ? 18 : 22,
+        ),
         const SizedBox(width: 8),
         Flexible(
           child: FittedBox(

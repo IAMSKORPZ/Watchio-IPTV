@@ -8,6 +8,8 @@ import '../../models/category_view_model.dart';
 import '../../models/content_type.dart';
 import '../../models/playlist_content_model.dart';
 import '../../repositories/iptv_repository.dart';
+import '../../repositories/user_preferences.dart';
+import '../../services/app_state.dart';
 import '../../services/config_service.dart';
 import '../../shared/widgets/glass_panel.dart';
 import '../../shared/widgets/sidebar_item.dart';
@@ -15,8 +17,9 @@ import '../../shared/widgets/poster_card.dart';
 import '../../shared/widgets/watchio_header.dart';
 import '../../utils/navigate_by_content_type.dart';
 import '../../utils/responsive_helper.dart';
+import '../../utils/firestick_performance.dart';
 import '../search_screen.dart';
-import '../shared/content_sort_dialog.dart';
+import '../shared/catalog_setup_dialog.dart';
 
 class XtreamMoviesScreen extends StatefulWidget {
   const XtreamMoviesScreen({super.key});
@@ -33,7 +36,12 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
   int _currentOffset = 0;
   static const int _pageSize = 60;
   final Map<String, int> _categoryCounts = {};
+  final Set<String> _hiddenCategoryIds = {};
   String _sortOrder = 'server';
+  bool _showPoster = true;
+  bool _showTitle = true;
+  bool _showRating = true;
+  String _posterSize = 'normal';
 
   final ScrollController _scrollController = ScrollController();
 
@@ -47,21 +55,49 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
         context,
         listen: false,
       );
-      if (controller.movieCategories.isNotEmpty) {
-        final categories = controller.movieCategories;
+      await _loadSetupPreferences();
+      if (!mounted) return;
+      final categories = _visibleCategories(controller);
+      if (categories.isNotEmpty) {
         final initialCategory = _findReleasedCategory(categories);
         // Load counts in bulk
         final counts = await controller.getAllCategoryCounts(CategoryType.vod);
         if (mounted) {
+          final savedSort = await UserPreferences.getCatalogSortOrder('movies');
+          if (!mounted) return;
           setState(() {
             _categoryCounts.addAll(counts);
-            _sortOrder = _isReleasedCategory(initialCategory)
-                ? 'recent'
-                : 'server';
+            _sortOrder =
+                savedSort ??
+                (_isReleasedCategory(initialCategory) ? 'recent' : 'server');
           });
           await _onCategorySelected(initialCategory);
         }
       }
+    });
+  }
+
+  Future<void> _loadSetupPreferences() async {
+    final playlist = AppState.currentPlaylist;
+    final hidden = playlist == null
+        ? <String>[]
+        : await UserPreferences.getCatalogHiddenCategoryIds(
+            'movies',
+            playlist.id,
+          );
+    final showPoster = await UserPreferences.getCatalogShowPoster('movies');
+    final showTitle = await UserPreferences.getCatalogShowTitle('movies');
+    final showRating = await UserPreferences.getCatalogShowRating('movies');
+    final posterSize = await UserPreferences.getCatalogPosterSize('movies');
+    if (!mounted) return;
+    setState(() {
+      _hiddenCategoryIds
+        ..clear()
+        ..addAll(hidden);
+      _showPoster = showPoster;
+      _showTitle = showTitle;
+      _showRating = showRating;
+      _posterSize = posterSize;
     });
   }
 
@@ -127,6 +163,11 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
 
   void _sortLoadedItems() {
     int itemNumber(ContentItem item) => int.tryParse(item.id) ?? 0;
+    double ratingValue(ContentItem item) => item.vodStream?.rating5based ?? 0;
+    int yearValue(ContentItem item) => RegExp(r'(19|20)\d{2}')
+        .allMatches(item.name)
+        .map((match) => int.tryParse(match.group(0) ?? '') ?? 0)
+        .fold<int>(0, (best, year) => year > best ? year : best);
     switch (_sortOrder) {
       case 'server':
         break;
@@ -142,6 +183,12 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
         break;
       case 'recent':
         _currentItems.sort((a, b) => itemNumber(b).compareTo(itemNumber(a)));
+        break;
+      case 'rating':
+        _currentItems.sort((a, b) => ratingValue(b).compareTo(ratingValue(a)));
+        break;
+      case 'year':
+        _currentItems.sort((a, b) => yearValue(b).compareTo(yearValue(a)));
         break;
       default:
         break;
@@ -166,19 +213,83 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
     return terms.every(name.contains);
   }
 
-  Future<void> _showSortDialog() async {
-    final selected = await showContentSortDialog(context, _sortOrder, 'Movies');
-    if (selected == null || !mounted) return;
+  Future<void> _showSetupDialog() async {
+    final playlist = AppState.currentPlaylist;
+    if (playlist == null) return;
+    final controller = Provider.of<XtreamCodeHomeController>(
+      context,
+      listen: false,
+    );
+    final settings = await showCatalogSetupDialog(
+      context: context,
+      title: 'Movies',
+      categories: controller.movieCategories,
+      initialSettings: CatalogSetupSettings(
+        hiddenCategoryIds: _hiddenCategoryIds,
+        showPoster: _showPoster,
+        showTitle: _showTitle,
+        showRating: _showRating,
+        posterSize: _posterSize,
+        sortOrder: _sortOrder,
+      ),
+    );
+    if (settings == null || !mounted) return;
+    await Future.wait([
+      UserPreferences.setCatalogHiddenCategoryIds(
+        'movies',
+        playlist.id,
+        settings.hiddenCategoryIds.toList(),
+      ),
+      UserPreferences.setCatalogShowPoster('movies', settings.showPoster),
+      UserPreferences.setCatalogShowTitle('movies', settings.showTitle),
+      UserPreferences.setCatalogShowRating('movies', settings.showRating),
+      UserPreferences.setCatalogPosterSize('movies', settings.posterSize),
+      UserPreferences.setCatalogSortOrder('movies', settings.sortOrder),
+    ]);
+    if (!mounted) return;
     setState(() {
-      _sortOrder = selected;
+      _hiddenCategoryIds
+        ..clear()
+        ..addAll(settings.hiddenCategoryIds);
+      _showPoster = settings.showPoster;
+      _showTitle = settings.showTitle;
+      _showRating = settings.showRating;
+      _posterSize = settings.posterSize;
+      _sortOrder = settings.sortOrder;
       _sortLoadedItems();
     });
+
+    if (_selectedCategory != null &&
+        _hiddenCategoryIds.contains(_selectedCategory!.category.categoryId)) {
+      final visible = _visibleCategories(controller);
+      if (visible.isNotEmpty) await _onCategorySelected(visible.first);
+    }
   }
 
-  void _showSetupPlaceholder() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Movie library setup is coming soon.')),
-    );
+  List<CategoryViewModel> _visibleCategories(
+    XtreamCodeHomeController controller,
+  ) {
+    return controller.movieCategories
+        .where(
+          (category) =>
+              !_canHideCategory(category.category.categoryId) ||
+              !_hiddenCategoryIds.contains(category.category.categoryId),
+        )
+        .toList();
+  }
+
+  bool _canHideCategory(String categoryId) {
+    return categoryId != IptvRepository.virtualAll &&
+        categoryId != IptvRepository.virtualFavorites &&
+        categoryId != IptvRepository.virtualHistory;
+  }
+
+  int _gridCrossAxisCount() {
+    return switch (_posterSize) {
+      'compact' => 6,
+      'large' => 4,
+      _ => 5,
+    };
   }
 
   @override
@@ -190,7 +301,7 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
     return Consumer<XtreamCodeHomeController>(
       builder: (context, controller, child) {
         if (controller.movieCategories.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+          return _buildLibraryNotLoaded(controller);
         }
 
         final deviceType = ResponsiveHelper.getDeviceType(context);
@@ -205,7 +316,7 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
               color: const Color(0xFF050812),
               image: DecorationImage(
                 image: (themeManager.showBackgroundImage && homeBg.isNotEmpty)
-                    ? NetworkImage(homeBg)
+                    ? perfNetworkImage(homeBg)
                     : const AssetImage('assets/images/background.png')
                           as ImageProvider,
                 fit: BoxFit.cover,
@@ -236,9 +347,8 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
                       ),
                     ),
                     onSettings: () => controller.onNavigationTap(5),
-                    onSetup: _showSetupPlaceholder,
-                    onSort: _showSortDialog,
-                    onRefresh: () => controller.refreshAllData(context),
+                    onSetup: _showSetupDialog,
+                    onRefresh: _showSetupDialog,
                   ),
                   Expanded(
                     child: Row(
@@ -253,12 +363,13 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
                             gradient: contentPanelGradientOf(context),
                             child: ListView.separated(
                               padding: const EdgeInsets.all(8),
-                              itemCount: controller.movieCategories.length,
+                              itemCount: _visibleCategories(controller).length,
                               separatorBuilder: (_, _) =>
                                   const SizedBox(height: 4),
                               itemBuilder: (context, index) {
-                                final category =
-                                    controller.movieCategories[index];
+                                final category = _visibleCategories(
+                                  controller,
+                                )[index];
                                 final isSelected =
                                     _selectedCategory?.category.categoryId ==
                                     category.category.categoryId;
@@ -312,7 +423,8 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
                                 Expanded(
                                   child: LayoutBuilder(
                                     builder: (context, constraints) {
-                                      const int crossAxisCount = 5;
+                                      final crossAxisCount =
+                                          _gridCrossAxisCount();
 
                                       return GridView.builder(
                                         controller: _scrollController,
@@ -338,7 +450,12 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
                                               child: PosterCard(
                                                 title: item.name,
                                                 imageUrl: item.imagePath,
-                                                rating: item.vodStream?.rating,
+                                                rating: _showRating
+                                                    ? item.vodStream?.rating
+                                                    : null,
+                                                showImage: _showPoster,
+                                                showTitle: _showTitle,
+                                                showRating: _showRating,
                                                 onTap: () =>
                                                     navigateByContentType(
                                                       context,
@@ -371,6 +488,49 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLibraryNotLoaded(XtreamCodeHomeController controller) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF050812),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.cloud_download_outlined,
+                color: Color(0xFF00B7FF),
+                size: 56,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Movie library not loaded yet',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Use library refresh when it is added. Home now opens without preloading movies.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white60),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () => controller.onNavigationTap(0),
+                icon: const Icon(Icons.home_rounded),
+                label: const Text('BACK HOME'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
