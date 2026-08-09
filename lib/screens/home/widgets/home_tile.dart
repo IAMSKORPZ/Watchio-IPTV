@@ -124,13 +124,13 @@ class _HomeTileState extends State<HomeTile> {
                       : 0.0;
                   final contentHeight = (h - footerHeight).clamp(80.0, h);
 
-                  double iconSize = (contentHeight * 0.28).clamp(30.0, 54.0);
-                  double titleSize = (contentHeight * 0.11).clamp(16.0, 24.0);
+                  double iconSize = (contentHeight * 0.26).clamp(34.0, 68.0);
+                  double titleSize = (contentHeight * 0.105).clamp(18.0, 30.0);
                   double subtitleSize = (contentHeight * 0.052).clamp(
-                    9.0,
-                    12.0,
+                    10.0,
+                    15.0,
                   );
-                  double spacing = (contentHeight * 0.035).clamp(3.0, 9.0);
+                  double spacing = (contentHeight * 0.035).clamp(4.0, 12.0);
 
                   if (isDesktop) {
                     iconSize = showRefreshFooter ? 54 : 72;
@@ -144,7 +144,7 @@ class _HomeTileState extends State<HomeTile> {
                     spacing = showRefreshFooter ? 7 : 10;
                   }
 
-                  final contentPadding = isDesktop ? 18.0 : 10.0;
+                  final contentPadding = isDesktop ? 18.0 : 14.0;
 
                   return Stack(
                     children: [

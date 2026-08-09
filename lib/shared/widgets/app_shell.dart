@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'sidebar_item.dart';
 import 'universal_top_bar.dart';
 
 class AppShell extends StatefulWidget {
@@ -38,22 +37,12 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  bool _isSidebarCollapsed = true;
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isLandscape =
             MediaQuery.of(context).orientation == Orientation.landscape;
-        final isLargeDesktop = constraints.maxWidth >= 1200;
-
-        // Only show global sidebar if on a very large screen and not on dashboard
-        final bool showSidebar =
-            isLargeDesktop &&
-            widget.navItems != null &&
-            widget.currentIndex != 0;
-
         return Shortcuts(
           shortcuts: const {
             SingleActivator(LogicalKeyboardKey.keyF, control: true):
@@ -109,86 +98,24 @@ class _AppShellState extends State<AppShell> {
               child: Scaffold(
                 resizeToAvoidBottomInset: false,
                 backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                body: Row(
+                body: Column(
                   children: [
-                    if (showSidebar)
-                      MouseRegion(
-                        onEnter: (_) =>
-                            setState(() => _isSidebarCollapsed = false),
-                        onExit: (_) =>
-                            setState(() => _isSidebarCollapsed = true),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: _isSidebarCollapsed ? 70 : 200,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            border: Border(
-                              right: BorderSide(
-                                color: Colors.white.withValues(alpha: 0.05),
-                                width: 1,
-                              ),
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              const SizedBox(height: 20),
-                              Icon(
-                                Icons.tv,
-                                color: Theme.of(context).colorScheme.secondary,
-                                size: 30,
-                              ),
-                              const SizedBox(height: 30),
-                              Expanded(
-                                child: ListView.separated(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                  ),
-                                  itemCount: widget.navItems!.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(height: 4),
-                                  itemBuilder: (context, index) {
-                                    final item = widget.navItems![index];
-                                    return SidebarItem(
-                                      icon: item.icon,
-                                      label: item.label,
-                                      selected: widget.currentIndex == index,
-                                      isCollapsed: _isSidebarCollapsed,
-                                      onFocusChange: (focused) => setState(
-                                        () => _isSidebarCollapsed = !focused,
-                                      ),
-                                      onTap: () =>
-                                          widget.onIndexChanged?.call(index),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+                    if (widget.currentIndex ==
+                        1) // Only show for History (Settings now has its own header)
+                      SafeArea(
+                        bottom: false,
+                        child: UniversalTopBar(
+                          title: widget.title,
+                          onSearchTap: widget.onSearchTap,
+                          onProfileTap: widget.onProfileTap,
+                          onRefreshTap: widget.onRefreshTap ?? widget.onRefresh,
+                          onSettingsTap: widget.onSettingsTap,
                         ),
                       ),
                     Expanded(
-                      child: Column(
-                        children: [
-                          if (widget.currentIndex ==
-                              1) // Only show for History (Settings now has its own header)
-                            SafeArea(
-                              bottom: false,
-                              child: UniversalTopBar(
-                                title: widget.title,
-                                onSearchTap: widget.onSearchTap,
-                                onProfileTap: widget.onProfileTap,
-                                onRefreshTap:
-                                    widget.onRefreshTap ?? widget.onRefresh,
-                                onSettingsTap: widget.onSettingsTap,
-                              ),
-                            ),
-                          Expanded(
-                            child: widget.pages != null
-                                ? widget.pages![widget.currentIndex]
-                                : (widget.body ?? const SizedBox.shrink()),
-                          ),
-                        ],
-                      ),
+                      child: widget.pages != null
+                          ? widget.pages![widget.currentIndex]
+                          : (widget.body ?? const SizedBox.shrink()),
                     ),
                   ],
                 ),

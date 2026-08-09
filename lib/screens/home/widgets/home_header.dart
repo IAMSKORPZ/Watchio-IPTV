@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/widgets/watchio_focus_action.dart';
-import '../../../utils/responsive_helper.dart';
 
 class HomeHeader extends StatelessWidget {
   final VoidCallback onSearch;
@@ -22,20 +21,18 @@ class HomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final deviceType = ResponsiveHelper.getDeviceType(context);
-    final isDesktop = deviceType == DeviceType.desktop;
-    final isTablet = deviceType == DeviceType.tablet;
-
-    const double logoHeight = 110;
-    double timeFontSize = isDesktop ? 44 : (isTablet ? 28 : 22);
-    double dateFontSize = isDesktop ? 18 : (isTablet ? 14 : 12);
-    double iconSize = isDesktop ? 36 : (isTablet ? 28 : 24);
+    final size = MediaQuery.sizeOf(context);
+    final double logoHeight = (size.height * 0.14).clamp(86.0, 118.0);
+    final double headerHeight = (logoHeight * 0.55).clamp(48.0, 64.0);
+    final double timeFontSize = (size.height * 0.038).clamp(22.0, 34.0);
+    final double dateFontSize = (size.height * 0.018).clamp(12.0, 16.0);
+    final double iconSize = (size.height * 0.034).clamp(24.0, 30.0);
 
     return Row(
       children: [
         // LEFT: Logo
         SizedBox(
-          height: 60,
+          height: headerHeight,
           width: logoHeight * 1.5,
           child: OverflowBox(
             maxHeight: logoHeight,
@@ -90,10 +87,7 @@ class HomeHeader extends StatelessWidget {
             _ToolbarItem(
               onTap: onSearch,
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isDesktop ? 20 : 12,
-                  vertical: isDesktop ? 12 : 8,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   children: [
                     Icon(
@@ -101,12 +95,12 @@ class HomeHeader extends StatelessWidget {
                       color: Colors.white,
                       size: iconSize,
                     ),
-                    SizedBox(width: isDesktop ? 14 : 10),
+                    const SizedBox(width: 10),
                     Text(
                       'SEARCH',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: isDesktop ? 20 : 16,
+                        fontSize: (iconSize * 0.6).clamp(16.0, 18.0),
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1.0,
                       ),
@@ -115,7 +109,7 @@ class HomeHeader extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(width: isDesktop ? 12 : 8),
+            const SizedBox(width: 8),
             _ToolbarItem(
               label: 'SPORTS',
               icon: Icons.sports_soccer_rounded,

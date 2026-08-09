@@ -6,7 +6,6 @@ import 'widgets/home_tile.dart';
 import 'widgets/home_header.dart';
 import 'widgets/home_footer.dart';
 import 'widgets/home_bottom_button.dart';
-import '../../../utils/responsive_helper.dart';
 import '../../../utils/firestick_performance.dart';
 import '../../widgets/announcement_popup_gate.dart';
 
@@ -72,6 +71,10 @@ class WatchioDashboardHome extends StatefulWidget {
 
 class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
     with SingleTickerProviderStateMixin {
+  static const double _referenceWidth = 1280;
+  static const double _referenceHeight = 580;
+  static const double _maxDashboardScale = 1.15;
+
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
@@ -153,31 +156,21 @@ class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
                 absorbing: isAnyTileUpdating,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final deviceType = ResponsiveHelper.getDeviceType(context);
-                    final isDesktop = deviceType == DeviceType.desktop;
-                    final isTablet = deviceType == DeviceType.tablet;
-
                     final double width = constraints.maxWidth;
                     final double height = constraints.maxHeight;
                     final useWideLayout = width > height && width >= 600;
 
-                    final double horizontalPadding = isDesktop
-                        ? 80
-                        : width * 0.05;
-                    final double verticalPadding = isDesktop
-                        ? 40
-                        : height * 0.04;
-                    final double gap = isDesktop
-                        ? 80
-                        : (isTablet ? 24 : width * 0.015);
+                    if (useWideLayout) {
+                      return _buildScaledLandscapeDashboard(width, height);
+                    }
 
                     return Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1600),
+                        constraints: const BoxConstraints(maxWidth: 1280),
                         child: Padding(
                           padding: EdgeInsets.symmetric(
-                            horizontal: horizontalPadding,
-                            vertical: verticalPadding,
+                            horizontal: width * 0.05,
+                            vertical: height * 0.04,
                           ),
                           child: Column(
                             children: [
@@ -190,124 +183,15 @@ class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
                                 onAnnouncements: widget.onAnnouncements,
                               ),
 
-                              useWideLayout
-                                  ? isDesktop
-                                        ? const SizedBox(height: 150)
-                                        : const Spacer(flex: 2)
-                                  : const Spacer(flex: 2),
+                              const Spacer(flex: 2),
 
                               // MAIN CONTENT - 3 CARDS
-                              useWideLayout
-                                  ? Expanded(
-                                      flex: 18,
-                                      child: _buildWideContent(
-                                        gap,
-                                        verticalGap: isDesktop ? 48 : 8,
-                                      ),
-                                    )
-                                  : Expanded(
-                                      flex: 14,
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          Expanded(
-                                            child: HomeTile(
-                                              title: 'LIVE TV',
-                                              subtitle:
-                                                  'Watch Live TV Channels',
-                                              icon: Icons.live_tv_rounded,
-                                              accentColor: const Color(
-                                                0xFFFF3D9A,
-                                              ),
-                                              onTap: widget.onLiveTv,
-                                              onRefresh: widget.onRefreshLiveTv,
-                                              isUpdating:
-                                                  widget.isLiveTvUpdating,
-                                              updateProgress:
-                                                  widget.liveTvUpdateProgress,
-                                              lastUpdatedLabel:
-                                                  widget.liveTvLastUpdatedLabel,
-                                              autofocus: true,
-                                            ),
-                                          ),
-                                          SizedBox(width: gap),
-                                          Expanded(
-                                            child: HomeTile(
-                                              title: 'MOVIES',
-                                              subtitle:
-                                                  'Browse a wide selection',
-                                              icon: Icons.play_arrow_rounded,
-                                              accentColor: const Color(
-                                                0xFFA855F7,
-                                              ),
-                                              onTap: widget.onMovies,
-                                              onRefresh: widget.onRefreshMovies,
-                                              isUpdating:
-                                                  widget.isMoviesUpdating,
-                                              updateProgress:
-                                                  widget.moviesUpdateProgress,
-                                              lastUpdatedLabel:
-                                                  widget.moviesLastUpdatedLabel,
-                                            ),
-                                          ),
-                                          SizedBox(width: gap),
-                                          Expanded(
-                                            child: HomeTile(
-                                              title: 'SERIES',
-                                              subtitle:
-                                                  'Discover and binge-watch',
-                                              icon: Icons.movie_rounded,
-                                              accentColor: const Color(
-                                                0xFF20D9D2,
-                                              ),
-                                              onTap: widget.onSeries,
-                                              onRefresh: widget.onRefreshSeries,
-                                              isUpdating:
-                                                  widget.isSeriesUpdating,
-                                              updateProgress:
-                                                  widget.seriesUpdateProgress,
-                                              lastUpdatedLabel:
-                                                  widget.seriesLastUpdatedLabel,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                              Expanded(flex: 14, child: _buildCompactContent()),
 
-                              SizedBox(height: useWideLayout ? 0 : 8),
+                              const SizedBox(height: 8),
 
                               // SECONDARY ACTION ROW
-                              useWideLayout
-                                  ? const SizedBox.shrink()
-                                  : Expanded(
-                                      flex: 4,
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: HomeBottomButton(
-                                              label: 'TV GUIDE',
-                                              icon: Icons.live_tv_rounded,
-                                              onTap: widget.onUpdate,
-                                              accentColor: const Color(
-                                                0xFFA855F7,
-                                              ),
-                                            ),
-                                          ),
-                                          SizedBox(width: gap),
-                                          Expanded(
-                                            child: HomeBottomButton(
-                                              label: 'SETTINGS',
-                                              icon: Icons.settings_rounded,
-                                              onTap: widget.onSettings,
-                                              accentColor: const Color(
-                                                0xFF20D9D2,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                              Expanded(flex: 4, child: _buildCompactButtons()),
 
                               const Spacer(flex: 2),
 
@@ -317,7 +201,6 @@ class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
                                 expiryDate: widget.expiryDate,
                                 version: widget.version,
                               ),
-                              if (isDesktop) const SizedBox(height: 24),
                             ],
                           ),
                         ),
@@ -330,6 +213,143 @@ class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildScaledLandscapeDashboard(double width, double height) {
+    final safe = MediaQuery.paddingOf(context);
+    final availableWidth = (width - safe.left - safe.right).clamp(
+      1.0,
+      double.infinity,
+    );
+    final availableHeight = (height - safe.top - safe.bottom).clamp(
+      1.0,
+      double.infinity,
+    );
+    final maxWidth = (_referenceWidth * _maxDashboardScale).clamp(
+      1.0,
+      availableWidth,
+    );
+    final maxHeight = (_referenceHeight * _maxDashboardScale).clamp(
+      1.0,
+      availableHeight,
+    );
+
+    return Center(
+      child: SizedBox(
+        width: maxWidth,
+        height: maxHeight,
+        child: FittedBox(
+          fit: BoxFit.contain,
+          alignment: Alignment.center,
+          child: SizedBox(
+            width: _referenceWidth,
+            height: _referenceHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: 82,
+                    child: HomeHeader(
+                      onSearch: widget.onSearch,
+                      onProfile: widget.onProfile,
+                      onSports: widget.onSports,
+                      onSwitchPlaylist: widget.onSwitchPlaylist,
+                      onAnnouncements: widget.onAnnouncements,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    height: 360,
+                    child: _buildWideContent(24, verticalGap: 14),
+                  ),
+                  const Spacer(),
+                  HomeFooter(
+                    username: widget.username,
+                    expiryDate: widget.expiryDate,
+                    version: widget.version,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactContent() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: HomeTile(
+            title: 'LIVE TV',
+            subtitle: 'Watch Live TV Channels',
+            icon: Icons.live_tv_rounded,
+            accentColor: const Color(0xFFFF3D9A),
+            onTap: widget.onLiveTv,
+            onRefresh: widget.onRefreshLiveTv,
+            isUpdating: widget.isLiveTvUpdating,
+            updateProgress: widget.liveTvUpdateProgress,
+            lastUpdatedLabel: widget.liveTvLastUpdatedLabel,
+            autofocus: true,
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: HomeTile(
+            title: 'MOVIES',
+            subtitle: 'Browse a wide selection',
+            icon: Icons.play_arrow_rounded,
+            accentColor: const Color(0xFFA855F7),
+            onTap: widget.onMovies,
+            onRefresh: widget.onRefreshMovies,
+            isUpdating: widget.isMoviesUpdating,
+            updateProgress: widget.moviesUpdateProgress,
+            lastUpdatedLabel: widget.moviesLastUpdatedLabel,
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: HomeTile(
+            title: 'SERIES',
+            subtitle: 'Discover and binge-watch',
+            icon: Icons.movie_rounded,
+            accentColor: const Color(0xFF20D9D2),
+            onTap: widget.onSeries,
+            onRefresh: widget.onRefreshSeries,
+            isUpdating: widget.isSeriesUpdating,
+            updateProgress: widget.seriesUpdateProgress,
+            lastUpdatedLabel: widget.seriesLastUpdatedLabel,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: HomeBottomButton(
+            label: 'TV GUIDE',
+            icon: Icons.live_tv_rounded,
+            onTap: widget.onUpdate,
+            accentColor: const Color(0xFFA855F7),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: HomeBottomButton(
+            label: 'SETTINGS',
+            icon: Icons.settings_rounded,
+            onTap: widget.onSettings,
+            accentColor: const Color(0xFF20D9D2),
+          ),
+        ),
+      ],
     );
   }
 
