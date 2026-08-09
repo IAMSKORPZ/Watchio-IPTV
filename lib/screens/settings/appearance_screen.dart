@@ -112,7 +112,7 @@ class _ThemeTile extends StatelessWidget {
   String _getThemeName(AppThemeType type) {
     switch (type) {
       case AppThemeType.bingieNeon:
-        return 'Bingie Neon';
+        return 'Default';
       case AppThemeType.emerald:
         return 'Emerald';
       case AppThemeType.crimson:

@@ -27,6 +27,20 @@ void main() {
     expect(provider.toJson().containsKey('password'), isFalse);
   });
 
+  test('playlist JSON never writes password', () {
+    final playlist = Playlist(
+      id: 'playlist-1',
+      name: 'Playlist',
+      type: PlaylistType.xtream,
+      url: 'https://example.com/player_api.php',
+      username: 'user',
+      password: 'secret',
+      createdAt: DateTime(2026),
+    );
+
+    expect(playlist.toJson().containsKey('password'), isFalse);
+  });
+
   test('media URL debug log does not include credentials', () {
     final messages = <String>[];
     final previousDebugPrint = debugPrint;

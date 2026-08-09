@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'secure_storage_service.dart';
+
 class TraktDeviceCode {
   const TraktDeviceCode({
     required this.deviceCode,
@@ -32,8 +34,30 @@ class TraktService {
   Future<bool> get isLoggedIn async => (await accessToken) != null;
 
   Future<String?> get accessToken async {
+    final stored = await SecureStorageService.instance.readProviderSecret(
+      'trakt',
+      'access_token',
+    );
+    if (stored != null) return stored;
+
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    final legacyToken = prefs.getString(_tokenKey);
+    final legacyRefresh = prefs.getString(_refreshKey);
+    if (legacyToken == null || legacyToken.isEmpty) return null;
+
+    await SecureStorageService.instance.saveProviderSecret(
+      'trakt',
+      'access_token',
+      legacyToken,
+    );
+    await SecureStorageService.instance.saveProviderSecret(
+      'trakt',
+      'refresh_token',
+      legacyRefresh,
+    );
+    await prefs.remove(_tokenKey);
+    await prefs.remove(_refreshKey);
+    return legacyToken;
   }
 
   Future<TraktDeviceCode> requestDeviceCode() async {
@@ -79,9 +103,16 @@ class TraktService {
       }
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_tokenKey, json['access_token'] as String);
-        await prefs.setString(_refreshKey, json['refresh_token'] as String);
+        await SecureStorageService.instance.saveProviderSecret(
+          'trakt',
+          'access_token',
+          json['access_token'] as String,
+        );
+        await SecureStorageService.instance.saveProviderSecret(
+          'trakt',
+          'refresh_token',
+          json['refresh_token'] as String,
+        );
         return true;
       }
       if ([410, 418].contains(response.statusCode)) return false;
@@ -112,6 +143,14 @@ class TraktService {
   }
 
   Future<void> logout() async {
+    await SecureStorageService.instance.deleteProviderSecret(
+      'trakt',
+      'access_token',
+    );
+    await SecureStorageService.instance.deleteProviderSecret(
+      'trakt',
+      'refresh_token',
+    );
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_refreshKey);

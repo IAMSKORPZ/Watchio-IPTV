@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../controllers/favorites_controller.dart';
 import '../../../services/tmdb_service.dart';
+import '../../../shared/widgets/focus_wrapper.dart';
 import '../../../shared/widgets/watchio_focus_action.dart';
 
 class MovieDetailsScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class MovieDetailsScreen extends StatefulWidget {
 }
 
 class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
+  static const Color _movieAccent = Color(0xFFA855F7);
   late final FavoritesController _favoritesController;
   late final IptvRepository? _repository;
 
@@ -334,13 +336,18 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
               crossAxisAlignment:
                   CrossAxisAlignment.center, // Vertically center items
               children: [
-                IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back,
-                    color: Colors.white,
-                    size: 32,
-                  ),
+                FocusWrapper(
                   onPressed: () => Navigator.of(context).pop(),
+                  borderRadius: BorderRadius.circular(12),
+                  accentColor: _movieAccent,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
                 ),
                 const SizedBox(width: 20), // 20px spacing
                 // WATCHIO LOGO - Fixed 64px height
@@ -506,51 +513,66 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          icon: const Icon(Icons.more_vert, color: Colors.white, size: 32),
+        FocusWrapper(
           onPressed: () {},
+          borderRadius: BorderRadius.circular(12),
+          accentColor: _movieAccent,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            icon: const Icon(Icons.more_vert, color: Colors.white, size: 32),
+            onPressed: () {},
+          ),
         ),
         const SizedBox(height: 12), // Requirement 5: 12px spacing
-        IconButton(
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          icon: Icon(
-            _isFavorite ? Icons.favorite : Icons.favorite_border,
-            color: _isFavorite ? Colors.redAccent : Colors.white,
-            size: 32,
-          ),
+        FocusWrapper(
           onPressed: _toggleFavorite,
+          borderRadius: BorderRadius.circular(12),
+          accentColor: _movieAccent,
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            icon: Icon(
+              _isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: _isFavorite ? Colors.redAccent : Colors.white,
+              size: 32,
+            ),
+            onPressed: _toggleFavorite,
+          ),
         ),
       ],
     );
   }
 
   Widget _buildPlayButton() {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.1),
+    return FocusWrapper(
+      onPressed: _openPlayer,
       borderRadius: BorderRadius.circular(6),
-      child: WatchioFocusAction(
-        focusNode: _playFocusNode,
-        onActivate: _openPlayer,
-        child: InkWell(
-          onTap: _openPlayer,
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            width: 140,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white12),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Text(
-              'Play',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+      accentColor: _movieAccent,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        child: WatchioFocusAction(
+          focusNode: _playFocusNode,
+          onActivate: _openPlayer,
+          child: InkWell(
+            onTap: _openPlayer,
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              width: 140,
+              height: 46,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Play',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -568,28 +590,33 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
       return const SizedBox.shrink();
     }
 
-    return Material(
-      color: Colors.white.withValues(alpha: 0.1),
+    return FocusWrapper(
+      onPressed: () => _openTrailer(context),
       borderRadius: BorderRadius.circular(6),
-      child: WatchioFocusAction(
-        onActivate: () => _openTrailer(context),
-        child: InkWell(
-          onTap: () => _openTrailer(context),
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            width: 150,
-            height: 46, // Height matching Play
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.white12),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: const Text(
-              'Watch Trailer',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+      accentColor: _movieAccent,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        child: WatchioFocusAction(
+          onActivate: () => _openTrailer(context),
+          child: InkWell(
+            onTap: () => _openTrailer(context),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              width: 150,
+              height: 46, // Height matching Play
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white12),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'Watch Trailer',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),

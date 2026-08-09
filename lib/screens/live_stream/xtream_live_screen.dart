@@ -1745,7 +1745,6 @@ class _XtreamLiveScreenState extends State<XtreamLiveScreen>
     });
   }
 
-  // ignore: unused_element
   Widget _buildChannelPanel() {
     return Column(
       children: [
@@ -2211,7 +2210,6 @@ class _XtreamLiveScreenState extends State<XtreamLiveScreen>
     }
   }
 
-  // ignore: unused_element
   Widget _buildPreviewPanel() {
     final displayChannel =
         _detailsChannel ?? _focusedChannel ?? _previewChannel;

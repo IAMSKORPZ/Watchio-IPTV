@@ -41,9 +41,15 @@ class AppearancePage extends StatelessWidget {
                     options: const [
                       Color(0xFFFF3D9A),
                       Color(0xFFFF58B0),
+                      Color(0xFFFF4F64),
+                      Color(0xFFFF7A1A),
+                      Color(0xFFFACC15),
+                      Color(0xFF22C55E),
                       Color(0xFFA855F7),
                       Color(0xFFC45CFF),
                       Color(0xFF20D9D2),
+                      Color(0xFF38BDF8),
+                      Color(0xFF2563EB),
                       Color(0xFFFFFFFF),
                     ],
                     onChanged: manager.setHighlightColor,
@@ -55,9 +61,14 @@ class AppearancePage extends StatelessWidget {
                     options: const [
                       Color(0xFF20D9D2),
                       Color(0xFF39EEE5),
+                      Color(0xFF38BDF8),
+                      Color(0xFF2563EB),
+                      Color(0xFF22C55E),
                       Color(0xFFA855F7),
                       Color(0xFFC45CFF),
                       Color(0xFFFF3D9A),
+                      Color(0xFFFF4F64),
+                      Color(0xFFFACC15),
                       Color(0xFFD95CFF),
                     ],
                     onChanged: manager.setSecondaryColor,
@@ -81,6 +92,9 @@ class AppearancePage extends StatelessWidget {
                       Color(0xFF000000),
                       Color(0xFF141E30),
                       Color(0xFF180B22),
+                      Color(0xFF061C1B),
+                      Color(0xFF101018),
+                      Color(0xFF160B12),
                     ],
                     onChanged: manager.setBackgroundColor,
                   ),
@@ -94,6 +108,10 @@ class AppearancePage extends StatelessWidget {
                       Color(0xFF111327),
                       Color(0xFF121212),
                       Color(0xFF1A1D29),
+                      Color(0xFF172033),
+                      Color(0xFF1B1230),
+                      Color(0xFF102622),
+                      Color(0xFF24131B),
                     ],
                     onChanged: manager.setSurfaceColor,
                   ),
@@ -131,7 +149,7 @@ class AppearancePage extends StatelessWidget {
   }
 
   static String _themeName(AppThemeType type) => switch (type) {
-    AppThemeType.bingieNeon => 'Bingie Neon',
+    AppThemeType.bingieNeon => 'Default',
     AppThemeType.emerald => 'Emerald',
     AppThemeType.crimson => 'Crimson',
     AppThemeType.ocean => 'Ocean',
@@ -181,21 +199,37 @@ class _ColorTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-          dense: true,
-          visualDensity: const VisualDensity(vertical: -3),
-          title: Text(title, style: AppearancePage._titleStyle),
-          subtitle: Text(subtitle, style: AppearancePage._subtitleStyle),
-          trailing: Wrap(
-            spacing: 8,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              for (final color in options)
-                _SwatchButton(
-                  color: color,
-                  selected: color.toARGB32() == value.toARGB32(),
-                  onTap: () => onChanged(color),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppearancePage._titleStyle),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: AppearancePage._subtitleStyle),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 16),
+              Flexible(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    for (final color in options)
+                      _SwatchButton(
+                        color: color,
+                        selected: color.toARGB32() == value.toARGB32(),
+                        onTap: () => onChanged(color),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

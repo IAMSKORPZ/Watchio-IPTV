@@ -36,6 +36,7 @@ class FocusWrapper extends StatefulWidget {
 
 class _FocusWrapperState extends State<FocusWrapper> {
   bool _isFocused = false;
+  bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +44,8 @@ class _FocusWrapperState extends State<FocusWrapper> {
     final accent = widget.accentColor ?? tokens.highlightColor;
     final glow = widget.accentColor ?? tokens.glowColor;
     final inputMode = context.watch<InputModeController>();
+
+    final isActive = _isFocused || _isHovered;
 
     return Focus(
       autofocus: widget.autofocus,
@@ -64,35 +67,39 @@ class _FocusWrapperState extends State<FocusWrapper> {
         }
         return KeyEventResult.ignored;
       },
-      child: GestureDetector(
-        onTap: inputMode.allowPointerInput ? widget.onPressed : null,
-        child: AnimatedScale(
-          scale: _isFocused ? perfScale(widget.scale) : 1.0,
-          duration: perfDuration(const Duration(milliseconds: 200)),
-          curve: Curves.easeInOut,
-          child: AnimatedContainer(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: inputMode.allowPointerInput ? widget.onPressed : null,
+          child: AnimatedScale(
+            scale: isActive ? perfScale(widget.scale) : 1.0,
             duration: perfDuration(const Duration(milliseconds: 200)),
-            decoration: BoxDecoration(
-              borderRadius: widget.borderRadius,
-              boxShadow: firestickPerformanceMode
-                  ? null
-                  : _isFocused && widget.showGlow
-                  ? [
-                      BoxShadow(
-                        color: glow.withValues(alpha: 0.4),
-                        blurRadius: 15,
-                        spreadRadius: 2,
-                      ),
-                    ]
-                  : [],
-              border: Border.all(
-                color: widget.showBorder && _isFocused
-                    ? accent
-                    : Colors.transparent,
-                width: widget.showBorder ? 2 : 0,
+            curve: Curves.easeInOut,
+            child: AnimatedContainer(
+              duration: perfDuration(const Duration(milliseconds: 200)),
+              decoration: BoxDecoration(
+                borderRadius: widget.borderRadius,
+                boxShadow: firestickPerformanceMode
+                    ? null
+                    : isActive && widget.showGlow
+                    ? [
+                        BoxShadow(
+                          color: glow.withValues(alpha: 0.4),
+                          blurRadius: 15,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : [],
+                border: Border.all(
+                  color: widget.showBorder && isActive
+                      ? accent
+                      : Colors.transparent,
+                  width: widget.showBorder ? 2 : 0,
+                ),
               ),
+              child: widget.child,
             ),
-            child: widget.child,
           ),
         ),
       ),

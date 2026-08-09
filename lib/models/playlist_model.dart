@@ -26,7 +26,6 @@ class Playlist {
       'type': type.toString(),
       'url': url,
       'username': username,
-      'password': password,
       'createdAt': createdAt.toIso8601String(),
     };
   }

@@ -26,6 +26,7 @@ class SeriesDetailsScreen extends StatefulWidget {
 }
 
 class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
+  static const Color _seriesAccent = Color(0xFF20D9D2);
   late IptvRepository _repository;
   late FavoritesController _favoritesController;
   late WatchHistoryService _watchHistoryService;
@@ -365,15 +366,20 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                icon: const Icon(
-                  Icons.arrow_back,
-                  color: Colors.white,
-                  size: 28,
-                ), // Restored size
+              FocusWrapper(
                 onPressed: () => Navigator.of(context).pop(),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
+                borderRadius: BorderRadius.circular(12),
+                accentColor: _seriesAccent,
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white,
+                    size: 28,
+                  ), // Restored size
+                  onPressed: () => Navigator.of(context).pop(),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                ),
               ),
               const SizedBox(width: 12),
               Image.asset(
@@ -410,42 +416,47 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
   }
 
   Widget _buildPopupMenu() {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Colors.white, size: 28),
-      onSelected: (value) {
-        if (value == 'favorite') {
-          _toggleFavorite();
-        } else if (value == 'trailer') {
-          _openTrailer();
-        }
-      },
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          value: 'favorite',
-          child: Row(
-            children: [
-              Icon(
-                _isFavorite ? Icons.favorite : Icons.favorite_border,
-                color: _isFavorite ? Colors.redAccent : Colors.black,
-              ),
-              const SizedBox(width: 10),
-              Text(_isFavorite ? 'Remove Favorite' : 'Add Favorite'),
-            ],
-          ),
-        ),
-        if (_tmdbTrailerKey != null ||
-            (seriesInfo?.youtubeTrailer?.isNotEmpty ?? false))
+    return FocusWrapper(
+      onPressed: null,
+      borderRadius: BorderRadius.circular(12),
+      accentColor: _seriesAccent,
+      child: PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert, color: Colors.white, size: 28),
+        onSelected: (value) {
+          if (value == 'favorite') {
+            _toggleFavorite();
+          } else if (value == 'trailer') {
+            _openTrailer();
+          }
+        },
+        itemBuilder: (context) => [
           PopupMenuItem(
-            value: 'trailer',
+            value: 'favorite',
             child: Row(
-              children: const [
-                Icon(Icons.play_circle_outline, color: Colors.black),
-                SizedBox(width: 10),
-                Text('Watch Trailer'),
+              children: [
+                Icon(
+                  _isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: _isFavorite ? Colors.redAccent : Colors.black,
+                ),
+                const SizedBox(width: 10),
+                Text(_isFavorite ? 'Remove Favorite' : 'Add Favorite'),
               ],
             ),
           ),
-      ],
+          if (_tmdbTrailerKey != null ||
+              (seriesInfo?.youtubeTrailer?.isNotEmpty ?? false))
+            const PopupMenuItem(
+              value: 'trailer',
+              child: Row(
+                children: [
+                  Icon(Icons.play_circle_outline, color: Colors.black),
+                  SizedBox(width: 10),
+                  Text('Watch Trailer'),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -687,6 +698,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
                       _openEpisode(epToPlay);
                     },
               borderRadius: BorderRadius.circular(6),
+              accentColor: _seriesAccent,
               child: Material(
                 color: const Color(0xFFC12CFF),
                 borderRadius: BorderRadius.circular(6),
@@ -729,6 +741,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
             child: FocusWrapper(
               onPressed: _showSeasonSelectionDialog,
               borderRadius: BorderRadius.circular(6),
+              accentColor: _seriesAccent,
               child: Material(
                 color: Colors.white.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6),

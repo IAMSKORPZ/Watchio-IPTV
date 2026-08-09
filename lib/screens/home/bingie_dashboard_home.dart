@@ -161,6 +161,7 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
 
                     final double width = constraints.maxWidth;
                     final double height = constraints.maxHeight;
+                    final useWideLayout = width > height && width >= 600;
 
                     final double horizontalPadding = isDesktop
                         ? 80
@@ -191,78 +192,20 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                 onAnnouncements: widget.onAnnouncements,
                               ),
 
-                              isDesktop
-                                  ? const SizedBox(height: 150)
+                              useWideLayout
+                                  ? isDesktop
+                                        ? const SizedBox(height: 150)
+                                        : const Spacer(flex: 2)
                                   : const Spacer(flex: 2),
 
                               // MAIN CONTENT - 3 CARDS
-                              isDesktop
-                                  ? Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        SizedBox(
-                                          width: 380,
-                                          height: 260,
-                                          child: HomeTile(
-                                            title: 'LIVE TV',
-                                            subtitle: 'Watch Live TV Channels',
-                                            icon: Icons.live_tv_rounded,
-                                            accentColor: const Color(
-                                              0xFFFF3D9A,
-                                            ),
-                                            onTap: widget.onLiveTv,
-                                            onRefresh: widget.onRefreshLiveTv,
-                                            isUpdating: widget.isLiveTvUpdating,
-                                            updateProgress:
-                                                widget.liveTvUpdateProgress,
-                                            lastUpdatedLabel:
-                                                widget.liveTvLastUpdatedLabel,
-                                            autofocus: true,
-                                          ),
-                                        ),
-                                        SizedBox(width: gap),
-                                        SizedBox(
-                                          width: 380,
-                                          height: 260,
-                                          child: HomeTile(
-                                            title: 'MOVIES',
-                                            subtitle: 'Browse a wide selection',
-                                            icon: Icons.play_arrow_rounded,
-                                            accentColor: const Color(
-                                              0xFFA855F7,
-                                            ),
-                                            onTap: widget.onMovies,
-                                            onRefresh: widget.onRefreshMovies,
-                                            isUpdating: widget.isMoviesUpdating,
-                                            updateProgress:
-                                                widget.moviesUpdateProgress,
-                                            lastUpdatedLabel:
-                                                widget.moviesLastUpdatedLabel,
-                                          ),
-                                        ),
-                                        SizedBox(width: gap),
-                                        SizedBox(
-                                          width: 380,
-                                          height: 260,
-                                          child: HomeTile(
-                                            title: 'SERIES',
-                                            subtitle:
-                                                'Discover and binge-watch',
-                                            icon: Icons.movie_rounded,
-                                            accentColor: const Color(
-                                              0xFF20D9D2,
-                                            ),
-                                            onTap: widget.onSeries,
-                                            onRefresh: widget.onRefreshSeries,
-                                            isUpdating: widget.isSeriesUpdating,
-                                            updateProgress:
-                                                widget.seriesUpdateProgress,
-                                            lastUpdatedLabel:
-                                                widget.seriesLastUpdatedLabel,
-                                          ),
-                                        ),
-                                      ],
+                              useWideLayout
+                                  ? Expanded(
+                                      flex: 18,
+                                      child: _buildWideContent(
+                                        gap,
+                                        verticalGap: isDesktop ? 48 : 8,
+                                      ),
                                     )
                                   : Expanded(
                                       flex: 14,
@@ -334,69 +277,15 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                       ),
                                     ),
 
-                              SizedBox(height: isDesktop ? 48 : 8),
+                              SizedBox(height: useWideLayout ? 0 : 8),
 
                               // SECONDARY ACTION ROW
-                              isDesktop
-                                  ? Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        SizedBox(
-                                          width: 380,
-                                          height: 85,
-                                          child: HomeBottomButton(
-                                            label: 'MY LIST',
-                                            icon: Icons.list_alt_rounded,
-                                            onTap: widget.onTrakt ?? () {},
-                                            accentColor: const Color(
-                                              0xFFFF3D9A,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(width: gap),
-                                        SizedBox(
-                                          width: 380,
-                                          height: 85,
-                                          child: HomeBottomButton(
-                                            label: 'TV GUIDE',
-                                            icon: Icons.live_tv_rounded,
-                                            onTap: widget.onUpdate,
-                                            accentColor: const Color(
-                                              0xFFA855F7,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(width: gap),
-                                        SizedBox(
-                                          width: 380,
-                                          height: 85,
-                                          child: HomeBottomButton(
-                                            label: 'SETTINGS',
-                                            icon: Icons.settings_rounded,
-                                            onTap: widget.onSettings,
-                                            accentColor: const Color(
-                                              0xFF20D9D2,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    )
+                              useWideLayout
+                                  ? const SizedBox.shrink()
                                   : Expanded(
                                       flex: 4,
                                       child: Row(
                                         children: [
-                                          Expanded(
-                                            child: HomeBottomButton(
-                                              label: 'MY LIST',
-                                              icon: Icons.list_alt_rounded,
-                                              onTap: widget.onTrakt ?? () {},
-                                              accentColor: const Color(
-                                                0xFFFF3D9A,
-                                              ),
-                                            ),
-                                          ),
-                                          SizedBox(width: gap),
                                           Expanded(
                                             child: HomeBottomButton(
                                               label: 'TV GUIDE',
@@ -443,6 +332,90 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildWideContent(double gap, {required double verticalGap}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: HomeTile(
+            title: 'LIVE TV',
+            subtitle: 'Watch Live TV Channels',
+            icon: Icons.live_tv_rounded,
+            accentColor: const Color(0xFFFF3D9A),
+            onTap: widget.onLiveTv,
+            onRefresh: widget.onRefreshLiveTv,
+            isUpdating: widget.isLiveTvUpdating,
+            updateProgress: widget.liveTvUpdateProgress,
+            lastUpdatedLabel: widget.liveTvLastUpdatedLabel,
+            autofocus: true,
+          ),
+        ),
+        SizedBox(width: gap),
+        Expanded(
+          child: Column(
+            children: [
+              Expanded(
+                flex: 14,
+                child: HomeTile(
+                  title: 'MOVIES',
+                  subtitle: 'Browse a wide selection',
+                  icon: Icons.play_arrow_rounded,
+                  accentColor: const Color(0xFFA855F7),
+                  onTap: widget.onMovies,
+                  onRefresh: widget.onRefreshMovies,
+                  isUpdating: widget.isMoviesUpdating,
+                  updateProgress: widget.moviesUpdateProgress,
+                  lastUpdatedLabel: widget.moviesLastUpdatedLabel,
+                ),
+              ),
+              SizedBox(height: verticalGap),
+              Expanded(
+                flex: 4,
+                child: HomeBottomButton(
+                  label: 'TV GUIDE',
+                  icon: Icons.live_tv_rounded,
+                  onTap: widget.onUpdate,
+                  accentColor: const Color(0xFFA855F7),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: gap),
+        Expanded(
+          child: Column(
+            children: [
+              Expanded(
+                flex: 14,
+                child: HomeTile(
+                  title: 'SERIES',
+                  subtitle: 'Discover and binge-watch',
+                  icon: Icons.movie_rounded,
+                  accentColor: const Color(0xFF20D9D2),
+                  onTap: widget.onSeries,
+                  onRefresh: widget.onRefreshSeries,
+                  isUpdating: widget.isSeriesUpdating,
+                  updateProgress: widget.seriesUpdateProgress,
+                  lastUpdatedLabel: widget.seriesLastUpdatedLabel,
+                ),
+              ),
+              SizedBox(height: verticalGap),
+              Expanded(
+                flex: 4,
+                child: HomeBottomButton(
+                  label: 'SETTINGS',
+                  icon: Icons.settings_rounded,
+                  onTap: widget.onSettings,
+                  accentColor: const Color(0xFF20D9D2),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
