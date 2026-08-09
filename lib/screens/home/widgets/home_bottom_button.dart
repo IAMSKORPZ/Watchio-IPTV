@@ -17,7 +17,7 @@ class HomeBottomButton extends StatefulWidget {
     required this.label,
     required this.icon,
     required this.onTap,
-    this.accentColor = const Color(0xFFC12CFF),
+    this.accentColor = const Color(0xFFFF3D9A),
   });
 
   @override

@@ -3,7 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../utils/firestick_performance.dart';
 import 'focus_wrapper.dart';
 
-class PosterCard extends StatelessWidget {
+class PosterCard extends StatefulWidget {
   final String title;
   final String? subtitle;
   final String? imageUrl;
@@ -14,6 +14,8 @@ class PosterCard extends StatelessWidget {
   final bool showImage;
   final bool showTitle;
   final bool showRating;
+  final Color? accentColor;
+  final Color? glowColor;
   final VoidCallback onTap;
   final VoidCallback? onFavoriteTap;
 
@@ -29,51 +31,109 @@ class PosterCard extends StatelessWidget {
     this.showImage = true,
     this.showTitle = true,
     this.showRating = true,
+    this.accentColor,
+    this.glowColor,
     required this.onTap,
     this.onFavoriteTap,
   });
 
   @override
+  State<PosterCard> createState() => _PosterCardState();
+}
+
+class _PosterCardState extends State<PosterCard> {
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
+    final accent = widget.accentColor ?? Theme.of(context).colorScheme.primary;
+    final glow = widget.glowColor ?? Theme.of(context).colorScheme.secondary;
+
     return RepaintBoundary(
       child: FocusWrapper(
-        onPressed: onTap,
+        onPressed: widget.onTap,
         borderRadius: BorderRadius.circular(12),
         scale: 1.045,
+        showGlow: false,
+        showBorder: false,
+        onFocusChange: (value) => setState(() => _focused = value),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: Stack(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: showImage && imageUrl != null && imageUrl!.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: imageUrl!,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            memCacheWidth: firestickPerformanceMode ? 260 : 420,
-                            maxWidthDiskCache: firestickPerformanceMode
-                                ? 420
-                                : 700,
-                            fadeInDuration: Duration.zero,
-                            fadeOutDuration: Duration.zero,
-                            placeholder: (context, url) => Container(
-                              color: Colors.grey.withValues(alpha: 0.1),
-                            ),
-                            errorWidget: (context, url, error) => Container(
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: _focused
+                          ? [
+                              BoxShadow(
+                                color: glow.withValues(alpha: 0.38),
+                                blurRadius: 14,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (widget.showImage &&
+                              widget.imageUrl != null &&
+                              widget.imageUrl!.isNotEmpty)
+                            CachedNetworkImage(
+                              imageUrl: widget.imageUrl!,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              memCacheWidth: firestickPerformanceMode
+                                  ? 260
+                                  : 420,
+                              maxWidthDiskCache: firestickPerformanceMode
+                                  ? 420
+                                  : 700,
+                              fadeInDuration: Duration.zero,
+                              fadeOutDuration: Duration.zero,
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey.withValues(alpha: 0.1),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.grey.withValues(alpha: 0.1),
+                                child: const Icon(Icons.movie, size: 50),
+                              ),
+                            )
+                          else
+                            Container(
                               color: Colors.grey.withValues(alpha: 0.1),
                               child: const Icon(Icons.movie, size: 50),
                             ),
-                          )
-                        : Container(
-                            color: Colors.grey.withValues(alpha: 0.1),
-                            child: const Icon(Icons.movie, size: 50),
+                          AnimatedOpacity(
+                            opacity: _focused ? 1 : 0,
+                            duration: const Duration(milliseconds: 180),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    accent.withValues(alpha: 0.22),
+                                    glow.withValues(alpha: 0.12),
+                                  ],
+                                ),
+                                border: Border.all(color: accent, width: 3),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                    ),
                   ),
-                  if (showRating && rating != null)
+                  if (widget.showRating && widget.rating != null)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -96,7 +156,7 @@ class PosterCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              rating!,
+                              widget.rating!,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
@@ -107,7 +167,7 @@ class PosterCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                  if (metaBadge != null)
+                  if (widget.metaBadge != null)
                     Positioned(
                       top: 8,
                       left: 8,
@@ -123,7 +183,7 @@ class PosterCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          metaBadge!,
+                          widget.metaBadge!,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 9,
@@ -132,12 +192,12 @@ class PosterCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                  if (onFavoriteTap != null)
+                  if (widget.onFavoriteTap != null)
                     Positioned(
                       bottom: 8,
                       right: 8,
                       child: FocusWrapper(
-                        onPressed: onFavoriteTap,
+                        onPressed: widget.onFavoriteTap,
                         borderRadius: BorderRadius.circular(20),
                         scale: 1.1,
                         child: Container(
@@ -147,8 +207,12 @@ class PosterCard extends StatelessWidget {
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            isFavorite ? Icons.favorite : Icons.favorite_border,
-                            color: isFavorite ? Colors.red : Colors.white,
+                            widget.isFavorite
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                            color: widget.isFavorite
+                                ? Colors.red
+                                : Colors.white,
                             size: 16,
                           ),
                         ),
@@ -157,35 +221,50 @@ class PosterCard extends StatelessWidget {
                 ],
               ),
             ),
-            if (showTitle) ...[
+            if (widget.showTitle) ...[
               const SizedBox(height: 8),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+              SizedBox(
+                height: widget.subtitle != null || widget.year != null
+                    ? 34
+                    : 18,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (widget.subtitle != null)
+                      Text(
+                        widget.subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.1,
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                      )
+                    else if (widget.year != null)
+                      Text(
+                        widget.year!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.1,
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (subtitle != null)
-                Text(
-                  subtitle!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withValues(alpha: 0.5),
-                  ),
-                )
-              else if (year != null)
-                Text(
-                  year!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withValues(alpha: 0.5),
-                  ),
-                ),
             ],
           ],
         ),

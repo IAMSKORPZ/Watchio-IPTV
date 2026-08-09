@@ -31,18 +31,71 @@ class AppearancePage extends StatelessWidget {
                     subtitle: 'Changes highlights, borders and glow',
                     value: manager.currentThemeType,
                     label: _themeName,
-                    options: AppThemeType.values
-                        .where((type) => type != AppThemeType.custom)
-                        .toList(),
+                    options: AppThemeType.values,
                     onChanged: manager.setThemeType,
+                  ),
+                  _ColorTile(
+                    title: 'Highlight Colour',
+                    subtitle: 'Focus rings, selected states and main buttons',
+                    value: Theme.of(context).colorScheme.primary,
+                    options: const [
+                      Color(0xFFFF3D9A),
+                      Color(0xFFFF58B0),
+                      Color(0xFFA855F7),
+                      Color(0xFFC45CFF),
+                      Color(0xFF20D9D2),
+                      Color(0xFFFFFFFF),
+                    ],
+                    onChanged: manager.setHighlightColor,
+                  ),
+                  _ColorTile(
+                    title: 'Glow Colour',
+                    subtitle: 'Gradients, progress and active accents',
+                    value: Theme.of(context).colorScheme.secondary,
+                    options: const [
+                      Color(0xFF20D9D2),
+                      Color(0xFF39EEE5),
+                      Color(0xFFA855F7),
+                      Color(0xFFC45CFF),
+                      Color(0xFFFF3D9A),
+                      Color(0xFFD95CFF),
+                    ],
+                    onChanged: manager.setSecondaryColor,
                   ),
                   _ChoiceTile<String>(
                     title: 'Background Style',
                     subtitle: 'Changes backgrounds across the application',
                     value: manager.backgroundStyle,
                     label: _backgroundName,
-                    options: const ['dynamic', 'dark', 'amoled'],
+                    options: const ['dynamic', 'dark', 'amoled', 'custom'],
                     onChanged: manager.setBackgroundStyle,
+                  ),
+                  _ColorTile(
+                    title: 'Background Colour',
+                    subtitle: 'Base app background when custom is active',
+                    value: Theme.of(context).scaffoldBackgroundColor,
+                    options: const [
+                      Color(0xFF050712),
+                      Color(0xFF0B1020),
+                      Color(0xFF111827),
+                      Color(0xFF000000),
+                      Color(0xFF141E30),
+                      Color(0xFF180B22),
+                    ],
+                    onChanged: manager.setBackgroundColor,
+                  ),
+                  _ColorTile(
+                    title: 'Panel Colour',
+                    subtitle: 'Cards, menus and settings panels',
+                    value: Theme.of(context).colorScheme.surface,
+                    options: const [
+                      Color(0xFF0B1020),
+                      Color(0xFF101426),
+                      Color(0xFF111327),
+                      Color(0xFF121212),
+                      Color(0xFF1A1D29),
+                    ],
+                    onChanged: manager.setSurfaceColor,
                   ),
                   _ChoiceTile<String>(
                     title: 'Tile Style',
@@ -91,6 +144,7 @@ class AppearancePage extends StatelessWidget {
   static String _backgroundName(String value) => switch (value) {
     'dark' => 'Dark Gradient',
     'amoled' => 'AMOLED Black',
+    'custom' => 'Custom Colour',
     _ => 'Dynamic Mesh',
   };
 
@@ -106,6 +160,91 @@ class AppearancePage extends StatelessWidget {
     color: Colors.white38,
     fontSize: 10,
   );
+}
+
+class _ColorTile extends StatelessWidget {
+  const _ColorTile({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final Color value;
+  final List<Color> options;
+  final Future<void> Function(Color) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          dense: true,
+          visualDensity: const VisualDensity(vertical: -3),
+          title: Text(title, style: AppearancePage._titleStyle),
+          subtitle: Text(subtitle, style: AppearancePage._subtitleStyle),
+          trailing: Wrap(
+            spacing: 8,
+            children: [
+              for (final color in options)
+                _SwatchButton(
+                  color: color,
+                  selected: color.toARGB32() == value.toARGB32(),
+                  onTap: () => onChanged(color),
+                ),
+            ],
+          ),
+        ),
+        const Divider(color: Colors.white10, indent: 16, endIndent: 16),
+      ],
+    );
+  }
+}
+
+class _SwatchButton extends StatelessWidget {
+  const _SwatchButton({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? Colors.white : Colors.white24,
+            width: selected ? 3 : 1,
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.55),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+      ),
+    );
+  }
 }
 
 class _ChoiceTile<T> extends StatelessWidget {

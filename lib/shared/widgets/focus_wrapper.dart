@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../../core/theme/theme_extensions.dart';
 import '../../services/input_mode_controller.dart';
 import '../../utils/firestick_performance.dart';
 import 'watchio_focus_action.dart';
@@ -10,9 +11,11 @@ class FocusWrapper extends StatefulWidget {
   final VoidCallback? onPressed;
   final double scale;
   final bool showGlow;
+  final bool showBorder;
   final BorderRadius borderRadius;
   final bool autofocus;
   final ValueChanged<bool>? onFocusChange;
+  final Color? accentColor;
 
   const FocusWrapper({
     super.key,
@@ -20,9 +23,11 @@ class FocusWrapper extends StatefulWidget {
     this.onPressed,
     this.scale = 1.05,
     this.showGlow = true,
+    this.showBorder = true,
     this.borderRadius = const BorderRadius.all(Radius.circular(12)),
     this.autofocus = false,
     this.onFocusChange,
+    this.accentColor,
   });
 
   @override
@@ -34,7 +39,9 @@ class _FocusWrapperState extends State<FocusWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final tokens = BingieThemeExtension.of(context);
+    final accent = widget.accentColor ?? tokens.highlightColor;
+    final glow = widget.accentColor ?? tokens.glowColor;
     final inputMode = context.watch<InputModeController>();
 
     return Focus(
@@ -72,15 +79,17 @@ class _FocusWrapperState extends State<FocusWrapper> {
                   : _isFocused && widget.showGlow
                   ? [
                       BoxShadow(
-                        color: colorScheme.primary.withValues(alpha: 0.4),
+                        color: glow.withValues(alpha: 0.4),
                         blurRadius: 15,
                         spreadRadius: 2,
                       ),
                     ]
                   : [],
               border: Border.all(
-                color: _isFocused ? colorScheme.primary : Colors.transparent,
-                width: 2,
+                color: widget.showBorder && _isFocused
+                    ? accent
+                    : Colors.transparent,
+                width: widget.showBorder ? 2 : 0,
               ),
             ),
             child: widget.child,

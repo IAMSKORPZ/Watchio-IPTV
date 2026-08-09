@@ -209,7 +209,7 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                             subtitle: 'Watch Live TV Channels',
                                             icon: Icons.live_tv_rounded,
                                             accentColor: const Color(
-                                              0xFFC12CFF,
+                                              0xFFFF3D9A,
                                             ),
                                             onTap: widget.onLiveTv,
                                             onRefresh: widget.onRefreshLiveTv,
@@ -229,7 +229,9 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                             title: 'MOVIES',
                                             subtitle: 'Browse a wide selection',
                                             icon: Icons.play_arrow_rounded,
-                                            accentColor: Colors.orange,
+                                            accentColor: const Color(
+                                              0xFFA855F7,
+                                            ),
                                             onTap: widget.onMovies,
                                             onRefresh: widget.onRefreshMovies,
                                             isUpdating: widget.isMoviesUpdating,
@@ -249,7 +251,7 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                                 'Discover and binge-watch',
                                             icon: Icons.movie_rounded,
                                             accentColor: const Color(
-                                              0xFF00B7FF,
+                                              0xFF20D9D2,
                                             ),
                                             onTap: widget.onSeries,
                                             onRefresh: widget.onRefreshSeries,
@@ -275,7 +277,7 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                                   'Watch Live TV Channels',
                                               icon: Icons.live_tv_rounded,
                                               accentColor: const Color(
-                                                0xFFC12CFF,
+                                                0xFFFF3D9A,
                                               ),
                                               onTap: widget.onLiveTv,
                                               onRefresh: widget.onRefreshLiveTv,
@@ -295,7 +297,9 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                               subtitle:
                                                   'Browse a wide selection',
                                               icon: Icons.play_arrow_rounded,
-                                              accentColor: Colors.orange,
+                                              accentColor: const Color(
+                                                0xFFA855F7,
+                                              ),
                                               onTap: widget.onMovies,
                                               onRefresh: widget.onRefreshMovies,
                                               isUpdating:
@@ -314,7 +318,7 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                                   'Discover and binge-watch',
                                               icon: Icons.movie_rounded,
                                               accentColor: const Color(
-                                                0xFF00B7FF,
+                                                0xFF20D9D2,
                                               ),
                                               onTap: widget.onSeries,
                                               onRefresh: widget.onRefreshSeries,
@@ -346,7 +350,7 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                             icon: Icons.list_alt_rounded,
                                             onTap: widget.onTrakt ?? () {},
                                             accentColor: const Color(
-                                              0xFFC12CFF,
+                                              0xFFFF3D9A,
                                             ),
                                           ),
                                         ),
@@ -358,7 +362,9 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                             label: 'TV GUIDE',
                                             icon: Icons.live_tv_rounded,
                                             onTap: widget.onUpdate,
-                                            accentColor: Colors.white,
+                                            accentColor: const Color(
+                                              0xFFA855F7,
+                                            ),
                                           ),
                                         ),
                                         SizedBox(width: gap),
@@ -370,7 +376,7 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                             icon: Icons.settings_rounded,
                                             onTap: widget.onSettings,
                                             accentColor: const Color(
-                                              0xFF00B7FF,
+                                              0xFF20D9D2,
                                             ),
                                           ),
                                         ),
@@ -386,7 +392,7 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                               icon: Icons.list_alt_rounded,
                                               onTap: widget.onTrakt ?? () {},
                                               accentColor: const Color(
-                                                0xFFC12CFF,
+                                                0xFFFF3D9A,
                                               ),
                                             ),
                                           ),
@@ -396,7 +402,9 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                               label: 'TV GUIDE',
                                               icon: Icons.live_tv_rounded,
                                               onTap: widget.onUpdate,
-                                              accentColor: Colors.white,
+                                              accentColor: const Color(
+                                                0xFFA855F7,
+                                              ),
                                             ),
                                           ),
                                           SizedBox(width: gap),
@@ -406,7 +414,7 @@ class _BingieDashboardHomeState extends State<BingieDashboardHome>
                                               icon: Icons.settings_rounded,
                                               onTap: widget.onSettings,
                                               accentColor: const Color(
-                                                0xFF00B7FF,
+                                                0xFF20D9D2,
                                               ),
                                             ),
                                           ),

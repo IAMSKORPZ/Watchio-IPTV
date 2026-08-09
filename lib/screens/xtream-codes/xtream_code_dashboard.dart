@@ -5,8 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:another_iptv_player/l10n/localization_extension.dart';
 import 'package:another_iptv_player/models/playlist_model.dart';
 import 'package:another_iptv_player/controllers/xtream_code_home_controller.dart';
+import 'package:another_iptv_player/screens/live_stream/xtream_live_screen.dart';
 import 'package:another_iptv_player/screens/settings/announcement_center_screen.dart';
 import 'package:another_iptv_player/widgets/tv_focusable.dart';
+import 'package:provider/provider.dart';
 
 class XtreamCodeDashboard extends StatefulWidget {
   final Playlist playlist;
@@ -114,7 +116,7 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
                   height: isSmallHeight ? 35 : 55,
                   errorBuilder: (context, error, stackTrace) => Icon(
                     Icons.tv,
-                    color: Colors.blue,
+                    color: const Color(0xFF20D9D2),
                     size: isSmallHeight ? 30 : 40,
                   ),
                 ),
@@ -140,7 +142,7 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
                 Text(
                   DateFormat('MMM d, yyyy').format(_now),
                   style: TextStyle(
-                    color: const Color(0xFFC12CFF),
+                    color: const Color(0xFFC45CFF),
                     fontSize: isSmallHeight ? 11 : 14,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
@@ -226,7 +228,7 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
                   title: 'LIVE TV',
                   subtitle: 'Watch Live TV Channels',
                   icon: Icons.play_arrow_rounded,
-                  color: const Color(0xFFC12CFF),
+                  color: const Color(0xFFFF3D9A),
                   isSmallHeight: isSmallHeight,
                   onTap: () => widget.controller.onNavigationTap(2),
                 ),
@@ -237,7 +239,7 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
                   title: 'MOVIES',
                   subtitle: 'Browse a wide selection',
                   icon: Icons.play_arrow_rounded,
-                  color: Colors.orange.shade800,
+                  color: const Color(0xFFA855F7),
                   isSmallHeight: isSmallHeight,
                   onTap: () => widget.controller.onNavigationTap(3),
                 ),
@@ -248,7 +250,7 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
                   title: 'SERIES',
                   subtitle: 'Discover and binge-watch',
                   icon: Icons.movie_filter_rounded,
-                  color: const Color(0xFF00B7FF),
+                  color: const Color(0xFF20D9D2),
                   isSmallHeight: isSmallHeight,
                   onTap: () => widget.controller.onNavigationTap(4),
                 ),
@@ -276,7 +278,19 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
                 child: _buildBottomAction(
                   title: 'TV GUIDE',
                   icon: Icons.live_tv_rounded,
-                  onTap: () => widget.controller.refreshAllData(context),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ChangeNotifierProvider.value(
+                        value: widget.controller,
+                        child: XtreamLiveScreen(
+                          playlist: widget.playlist,
+                          openAsGuide: true,
+                          homeController: widget.controller,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 20),
@@ -443,7 +457,7 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
             children: [
               const Icon(
                 Icons.verified_rounded,
-                color: Color(0xFF00B7FF),
+                color: Color(0xFF20D9D2),
                 size: 18,
               ),
               const SizedBox(width: 10),
@@ -473,7 +487,7 @@ class _XtreamCodeDashboardState extends State<XtreamCodeDashboard> {
             children: [
               const Icon(
                 Icons.person_rounded,
-                color: Color(0xFFC12CFF),
+                color: Color(0xFFFF3D9A),
                 size: 18,
               ),
               const SizedBox(width: 10),

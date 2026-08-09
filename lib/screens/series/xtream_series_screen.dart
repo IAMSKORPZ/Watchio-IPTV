@@ -304,6 +304,8 @@ class _XtreamSeriesScreenState extends State<XtreamSeriesScreen> {
     final config = context.watch<ConfigService>().config;
     final themeManager = context.watch<ThemeManager>();
     final homeBg = config.backgrounds.home;
+    const seriesAccent = Color(0xFF20D9D2);
+    const seriesGlow = Color(0xFF129C9A);
 
     return Consumer<XtreamCodeHomeController>(
       builder: (context, controller, child) {
@@ -386,6 +388,7 @@ class _XtreamSeriesScreenState extends State<XtreamSeriesScreen> {
                                   ),
                                   label: category.category.categoryName,
                                   selected: isSelected,
+                                  accentColor: seriesAccent,
                                   count:
                                       _categoryCounts[category
                                           .category
@@ -463,6 +466,8 @@ class _XtreamSeriesScreenState extends State<XtreamSeriesScreen> {
                                                 showImage: _showPoster,
                                                 showTitle: _showTitle,
                                                 showRating: _showRating,
+                                                accentColor: seriesAccent,
+                                                glowColor: seriesGlow,
                                                 onTap: () =>
                                                     navigateByContentType(
                                                       context,
@@ -473,7 +478,7 @@ class _XtreamSeriesScreenState extends State<XtreamSeriesScreen> {
                                           } else {
                                             return const Center(
                                               child: CircularProgressIndicator(
-                                                color: Color(0xFFC12CFF),
+                                                color: seriesAccent,
                                               ),
                                             );
                                           }

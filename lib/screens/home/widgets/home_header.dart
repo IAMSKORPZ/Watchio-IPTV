@@ -45,7 +45,7 @@ class HomeHeader extends StatelessWidget {
               fit: BoxFit.contain,
               errorBuilder: (context, error, stackTrace) => Icon(
                 Icons.play_arrow_rounded,
-                color: const Color(0xFF00B7FF),
+                color: const Color(0xFF20D9D2),
                 size: logoHeight * 0.7,
               ),
             ),
@@ -71,7 +71,7 @@ class HomeHeader extends StatelessWidget {
             Text(
               DateFormat('MMM d, yyyy').format(now),
               style: TextStyle(
-                color: const Color(0xFFC12CFF),
+                color: const Color(0xFFC45CFF),
                 fontSize: dateFontSize,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.5,
@@ -187,14 +187,14 @@ class _HeaderButtonState extends State<HeaderButton> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: _isFocused
-                    ? const Color(0xFFC12CFF)
+                    ? const Color(0xFFFFFFFF)
                     : Colors.white.withValues(alpha: 0.1),
                 width: _isFocused ? 2.5 : 1.0,
               ),
               boxShadow: _isFocused
                   ? [
                       BoxShadow(
-                        color: const Color(0xFFC12CFF).withValues(alpha: 0.3),
+                        color: const Color(0xFFD95CFF).withValues(alpha: 0.3),
                         blurRadius: 15,
                       ),
                     ]
@@ -278,7 +278,7 @@ class _ToolbarItemState extends State<_ToolbarItem> {
                         ? [
                             BoxShadow(
                               color: const Color(
-                                0xFFC12CFF,
+                                0xFFD95CFF,
                               ).withValues(alpha: 0.3),
                               blurRadius: 10,
                             ),
@@ -308,7 +308,7 @@ class _ToolbarItemState extends State<_ToolbarItem> {
                                 ? [
                                     BoxShadow(
                                       color: const Color(
-                                        0xFFC12CFF,
+                                        0xFFD95CFF,
                                       ).withValues(alpha: 0.3),
                                       blurRadius: 10,
                                     ),

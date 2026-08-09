@@ -319,19 +319,13 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
     });
   }
 
-  void _toggleControls() {
+  void _handlePlayerSurfaceTap() {
     if (hasError) return;
-    setState(() {
-      _showControls = !_showControls;
-      if (_showControls) {
-        _showChannelList = false;
-        _focusPlayPause();
-        _startControlsTimer();
-      } else {
-        _controlsTimer?.cancel();
-        _playerFocusNode.requestFocus();
-      }
-    });
+    if (_showControls) {
+      _hideControls();
+    } else {
+      _showControlsTemporarily();
+    }
   }
 
   Future<void> _toggleDesktopFullscreen() async {
@@ -864,7 +858,7 @@ class _UnifiedPlayerScreenState extends State<UnifiedPlayerScreen> {
           child: MouseRegion(
             onHover: (_) => _showControlsTemporarily(),
             child: GestureDetector(
-              onTap: _toggleControls,
+              onTap: _handlePlayerSurfaceTap,
               onDoubleTap: _toggleDesktopFullscreen,
               behavior: HitTestBehavior.opaque,
               child: _playerController.buildPlayerView(context),

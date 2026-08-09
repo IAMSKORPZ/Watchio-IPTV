@@ -57,15 +57,17 @@ class _WatchioSettingsScaffoldState extends State<WatchioSettingsScaffold> {
     final themeManager = context.watch<ThemeManager>();
     final homeBg = config.backgrounds.home;
 
+    final background = Theme.of(context).scaffoldBackgroundColor;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF050812),
+      backgroundColor: background,
       body: Stack(
         children: [
           // Background Layer
           Positioned.fill(
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF050812),
+                color: background,
                 image: DecorationImage(
                   image: (themeManager.showBackgroundImage && homeBg.isNotEmpty)
                       ? perfNetworkImage(homeBg)
@@ -80,9 +82,9 @@ class _WatchioSettingsScaffoldState extends State<WatchioSettingsScaffold> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      const Color(0xFF050812).withValues(alpha: 0.2),
-                      const Color(0xFF050812).withValues(alpha: 0.6),
-                      const Color(0xFF050812).withValues(alpha: 0.9),
+                      background.withValues(alpha: 0.2),
+                      background.withValues(alpha: 0.6),
+                      background.withValues(alpha: 0.9),
                     ],
                   ),
                 ),
@@ -189,6 +191,7 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
   bool _isFocused = false;
   @override
   Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
     return WatchioFocusAction(
       onFocusChange: (v) => setState(() => _isFocused = v),
       onActivate: widget.onTap,
@@ -203,9 +206,7 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
                 ? Colors.white.withValues(alpha: 0.2)
                 : Colors.white.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _isFocused ? const Color(0xFFC12CFF) : Colors.white10,
-            ),
+            border: Border.all(color: _isFocused ? accent : Colors.white10),
           ),
           child: Icon(
             widget.icon,

@@ -75,6 +75,7 @@ class _WatchioHeaderState extends State<WatchioHeader> {
             children: [
               _HeaderIconButton(
                 icon: Icons.arrow_back_rounded,
+                tooltip: 'Back',
                 onTap: widget.onBack,
               ),
               const SizedBox(width: 16),
@@ -120,8 +121,8 @@ class _WatchioHeaderState extends State<WatchioHeader> {
               ),
               Text(
                 DateFormat('MMM d, yyyy').format(_now),
-                style: const TextStyle(
-                  color: Color(0xFFC12CFF),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                 ),
@@ -136,127 +137,185 @@ class _WatchioHeaderState extends State<WatchioHeader> {
             children: [
               _HeaderIconButton(
                 icon: Icons.search_rounded,
+                tooltip: 'Search',
                 onTap: widget.onSearch,
               ),
               if (widget.onProfile != null) ...[
                 const SizedBox(width: 12),
                 _HeaderIconButton(
                   icon: Icons.person_outline_rounded,
+                  tooltip: 'Profile',
                   onTap: widget.onProfile!,
                 ),
               ],
               const SizedBox(width: 12),
-              _buildMenu(context),
+              _HeaderMenuButton(
+                onSelected: (value) {
+                  switch (value) {
+                    case 'setup':
+                      widget.onSetup?.call();
+                      break;
+                    case 'refresh':
+                      widget.onRefresh?.call();
+                      break;
+                    case 'refresh_epg':
+                      widget.onRefreshEpg?.call();
+                      break;
+                    case 'settings':
+                      (widget.onSettings ?? widget.onMenu)?.call();
+                      break;
+                    case 'clear_history':
+                      widget.onClearHistory?.call();
+                      break;
+                  }
+                },
+                showClearHistory: widget.onClearHistory != null,
+              ),
             ],
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildMenu(BuildContext context) {
+class _HeaderMenuButton extends StatefulWidget {
+  final ValueChanged<String> onSelected;
+  final bool showClearHistory;
+
+  const _HeaderMenuButton({
+    required this.onSelected,
+    required this.showClearHistory,
+  });
+
+  @override
+  State<_HeaderMenuButton> createState() => _HeaderMenuButtonState();
+}
+
+class _HeaderMenuButtonState extends State<_HeaderMenuButton> {
+  bool _isFocused = false;
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final active = _isFocused || _isHovered;
     return Theme(
-      data: Theme.of(
-        context,
-      ).copyWith(hoverColor: Colors.white.withValues(alpha: 0.1)),
-      child: PopupMenuButton<String>(
-        icon: const _HeaderIconContainer(icon: Icons.more_vert_rounded),
-        offset: const Offset(0, 50),
-        color: const Color(0xFF1A1D29),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Colors.white10),
-        ),
-        onSelected: (value) {
-          switch (value) {
-            case 'setup':
-              widget.onSetup?.call();
-              break;
-            case 'refresh':
-              widget.onRefresh?.call();
-              break;
-            case 'refresh_epg':
-              if (Navigator.of(context).canPop()) {
-                // Not the best way but if we are in live screen it works
-              }
-              // We'll pass this via a new callback
-              if (widget.onRefreshEpg != null) {
-                widget.onRefreshEpg!();
-              }
-              break;
-            case 'settings':
-              (widget.onSettings ?? widget.onMenu)?.call();
-              break;
-            case 'clear_history':
-              widget.onClearHistory?.call();
-              break;
-          }
-        },
-        itemBuilder: (context) => [
-          const PopupMenuItem(
-            value: 'setup',
-            child: Row(
-              children: [
-                Icon(Icons.tune_rounded, color: Colors.white70, size: 20),
-                SizedBox(width: 12),
-                Text('Setup', style: TextStyle(color: Colors.white)),
-              ],
+      data: Theme.of(context).copyWith(
+        hoverColor: accent.withValues(alpha: 0.14),
+        focusColor: accent.withValues(alpha: 0.18),
+        splashColor: accent.withValues(alpha: 0.12),
+      ),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: WatchioFocusAction(
+          onFocusChange: (v) => setState(() => _isFocused = v),
+          child: PopupMenuButton<String>(
+            tooltip: 'Menu',
+            offset: const Offset(0, 50),
+            color: Theme.of(context).colorScheme.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: accent.withValues(alpha: 0.35)),
             ),
-          ),
-          if (widget.onClearHistory != null)
-            const PopupMenuItem(
-              value: 'clear_history',
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.delete_sweep_rounded,
-                    color: Colors.redAccent,
-                    size: 20,
+            onSelected: widget.onSelected,
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'setup',
+                child: _ThemedMenuItem(
+                  icon: Icons.tune_rounded,
+                  label: 'Setup',
+                ),
+              ),
+              if (widget.showClearHistory)
+                const PopupMenuItem(
+                  value: 'clear_history',
+                  child: _ThemedMenuItem(
+                    icon: Icons.delete_sweep_rounded,
+                    label: 'Clear History',
+                    danger: true,
                   ),
-                  SizedBox(width: 12),
-                  Text('Clear History', style: TextStyle(color: Colors.white)),
-                ],
+                ),
+              const PopupMenuItem(
+                value: 'settings',
+                child: _ThemedMenuItem(
+                  icon: Icons.settings_rounded,
+                  label: 'Settings',
+                ),
+              ),
+            ],
+            icon: AnimatedContainer(
+              duration: perfDuration(const Duration(milliseconds: 200)),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: active
+                    ? accent.withValues(alpha: 0.18)
+                    : Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: active ? accent : Colors.white10,
+                  width: active ? 2 : 1,
+                ),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.28),
+                          blurRadius: 12,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Icon(
+                Icons.more_vert_rounded,
+                color: active ? Colors.white : Colors.white70,
+                size: 22,
               ),
             ),
-          const PopupMenuItem(
-            value: 'settings',
-            child: Row(
-              children: [
-                Icon(Icons.settings_rounded, color: Colors.white70, size: 20),
-                SizedBox(width: 12),
-                Text('Settings', style: TextStyle(color: Colors.white)),
-              ],
-            ),
+            onOpened: () => setState(() => _isHovered = true),
+            onCanceled: () => setState(() => _isHovered = false),
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _HeaderIconContainer extends StatelessWidget {
+class _ThemedMenuItem extends StatelessWidget {
   final IconData icon;
+  final String label;
+  final bool danger;
 
-  const _HeaderIconContainer({required this.icon});
+  const _ThemedMenuItem({
+    required this.icon,
+    required this.label,
+    this.danger = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Icon(icon, color: Colors.white70, size: 22),
+    final color = danger
+        ? Colors.redAccent
+        : Theme.of(context).colorScheme.primary;
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 12),
+        Text(label, style: const TextStyle(color: Colors.white)),
+      ],
     );
   }
 }
 
 class _HeaderIconButton extends StatefulWidget {
   final IconData icon;
+  final String tooltip;
   final VoidCallback onTap;
-  const _HeaderIconButton({required this.icon, required this.onTap});
+  const _HeaderIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   @override
   State<_HeaderIconButton> createState() => _HeaderIconButtonState();
@@ -264,30 +323,47 @@ class _HeaderIconButton extends StatefulWidget {
 
 class _HeaderIconButtonState extends State<_HeaderIconButton> {
   bool _isFocused = false;
+  bool _isHovered = false;
+
   @override
   Widget build(BuildContext context) {
-    return WatchioFocusAction(
-      onFocusChange: (v) => setState(() => _isFocused = v),
-      onActivate: widget.onTap,
-      child: InkWell(
-        onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: perfDuration(const Duration(milliseconds: 200)),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: _isFocused
-                ? Colors.white.withValues(alpha: 0.2)
-                : Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _isFocused ? const Color(0xFFC12CFF) : Colors.white10,
+    final active = _isFocused || _isHovered;
+    final accent = Theme.of(context).colorScheme.primary;
+    return Tooltip(
+      message: widget.tooltip,
+      child: WatchioFocusAction(
+        onFocusChange: (v) => setState(() => _isFocused = v),
+        onActivate: widget.onTap,
+        child: InkWell(
+          onTap: widget.onTap,
+          onHover: (v) => setState(() => _isHovered = v),
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: perfDuration(const Duration(milliseconds: 200)),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: active
+                  ? accent.withValues(alpha: 0.18)
+                  : Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: active ? accent : Colors.white10,
+                width: active ? 2 : 1,
+              ),
+              boxShadow: active
+                  ? [
+                      BoxShadow(
+                        color: accent.withValues(alpha: 0.28),
+                        blurRadius: 12,
+                      ),
+                    ]
+                  : null,
             ),
-          ),
-          child: Icon(
-            widget.icon,
-            color: _isFocused ? Colors.white : Colors.white70,
-            size: 22,
+            child: Icon(
+              widget.icon,
+              color: active ? Colors.white : Colors.white70,
+              size: 22,
+            ),
           ),
         ),
       ),

@@ -1,15 +1,17 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../repositories/user_preferences.dart';
 import '../utils/firestick_performance.dart';
 
-enum DeviceInputMode { mobile, tv }
+enum DeviceInputMode { mobile, desktop, tv }
 
 extension DeviceInputModeLabel on DeviceInputMode {
   String get storageValue {
     switch (this) {
       case DeviceInputMode.mobile:
         return 'mobile';
+      case DeviceInputMode.desktop:
+        return 'desktop';
       case DeviceInputMode.tv:
         return 'tv';
     }
@@ -19,6 +21,8 @@ extension DeviceInputModeLabel on DeviceInputMode {
     switch (this) {
       case DeviceInputMode.mobile:
         return 'Mobile';
+      case DeviceInputMode.desktop:
+        return 'Desktop';
       case DeviceInputMode.tv:
         return 'TV';
     }
@@ -33,12 +37,18 @@ class InputModeController extends ChangeNotifier {
   bool get isLoaded => _isLoaded;
   bool get isTvMode => _mode == DeviceInputMode.tv;
   bool get isMobileMode => _mode == DeviceInputMode.mobile;
+  bool get isDesktopMode => _mode == DeviceInputMode.desktop;
   bool get hasMode => _mode != null;
 
-  bool get allowPointerInput => !isTvMode;
+  bool get allowPointerInput => !isTvMode || isDesktopPlatform;
   bool get allowTouchGestures => isMobileMode;
   bool get showKeyboardOnFocus => isMobileMode;
   bool get useTvPerformanceProfile => isTvMode;
+  bool get isDesktopPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux);
 
   Future<void> load() async {
     final value = await UserPreferences.getDeviceInputMode();
@@ -68,6 +78,8 @@ class InputModeController extends ChangeNotifier {
     switch (value) {
       case 'mobile':
         return DeviceInputMode.mobile;
+      case 'desktop':
+        return DeviceInputMode.desktop;
       case 'tv':
         return DeviceInputMode.tv;
       default:

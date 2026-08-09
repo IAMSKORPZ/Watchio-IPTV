@@ -108,7 +108,7 @@ class _AppShellState extends State<AppShell> {
               },
               child: Scaffold(
                 resizeToAvoidBottomInset: false,
-                backgroundColor: const Color(0xFF050812),
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                 body: Row(
                   children: [
                     if (showSidebar)
@@ -132,9 +132,9 @@ class _AppShellState extends State<AppShell> {
                           child: Column(
                             children: [
                               const SizedBox(height: 20),
-                              const Icon(
+                              Icon(
                                 Icons.tv,
-                                color: Colors.blue,
+                                color: Theme.of(context).colorScheme.secondary,
                                 size: 30,
                               ),
                               const SizedBox(height: 30),

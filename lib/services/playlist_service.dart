@@ -22,6 +22,12 @@ class PlaylistService {
 
   static Future<void> deletePlaylist(String id) async {
     await SecureStorageService.instance.deleteProviderPassword(id);
+    await SecureStorageService.instance.deleteProviderSecret(id, 'username');
+    await SecureStorageService.instance.deleteProviderSecret(id, 'stalker_mac');
+    await SecureStorageService.instance.deleteProviderSecret(
+      id,
+      'stalker_token',
+    );
     await DatabaseService.deletePlaylist(id);
   }
 
@@ -44,11 +50,15 @@ class PlaylistService {
   }
 
   static Future<List<Playlist>> getXStreamPlaylists() async {
-    return _hydrateAll(await DatabaseService.getPlaylistsByType(PlaylistType.xtream));
+    return _hydrateAll(
+      await DatabaseService.getPlaylistsByType(PlaylistType.xtream),
+    );
   }
 
   static Future<List<Playlist>> getM3UPlaylists() async {
-    return _hydrateAll(await DatabaseService.getPlaylistsByType(PlaylistType.m3u));
+    return _hydrateAll(
+      await DatabaseService.getPlaylistsByType(PlaylistType.m3u),
+    );
   }
 
   static Playlist _withoutSecret(Playlist playlist) {
@@ -64,10 +74,23 @@ class PlaylistService {
   }
 
   static Future<Playlist> _hydrate(Playlist playlist) async {
-    final password =
-        await SecureStorageService.instance.readProviderPassword(playlist.id);
-    final username = await SecureStorageService.instance
-        .readProviderSecret(playlist.id, 'username');
+    var password = await SecureStorageService.instance.readProviderPassword(
+      playlist.id,
+    );
+    final username = await SecureStorageService.instance.readProviderSecret(
+      playlist.id,
+      'username',
+    );
+
+    if ((password == null || password.isEmpty) &&
+        (playlist.password?.isNotEmpty ?? false)) {
+      password = playlist.password;
+      await SecureStorageService.instance.saveProviderPassword(
+        playlist.id,
+        password,
+      );
+      await DatabaseService.updatePlaylist(_withoutSecret(playlist));
+    }
 
     return Playlist(
       id: playlist.id,

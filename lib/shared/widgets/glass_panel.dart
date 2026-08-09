@@ -40,7 +40,10 @@ class GlassPanel extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: gradient == null
-            ? theme.glassColor.withValues(alpha: opacity)
+            ? Color.alphaBlend(
+                theme.panelColor.withValues(alpha: 0.38),
+                theme.glassColor.withValues(alpha: opacity),
+              )
             : null,
         gradient: gradient,
         borderRadius: BorderRadius.circular(effectiveRadius),

@@ -10,16 +10,38 @@ class ThemeManager extends ChangeNotifier {
   String _backgroundStyle = 'dynamic';
   String _tileStyle = 'rounded';
   bool _animationsEnabled = true;
+  Color _highlightColor = AppTheme.primaryPink;
+  Color _secondaryColor = AppTheme.primaryTurquoise;
+  Color _backgroundColor = AppTheme.defaultBackground;
+  Color _surfaceColor = AppTheme.defaultSurface;
 
   AppThemeType get currentThemeType => _currentThemeType;
   ThemeMode get themeMode => _themeMode;
   String get backgroundStyle => _backgroundStyle;
   String get tileStyle => _tileStyle;
   bool get animationsEnabled => _animationsEnabled;
+  Color get highlightColor => _highlightColor;
+  Color get secondaryColor => _secondaryColor;
+  Color get backgroundColor => _backgroundColor;
+  Color get surfaceColor => _surfaceColor;
   bool get showBackgroundImage => _backgroundStyle == 'dynamic';
   double get tileRadius => _tileStyle == 'compact' ? 16 : 30;
 
-  ThemeData get currentThemeData => AppTheme.getTheme(_currentThemeType);
+  ThemeData get currentThemeData {
+    final customBackground = switch (_backgroundStyle) {
+      'amoled' => Colors.black,
+      'dark' => AppTheme.defaultBackground,
+      'custom' => _backgroundColor,
+      _ => null,
+    };
+    return AppTheme.getTheme(
+      _currentThemeType,
+      customHighlight: _highlightColor,
+      customSecondary: _secondaryColor,
+      customBackground: customBackground,
+      customSurface: _surfaceColor,
+    );
+  }
 
   ThemeManager() {
     _init();
@@ -27,6 +49,13 @@ class ThemeManager extends ChangeNotifier {
 
   Future<void> _init() async {
     _currentThemeType = await ThemeStorage.loadTheme();
+    _highlightColor =
+        await ThemeStorage.loadHighlightColor() ?? _highlightColor;
+    _secondaryColor =
+        await ThemeStorage.loadSecondaryColor() ?? _secondaryColor;
+    _backgroundColor =
+        await ThemeStorage.loadBackgroundColor() ?? _backgroundColor;
+    _surfaceColor = await ThemeStorage.loadSurfaceColor() ?? _surfaceColor;
     _themeMode = await UserPreferences.getThemeMode();
     final prefs = await SharedPreferences.getInstance();
     _backgroundStyle = prefs.getString('appearance_background') ?? 'dynamic';
@@ -65,6 +94,41 @@ class ThemeManager extends ChangeNotifier {
     _animationsEnabled = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('appearance_animations', value);
+    notifyListeners();
+  }
+
+  Future<void> setHighlightColor(Color value) async {
+    _highlightColor = value;
+    _currentThemeType = AppThemeType.custom;
+    await ThemeStorage.saveHighlightColor(value);
+    await ThemeStorage.saveTheme(_currentThemeType);
+    notifyListeners();
+  }
+
+  Future<void> setSecondaryColor(Color value) async {
+    _secondaryColor = value;
+    _currentThemeType = AppThemeType.custom;
+    await ThemeStorage.saveSecondaryColor(value);
+    await ThemeStorage.saveTheme(_currentThemeType);
+    notifyListeners();
+  }
+
+  Future<void> setBackgroundColor(Color value) async {
+    _backgroundColor = value;
+    _currentThemeType = AppThemeType.custom;
+    _backgroundStyle = 'custom';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('appearance_background', _backgroundStyle);
+    await ThemeStorage.saveBackgroundColor(value);
+    await ThemeStorage.saveTheme(_currentThemeType);
+    notifyListeners();
+  }
+
+  Future<void> setSurfaceColor(Color value) async {
+    _surfaceColor = value;
+    _currentThemeType = AppThemeType.custom;
+    await ThemeStorage.saveSurfaceColor(value);
+    await ThemeStorage.saveTheme(_currentThemeType);
     notifyListeners();
   }
 

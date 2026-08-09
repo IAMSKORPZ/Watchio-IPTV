@@ -45,6 +45,18 @@ class InputModePage extends StatelessWidget {
                 const SizedBox(width: 22),
                 Expanded(
                   child: _InputModeOption(
+                    autofocus: inputMode.mode == DeviceInputMode.desktop,
+                    selected: inputMode.mode == DeviceInputMode.desktop,
+                    mode: DeviceInputMode.desktop,
+                    icon: Icons.desktop_windows_rounded,
+                    title: 'DESKTOP / LAPTOP',
+                    subtitle:
+                        'Use mouse clicks, hover, scroll wheel, keyboard shortcuts, and text input.',
+                  ),
+                ),
+                const SizedBox(width: 22),
+                Expanded(
+                  child: _InputModeOption(
                     autofocus: inputMode.mode == DeviceInputMode.tv,
                     selected: inputMode.mode == DeviceInputMode.tv,
                     mode: DeviceInputMode.tv,
@@ -59,8 +71,10 @@ class InputModePage extends StatelessWidget {
             const SizedBox(height: 18),
             Text(
               inputMode.isTvMode
-                  ? 'TV mode blocks touch and mouse clicks. Use remote, controller, or keyboard to navigate.'
-                  : 'Mobile mode keeps touchscreen and mouse clicks enabled.',
+                  ? 'TV mode blocks touch and mouse clicks on TV devices. Desktop platforms still keep mouse available.'
+                  : inputMode.isDesktopMode
+                  ? 'Desktop mode keeps mouse clicks and keyboard enabled without mobile touch gestures.'
+                  : 'Mobile mode keeps touchscreen, taps, swipes, and soft keyboard enabled.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.56),
                 fontSize: 14,
@@ -104,9 +118,11 @@ class _InputModeOptionState extends State<_InputModeOption> {
   @override
   Widget build(BuildContext context) {
     final active = _focused || widget.selected;
-    final color = widget.mode == DeviceInputMode.tv
-        ? const Color(0xFFC12CFF)
-        : const Color(0xFF00B7FF);
+    final color = switch (widget.mode) {
+      DeviceInputMode.tv => const Color(0xFFC12CFF),
+      DeviceInputMode.desktop => const Color(0xFF35D07F),
+      DeviceInputMode.mobile => const Color(0xFF00B7FF),
+    };
 
     return WatchioFocusAction(
       autofocus: widget.autofocus,

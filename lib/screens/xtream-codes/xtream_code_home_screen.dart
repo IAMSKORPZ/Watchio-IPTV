@@ -141,6 +141,22 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
     );
   }
 
+  void _openTvGuide() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider.value(
+          value: _controller,
+          child: XtreamLiveScreen(
+            playlist: widget.playlist,
+            openAsGuide: true,
+            homeController: _controller,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
@@ -169,7 +185,7 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
             onIndexChanged: controller.onNavigationTap,
             navItems: navItems,
             onSearchTap: _navigateToSearch,
-            onRefreshTap: () => _showTvGuideComingSoon(context),
+            onRefreshTap: _openTvGuide,
             onSettingsTap: () => controller.onNavigationTap(5),
             pages: [
               BingieDashboardHome(
@@ -192,7 +208,7 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
                   _refreshSection(context, controller, CategoryType.series),
                 ),
                 onAnnouncements: _showAnnouncements,
-                onUpdate: () => _showTvGuideComingSoon(context),
+                onUpdate: _openTvGuide,
                 onSettings: () => controller.onNavigationTap(5),
                 onSearch: _navigateToSearch,
                 onSports: _showSportsHub,
@@ -247,29 +263,6 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => SearchScreen(contentType: contentType),
-      ),
-    );
-  }
-
-  void _showTvGuideComingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF17112A),
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: const Row(
-          children: [
-            Icon(Icons.live_tv_rounded, color: Color(0xFFC12CFF), size: 22),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'TV Guide coming next. Use Live TV for channels and EPG preview for now.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

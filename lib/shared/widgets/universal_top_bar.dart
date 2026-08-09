@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../core/theme/theme_extensions.dart';
 import 'focus_wrapper.dart';
 
 class UniversalTopBar extends StatefulWidget implements PreferredSizeWidget {
@@ -154,7 +155,7 @@ class _UniversalTopBarState extends State<UniversalTopBar> {
       children: [
         Icon(
           Icons.play_arrow_rounded,
-          color: Colors.blue,
+          color: BingieThemeExtension.of(context).glowColor,
           size: isSmallHeight ? 18 : 22,
         ),
         const SizedBox(width: 8),

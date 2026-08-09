@@ -297,6 +297,8 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
     final config = context.watch<ConfigService>().config;
     final themeManager = context.watch<ThemeManager>();
     final homeBg = config.backgrounds.home;
+    const moviesAccent = Color(0xFFA855F7);
+    const moviesGlow = Color(0xFFC45CFF);
 
     return Consumer<XtreamCodeHomeController>(
       builder: (context, controller, child) {
@@ -379,6 +381,7 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
                                   ),
                                   label: category.category.categoryName,
                                   selected: isSelected,
+                                  accentColor: moviesAccent,
                                   count:
                                       _categoryCounts[category
                                           .category
@@ -428,14 +431,19 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
 
                                       return GridView.builder(
                                         controller: _scrollController,
+                                        padding: const EdgeInsets.fromLTRB(
+                                          10,
+                                          12,
+                                          10,
+                                          24,
+                                        ),
                                         scrollCacheExtent:
                                             const ScrollCacheExtent.pixels(900),
                                         gridDelegate:
                                             SliverGridDelegateWithFixedCrossAxisCount(
                                               crossAxisCount: crossAxisCount,
                                               childAspectRatio:
-                                                  2 /
-                                                  3, // 2:3 movie poster ratio
+                                                  0.58, // poster + title room
                                               crossAxisSpacing: 16,
                                               mainAxisSpacing: 20,
                                             ),
@@ -456,6 +464,8 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
                                                 showImage: _showPoster,
                                                 showTitle: _showTitle,
                                                 showRating: _showRating,
+                                                accentColor: moviesAccent,
+                                                glowColor: moviesGlow,
                                                 onTap: () =>
                                                     navigateByContentType(
                                                       context,
@@ -464,9 +474,9 @@ class _XtreamMoviesScreenState extends State<XtreamMoviesScreen> {
                                               ),
                                             );
                                           } else {
-                                            return const Center(
+                                            return Center(
                                               child: CircularProgressIndicator(
-                                                color: Color(0xFFC12CFF),
+                                                color: moviesAccent,
                                               ),
                                             );
                                           }

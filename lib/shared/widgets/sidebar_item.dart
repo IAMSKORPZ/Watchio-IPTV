@@ -9,6 +9,7 @@ class SidebarItem extends StatelessWidget {
   final ValueChanged<bool>? onFocusChange;
   final bool isCollapsed;
   final int? count;
+  final Color? accentColor;
 
   const SidebarItem({
     super.key,
@@ -19,30 +20,28 @@ class SidebarItem extends StatelessWidget {
     this.onFocusChange,
     this.isCollapsed = false,
     this.count,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final accent = accentColor ?? colorScheme.primary;
 
     return FocusWrapper(
       onPressed: onTap,
       onFocusChange: onFocusChange,
       scale: 1.02,
       showGlow: false,
+      accentColor: accent,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: selected
-              ? colorScheme.primary.withValues(alpha: 0.15)
-              : Colors.transparent,
+          color: selected ? accent.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: selected
-              ? Border.all(
-                  color: colorScheme.primary.withValues(alpha: 0.5),
-                  width: 1,
-                )
+              ? Border.all(color: accent.withValues(alpha: 0.5), width: 1)
               : null,
         ),
         child: Row(
@@ -51,7 +50,7 @@ class SidebarItem extends StatelessWidget {
             Icon(
               icon,
               color: selected
-                  ? colorScheme.primary
+                  ? accent
                   : colorScheme.onSurface.withValues(alpha: 0.6),
               size: 24,
             ),

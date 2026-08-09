@@ -6,6 +6,9 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
   final LinearGradient panelGradient;
   final Color glassColor;
   final Color glassBorder;
+  final Color highlightColor;
+  final Color glowColor;
+  final Color panelColor;
 
   const BingieThemeExtension({
     required this.primaryGradient,
@@ -13,6 +16,9 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
     required this.panelGradient,
     required this.glassColor,
     required this.glassBorder,
+    required this.highlightColor,
+    required this.glowColor,
+    required this.panelColor,
   });
 
   @override
@@ -22,6 +28,9 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
     LinearGradient? panelGradient,
     Color? glassColor,
     Color? glassBorder,
+    Color? highlightColor,
+    Color? glowColor,
+    Color? panelColor,
   }) {
     return BingieThemeExtension(
       primaryGradient: primaryGradient ?? this.primaryGradient,
@@ -29,6 +38,9 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
       panelGradient: panelGradient ?? this.panelGradient,
       glassColor: glassColor ?? this.glassColor,
       glassBorder: glassBorder ?? this.glassBorder,
+      highlightColor: highlightColor ?? this.highlightColor,
+      glowColor: glowColor ?? this.glowColor,
+      panelColor: panelColor ?? this.panelColor,
     );
   }
 
@@ -58,6 +70,9 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
       )!,
       glassColor: Color.lerp(glassColor, other.glassColor, t)!,
       glassBorder: Color.lerp(glassBorder, other.glassBorder, t)!,
+      highlightColor: Color.lerp(highlightColor, other.highlightColor, t)!,
+      glowColor: Color.lerp(glowColor, other.glowColor, t)!,
+      panelColor: Color.lerp(panelColor, other.panelColor, t)!,
     );
   }
 
@@ -67,15 +82,18 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
 
   static const defaults = BingieThemeExtension(
     primaryGradient: LinearGradient(
-      colors: [Color(0xFF6A11CB), Color(0xFF2575FC)],
+      colors: [Color(0xFFFF3D9A), Color(0xFFA855F7)],
     ),
     secondaryGradient: LinearGradient(
-      colors: [Color(0xFF2575FC), Color(0xFF6A11CB)],
+      colors: [Color(0xFFA855F7), Color(0xFF20D9D2)],
     ),
     panelGradient: LinearGradient(
-      colors: [Color(0xAA4A3D6A), Color(0xAA30274F)],
+      colors: [Color(0xCC0B1020), Color(0xCC101426)],
     ),
-    glassColor: Color(0x1AFFFFFF),
-    glassBorder: Color(0x1AFFFFFF),
+    glassColor: Color(0xB3101426),
+    glassBorder: Color(0x9E30354D),
+    highlightColor: Color(0xFFFF3D9A),
+    glowColor: Color(0x6620D9D2),
+    panelColor: Color(0xFF0B1020),
   );
 }

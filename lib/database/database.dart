@@ -528,7 +528,7 @@ class AppDatabase extends _$AppDatabase {
         type: Value(playlist.type.toString()),
         url: Value(playlist.url),
         username: Value(playlist.username),
-        password: Value(playlist.password),
+        password: const Value(null),
         createdAt: Value(playlist.createdAt),
       ),
     );
@@ -563,7 +563,7 @@ class AppDatabase extends _$AppDatabase {
         type: Value(playlist.type.toString()),
         url: Value(playlist.url),
         username: Value(playlist.username),
-        password: Value(playlist.password),
+        password: const Value(null),
       ),
     );
   }
@@ -788,7 +788,7 @@ class AppDatabase extends _$AppDatabase {
       )..where((tbl) => tbl.playlistId.equals(userInfo.playlistId))).write(
         UserInfosCompanion(
           username: Value(userInfo.username),
-          password: Value(userInfo.password),
+          password: const Value(''),
           message: Value(userInfo.message),
           auth: Value(userInfo.auth),
           status: Value(userInfo.status),
@@ -806,7 +806,7 @@ class AppDatabase extends _$AppDatabase {
         UserInfosCompanion.insert(
           playlistId: userInfo.playlistId,
           username: userInfo.username,
-          password: userInfo.password,
+          password: '',
           message: userInfo.message,
           auth: userInfo.auth,
           status: userInfo.status,

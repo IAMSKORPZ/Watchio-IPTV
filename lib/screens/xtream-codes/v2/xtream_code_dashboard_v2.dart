@@ -6,10 +6,7 @@ import '../../../services/app_state.dart';
 class XtreamCodeDashboardV2 extends StatefulWidget {
   final Function(int) onCategoryTap;
 
-  const XtreamCodeDashboardV2({
-    super.key,
-    required this.onCategoryTap,
-  });
+  const XtreamCodeDashboardV2({super.key, required this.onCategoryTap});
 
   @override
   State<XtreamCodeDashboardV2> createState() => _XtreamCodeDashboardV2State();
@@ -24,14 +21,22 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
         final double spacing = 12.0;
         final double horizontalPadding = 16.0;
         final bool isSmallHeight = constraints.maxHeight < 400;
-        
+
         return Column(
           children: [
             Expanded(
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: isSmallHeight ? 4 : 8),
-                child: isLandscape 
-                    ? _buildLandscapeLayout(context, constraints, spacing, isSmallHeight)
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: isSmallHeight ? 4 : 8,
+                ),
+                child: isLandscape
+                    ? _buildLandscapeLayout(
+                        context,
+                        constraints,
+                        spacing,
+                        isSmallHeight,
+                      )
                     : _buildPortraitLayout(context, constraints, spacing),
               ),
             ),
@@ -42,7 +47,12 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
     );
   }
 
-  Widget _buildLandscapeLayout(BuildContext context, BoxConstraints constraints, double spacing, bool isSmallHeight) {
+  Widget _buildLandscapeLayout(
+    BuildContext context,
+    BoxConstraints constraints,
+    double spacing,
+    bool isSmallHeight,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -130,7 +140,7 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
                         context,
                         title: 'SETTINGS',
                         icon: Icons.settings_rounded,
-                        iconColor: Colors.orange,
+                        iconColor: const Color(0xFF20D9D2),
                         onTap: () => widget.onCategoryTap(5),
                         isSmallHeight: isSmallHeight,
                       ),
@@ -145,7 +155,11 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
     );
   }
 
-  Widget _buildPortraitLayout(BuildContext context, BoxConstraints constraints, double spacing) {
+  Widget _buildPortraitLayout(
+    BuildContext context,
+    BoxConstraints constraints,
+    double spacing,
+  ) {
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -210,7 +224,7 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
             context,
             title: 'SETTINGS',
             icon: Icons.settings_rounded,
-            iconColor: Colors.orange,
+            iconColor: const Color(0xFF20D9D2),
             onTap: () => widget.onCategoryTap(5),
             height: 60,
           ),
@@ -250,14 +264,21 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
                   top: 10,
                   left: 10,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       badge,
-                      style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -265,7 +286,11 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, color: Colors.white, size: isSmallHeight ? 32 : 50),
+                    Icon(
+                      icon,
+                      color: Colors.white,
+                      size: isSmallHeight ? 32 : 50,
+                    ),
                     const SizedBox(height: 8),
                     FittedBox(
                       child: Text(
@@ -284,7 +309,11 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
                 const Positioned(
                   bottom: 8,
                   right: 8,
-                  child: Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 12),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.white24,
+                    size: 12,
+                  ),
                 ),
             ],
           ),
@@ -316,7 +345,11 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
               child: FittedBox(
                 child: Text(
                   title,
-                  style: TextStyle(color: Colors.white, fontSize: isSmallHeight ? 10 : 12, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: isSmallHeight ? 10 : 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -329,7 +362,7 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
   Widget _buildFooter(BuildContext context, bool isSmallHeight) {
     final playlist = AppState.currentPlaylist;
     if (isSmallHeight) return const SizedBox.shrink();
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
@@ -337,15 +370,26 @@ class _XtreamCodeDashboardV2State extends State<XtreamCodeDashboardV2> {
         children: [
           Row(
             children: [
-              const Icon(Icons.workspace_premium, color: Colors.amber, size: 12),
+              const Icon(
+                Icons.workspace_premium,
+                color: Colors.amber,
+                size: 12,
+              ),
               const SizedBox(width: 4),
-              const Text('Exp: Lifetime', style: TextStyle(color: Colors.white70, fontSize: 9)),
+              const Text(
+                'Exp: Lifetime',
+                style: TextStyle(color: Colors.white70, fontSize: 9),
+              ),
             ],
           ),
-          const Text('By using this app, you agree to the Terms of Service.',
-            style: TextStyle(color: Colors.grey, fontSize: 8)),
-          Text('User: ${playlist?.username ?? "Guest"}',
-            style: const TextStyle(color: Colors.white70, fontSize: 9)),
+          const Text(
+            'By using this app, you agree to the Terms of Service.',
+            style: TextStyle(color: Colors.grey, fontSize: 8),
+          ),
+          Text(
+            'User: ${playlist?.username ?? "Guest"}',
+            style: const TextStyle(color: Colors.white70, fontSize: 9),
+          ),
         ],
       ),
     );

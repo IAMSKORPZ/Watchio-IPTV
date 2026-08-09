@@ -273,6 +273,7 @@ class _TileRefreshFooterState extends State<_TileRefreshFooter> {
 
   @override
   Widget build(BuildContext context) {
+    final refreshEndColor = _refreshEndColor(widget.accentColor);
     final button = SizedBox(
       width: 58,
       height: 34,
@@ -286,11 +287,11 @@ class _TileRefreshFooterState extends State<_TileRefreshFooter> {
               end: Alignment.bottomRight,
               colors: [
                 widget.accentColor.withValues(
-                  alpha: widget.onRefresh == null ? 0.18 : 0.9,
+                  alpha: widget.onRefresh == null ? 0.18 : 0.78,
                 ),
-                const Color(
-                  0xFF00B7FF,
-                ).withValues(alpha: widget.onRefresh == null ? 0.12 : 0.65),
+                refreshEndColor.withValues(
+                  alpha: widget.onRefresh == null ? 0.12 : 0.62,
+                ),
               ],
             ),
             borderRadius: BorderRadius.circular(10),
@@ -333,7 +334,7 @@ class _TileRefreshFooterState extends State<_TileRefreshFooter> {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF22248B).withValues(alpha: 0.78),
+        color: const Color(0xFF111327).withValues(alpha: 0.78),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
       ),
       child: Row(
@@ -361,6 +362,15 @@ class _TileRefreshFooterState extends State<_TileRefreshFooter> {
         ],
       ),
     );
+  }
+
+  Color _refreshEndColor(Color accentColor) {
+    return switch (accentColor.toARGB32()) {
+      0xFFFF3D9A => const Color(0xFFA855F7),
+      0xFFA855F7 => const Color(0xFF20D9D2),
+      0xFF20D9D2 => const Color(0xFFA855F7),
+      _ => Color.lerp(accentColor, Colors.black, 0.28)!,
+    };
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/config_service.dart';
@@ -16,6 +17,12 @@ class DeviceModeSelectionScreen extends StatefulWidget {
 
 class _DeviceModeSelectionScreenState extends State<DeviceModeSelectionScreen> {
   DeviceInputMode? _selectedMode;
+
+  bool get _isDesktopPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux);
 
   Future<void> _save() async {
     final mode = _selectedMode;
@@ -49,7 +56,9 @@ class _DeviceModeSelectionScreenState extends State<DeviceModeSelectionScreen> {
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              _selectedMode ??= constraints.maxWidth >= 900
+              _selectedMode ??= _isDesktopPlatform
+                  ? DeviceInputMode.desktop
+                  : constraints.maxWidth >= 900
                   ? DeviceInputMode.tv
                   : DeviceInputMode.mobile;
 
@@ -159,7 +168,7 @@ class _DeviceOptionPanel extends StatelessWidget {
             SizedBox(height: compact ? 14 : 18),
             Text(
               'Watchio detected your device type is '
-              '${selectedMode == DeviceInputMode.tv ? 'TV' : 'Mobile'}',
+              '${selectedMode.title}',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.82),
@@ -189,6 +198,14 @@ class _DeviceOptionPanel extends StatelessWidget {
                       selected: selectedMode == DeviceInputMode.mobile,
                       label: 'Mobile',
                       mode: DeviceInputMode.mobile,
+                      onChanged: onChanged,
+                    ),
+                    SizedBox(height: compact ? 8 : 12),
+                    _ModeRadioRow(
+                      autofocus: selectedMode == DeviceInputMode.desktop,
+                      selected: selectedMode == DeviceInputMode.desktop,
+                      label: 'Desktop',
+                      mode: DeviceInputMode.desktop,
                       onChanged: onChanged,
                     ),
                     SizedBox(height: compact ? 8 : 12),

@@ -98,7 +98,7 @@ class MyApp extends StatelessWidget {
           child: child ?? const SizedBox.shrink(),
         );
 
-        if (inputMode.isTvMode) {
+        if (!inputMode.allowPointerInput) {
           content = AbsorbPointer(absorbing: true, child: content);
         }
 
