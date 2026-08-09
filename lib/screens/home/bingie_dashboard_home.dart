@@ -24,7 +24,6 @@ class BingieDashboardHome extends StatefulWidget {
   final VoidCallback onSports;
   final VoidCallback? onSwitchPlaylist;
   final VoidCallback onProfile;
-  final VoidCallback? onTrakt;
   final String username;
   final String expiryDate;
   final String version;
@@ -53,7 +52,6 @@ class BingieDashboardHome extends StatefulWidget {
     required this.onSports,
     this.onSwitchPlaylist,
     required this.onProfile,
-    this.onTrakt,
     required this.username,
     required this.expiryDate,
     required this.version,
