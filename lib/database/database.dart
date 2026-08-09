@@ -153,6 +153,8 @@ class VodStreams extends Table {
 
   TextColumn get youtubeTrailer => text().nullable()();
 
+  IntColumn get serverOrder => integer().withDefault(const Constant(0))();
+
   @override
   Set<Column> get primaryKey => {streamId, playlistId};
 }
@@ -192,6 +194,8 @@ class SeriesStreams extends Table {
   TextColumn get lastModified => text().nullable()();
 
   TextColumn get backdropPath => text().nullable()();
+
+  IntColumn get serverOrder => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {seriesId, playlistId};
@@ -515,7 +519,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   // === PLAYLIST İŞLEMLERİ ===
 
@@ -1091,7 +1095,11 @@ class AppDatabase extends _$AppDatabase {
     int offset = 0,
   }) async {
     var query = select(vodStreams)
-      ..where((vs) => vs.playlistId.equals(playlistId));
+      ..where((vs) => vs.playlistId.equals(playlistId))
+      ..orderBy([
+        (vs) => OrderingTerm.asc(vs.serverOrder),
+        (vs) => OrderingTerm.asc(vs.streamId),
+      ]);
 
     if (top != null) {
       query = query..limit(top, offset: offset);
@@ -1111,7 +1119,11 @@ class AppDatabase extends _$AppDatabase {
       ..where(
         (vs) =>
             vs.categoryId.equals(categoryId) & vs.playlistId.equals(playlistId),
-      );
+      )
+      ..orderBy([
+        (vs) => OrderingTerm.asc(vs.serverOrder),
+        (vs) => OrderingTerm.asc(vs.streamId),
+      ]);
 
     if (top != null) {
       query = query..limit(top, offset: offset);
@@ -1231,7 +1243,11 @@ class AppDatabase extends _$AppDatabase {
     int offset = 0,
   }) async {
     var query = select(seriesStreams)
-      ..where((ss) => ss.playlistId.equals(playlistId));
+      ..where((ss) => ss.playlistId.equals(playlistId))
+      ..orderBy([
+        (ss) => OrderingTerm.asc(ss.serverOrder),
+        (ss) => OrderingTerm.asc(ss.seriesId),
+      ]);
 
     if (top != null) {
       query = query..limit(top, offset: offset);
@@ -1251,7 +1267,11 @@ class AppDatabase extends _$AppDatabase {
       ..where(
         (ss) =>
             ss.categoryId.equals(categoryId) & ss.playlistId.equals(playlistId),
-      );
+      )
+      ..orderBy([
+        (ss) => OrderingTerm.asc(ss.serverOrder),
+        (ss) => OrderingTerm.asc(ss.seriesId),
+      ]);
 
     if (top != null) {
       query = query..limit(top, offset: offset);
@@ -1916,6 +1936,11 @@ class AppDatabase extends _$AppDatabase {
 
       if (from < 11) {
         await m.createTable(tmdbTrailerCaches);
+      }
+
+      if (from < 12) {
+        await m.addColumn(vodStreams, vodStreams.serverOrder);
+        await m.addColumn(seriesStreams, seriesStreams.serverOrder);
       }
     },
   );

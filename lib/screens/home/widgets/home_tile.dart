@@ -368,7 +368,7 @@ class _TileRefreshFooterState extends State<_TileRefreshFooter> {
     return switch (accentColor.toARGB32()) {
       0xFFFF3D9A => const Color(0xFFA855F7),
       0xFFA855F7 => const Color(0xFF20D9D2),
-      0xFF20D9D2 => const Color(0xFFA855F7),
+      0xFF20D9D2 => const Color(0xFF315B86),
       _ => Color.lerp(accentColor, Colors.black, 0.28)!,
     };
   }

@@ -21,6 +21,7 @@ class SeriesStream {
   final String? youtubeTrailer;
   final String? episodeRunTime;
   final String? categoryId;
+  final int serverOrder;
 
   SeriesStream({
     required this.playlistId,
@@ -39,9 +40,14 @@ class SeriesStream {
     this.youtubeTrailer,
     this.episodeRunTime,
     this.categoryId,
+    this.serverOrder = 0,
   });
 
-  factory SeriesStream.fromJson(Map<String, dynamic> json, String playlistId) {
+  factory SeriesStream.fromJson(
+    Map<String, dynamic> json,
+    String playlistId, {
+    int serverOrder = 0,
+  }) {
     List<String> backdropPaths = [];
     final rawBackdrop = json['backdrop_path'];
     if (rawBackdrop is List) {
@@ -70,6 +76,7 @@ class SeriesStream {
       episodeRunTime: safeString(json['episode_run_time']),
       categoryId: safeString(json['category_id']),
       playlistId: safeString(playlistId),
+      serverOrder: serverOrder,
     );
   }
 
@@ -109,6 +116,7 @@ class SeriesStream {
       episodeRunTime: driftSeriesStream.episodeRunTime,
       categoryId: driftSeriesStream.categoryId,
       playlistId: driftSeriesStream.playlistId,
+      serverOrder: driftSeriesStream.serverOrder,
     );
   }
 
@@ -135,6 +143,7 @@ class SeriesStream {
       episodeRunTime: Value(episodeRunTime),
       categoryId: Value(categoryId),
       playlistId: Value(playlistId),
+      serverOrder: Value(serverOrder),
     );
   }
 

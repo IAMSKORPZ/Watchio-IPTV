@@ -14,6 +14,7 @@ class VodStream {
   final DateTime? createdAt;
   final String? youtubeTrailer;
   final String? genre;
+  final int serverOrder;
 
   VodStream({
     required this.streamId,
@@ -27,9 +28,14 @@ class VodStream {
     required this.createdAt,
     this.youtubeTrailer,
     this.genre,
+    this.serverOrder = 0,
   });
 
-  factory VodStream.fromJson(Map<String, dynamic> json, String playlistId) {
+  factory VodStream.fromJson(
+    Map<String, dynamic> json,
+    String playlistId, {
+    int serverOrder = 0,
+  }) {
     return VodStream(
       streamId: safeString(json['stream_id']),
       name: safeString(json['name']),
@@ -39,9 +45,10 @@ class VodStream {
       rating5based: safeDouble(json['rating_5based']) ?? 0.0,
       containerExtension: safeString(json['container_extension']),
       playlistId: safeString(playlistId),
-      createdAt:(json['createdAt']),
+      createdAt: (json['createdAt']),
       youtubeTrailer: safeString(json['youtube_trailer']),
       genre: safeString(json['genre']),
+      serverOrder: serverOrder,
     );
   }
 
@@ -58,6 +65,7 @@ class VodStream {
       playlistId: driftVodStream.playlistId,
       createdAt: driftVodStream.createdAt,
       genre: driftVodStream.genre,
+      serverOrder: driftVodStream.serverOrder,
     );
   }
 
@@ -74,6 +82,7 @@ class VodStream {
       playlistId: Value(playlistId ?? ''),
       youtubeTrailer: Value(youtubeTrailer ?? ''),
       genre: Value(genre ?? ''),
+      serverOrder: Value(serverOrder),
     );
   }
 }

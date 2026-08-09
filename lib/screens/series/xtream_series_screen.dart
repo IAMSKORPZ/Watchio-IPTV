@@ -69,9 +69,7 @@ class _XtreamSeriesScreenState extends State<XtreamSeriesScreen> {
           if (!mounted) return;
           setState(() {
             _categoryCounts.addAll(counts);
-            _sortOrder =
-                savedSort ??
-                (_isReleasedCategory(initialCategory) ? 'recent' : 'server');
+            _sortOrder = savedSort ?? 'server';
           });
           await _onCategorySelected(initialCategory);
         }
@@ -212,9 +210,6 @@ class _XtreamSeriesScreenState extends State<XtreamSeriesScreen> {
     );
   }
 
-  bool _isReleasedCategory(CategoryViewModel category) =>
-      _categoryNameHas(category, const ['RELEASED']);
-
   bool _categoryNameHas(CategoryViewModel category, List<String> terms) {
     final name = category.category.categoryName.toUpperCase();
     return terms.every(name.contains);
@@ -347,6 +342,7 @@ class _XtreamSeriesScreenState extends State<XtreamSeriesScreen> {
                 children: [
                   WatchioHeader(
                     isCompact: true,
+                    accentColor: seriesAccent,
                     onBack: () => controller.onNavigationTap(0),
                     onSearch: () => Navigator.push(
                       context,

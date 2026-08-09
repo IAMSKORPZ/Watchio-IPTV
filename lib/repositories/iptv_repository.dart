@@ -367,8 +367,14 @@ class IptvRepository {
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonData = json.decode(response.body);
-        var vodStreams = jsonData
-            .map((json) => VodStream.fromJson(json, _playlistId))
+        var vodStreams = jsonData.indexed
+            .map(
+              (entry) => VodStream.fromJson(
+                entry.$2,
+                _playlistId,
+                serverOrder: entry.$1,
+              ),
+            )
             .toList();
 
         await _database.deleteVodStreamsByPlaylistId(_playlistId);
@@ -394,10 +400,15 @@ class IptvRepository {
   }) async {
     try {
       if (categoryId == virtualAll) {
-        return await _database.getVodStreamsByPlaylistId(
+        final vodStreams = await _database.getVodStreamsByPlaylistId(
           _playlistId,
           top: top,
           offset: offset,
+        );
+        return await _refreshMoviesIfMissingServerOrder(
+          vodStreams,
+          top,
+          offset,
         );
       } else if (categoryId == virtualFavorites) {
         final favorites = await _database.getFavoritesByContentType(
@@ -432,6 +443,15 @@ class IptvRepository {
         );
 
         if (vodStreams.isNotEmpty) {
+          if (_needsServerOrderRefresh(vodStreams)) {
+            await getMoviesFromApi();
+            vodStreams = await _database.getVodStreamsByCategoryAndPlaylistId(
+              categoryId: categoryId,
+              playlistId: _playlistId,
+              top: top,
+              offset: offset,
+            );
+          }
           return vodStreams;
         }
       } else {
@@ -442,6 +462,11 @@ class IptvRepository {
         );
 
         if (vodStreams.isNotEmpty) {
+          vodStreams = await _refreshMoviesIfMissingServerOrder(
+            vodStreams,
+            top,
+            offset,
+          );
           return vodStreams;
         }
       }
@@ -471,8 +496,14 @@ class IptvRepository {
 
       if (response.statusCode == 200) {
         final List<dynamic> jsonData = json.decode(response.body);
-        var series = jsonData
-            .map((json) => SeriesStream.fromJson(json, _playlistId))
+        var series = jsonData.indexed
+            .map(
+              (entry) => SeriesStream.fromJson(
+                entry.$2,
+                _playlistId,
+                serverOrder: entry.$1,
+              ),
+            )
             .toList();
 
         await _database.deleteSeriesStreamsByPlaylistId(_playlistId);
@@ -498,11 +529,12 @@ class IptvRepository {
   }) async {
     try {
       if (categoryId == virtualAll) {
-        return await _database.getSeriesStreamsByPlaylistId(
+        final series = await _database.getSeriesStreamsByPlaylistId(
           _playlistId,
           top: top,
           offset: offset,
         );
+        return await _refreshSeriesIfMissingServerOrder(series, top, offset);
       } else if (categoryId == virtualFavorites) {
         final favorites = await _database.getFavoritesByContentType(
           _playlistId,
@@ -536,6 +568,15 @@ class IptvRepository {
         );
 
         if (series.isNotEmpty) {
+          if (_needsServerOrderRefresh(series)) {
+            await getSeriesFromApi();
+            series = await _database.getSeriesStreamsByCategoryAndPlaylistId(
+              categoryId: categoryId,
+              playlistId: _playlistId,
+              top: top,
+              offset: offset,
+            );
+          }
           return series;
         }
       } else {
@@ -546,6 +587,11 @@ class IptvRepository {
         );
 
         if (series.isNotEmpty) {
+          series = await _refreshSeriesIfMissingServerOrder(
+            series,
+            top,
+            offset,
+          );
           return series;
         }
       }
@@ -553,6 +599,42 @@ class IptvRepository {
       return null;
     }
     return null;
+  }
+
+  Future<List<VodStream>> _refreshMoviesIfMissingServerOrder(
+    List<VodStream> vodStreams,
+    int? top,
+    int offset,
+  ) async {
+    if (!_needsServerOrderRefresh(vodStreams)) return vodStreams;
+    await getMoviesFromApi();
+    return _database.getVodStreamsByPlaylistId(
+      _playlistId,
+      top: top,
+      offset: offset,
+    );
+  }
+
+  Future<List<SeriesStream>> _refreshSeriesIfMissingServerOrder(
+    List<SeriesStream> series,
+    int? top,
+    int offset,
+  ) async {
+    if (!_needsServerOrderRefresh(series)) return series;
+    await getSeriesFromApi();
+    return _database.getSeriesStreamsByPlaylistId(
+      _playlistId,
+      top: top,
+      offset: offset,
+    );
+  }
+
+  bool _needsServerOrderRefresh(List<dynamic> items) {
+    return items.length > 1 &&
+        items.every((item) {
+          final serverOrder = item.serverOrder;
+          return serverOrder is int && serverOrder == 0;
+        });
   }
 
   Future<SeriesStream?> findSeriesStreamById(String seriesId) async {

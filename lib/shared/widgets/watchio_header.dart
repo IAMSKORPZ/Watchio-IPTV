@@ -17,6 +17,7 @@ class WatchioHeader extends StatefulWidget {
   final VoidCallback? onProfile;
   final VoidCallback? onSetup;
   final VoidCallback? onClearHistory;
+  final Color? accentColor;
 
   const WatchioHeader({
     super.key,
@@ -32,6 +33,7 @@ class WatchioHeader extends StatefulWidget {
     this.onProfile,
     this.onSetup,
     this.onClearHistory,
+    this.accentColor,
   });
 
   @override
@@ -60,6 +62,7 @@ class _WatchioHeaderState extends State<WatchioHeader> {
   Widget build(BuildContext context) {
     final double verticalPadding = widget.isCompact ? 8 : 16;
     final double logoHeight = widget.customLogoHeight ?? 110;
+    final accent = widget.accentColor ?? Theme.of(context).colorScheme.primary;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -77,6 +80,7 @@ class _WatchioHeaderState extends State<WatchioHeader> {
                 icon: Icons.arrow_back_rounded,
                 tooltip: 'Back',
                 onTap: widget.onBack,
+                accentColor: accent,
               ),
               const SizedBox(width: 16),
               SizedBox(
@@ -122,7 +126,7 @@ class _WatchioHeaderState extends State<WatchioHeader> {
               Text(
                 DateFormat('MMM d, yyyy').format(_now),
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
+                  color: accent,
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                 ),
@@ -139,6 +143,7 @@ class _WatchioHeaderState extends State<WatchioHeader> {
                 icon: Icons.search_rounded,
                 tooltip: 'Search',
                 onTap: widget.onSearch,
+                accentColor: accent,
               ),
               if (widget.onProfile != null) ...[
                 const SizedBox(width: 12),
@@ -146,10 +151,12 @@ class _WatchioHeaderState extends State<WatchioHeader> {
                   icon: Icons.person_outline_rounded,
                   tooltip: 'Profile',
                   onTap: widget.onProfile!,
+                  accentColor: accent,
                 ),
               ],
               const SizedBox(width: 12),
               _HeaderMenuButton(
+                accentColor: accent,
                 onSelected: (value) {
                   switch (value) {
                     case 'setup':
@@ -182,10 +189,12 @@ class _WatchioHeaderState extends State<WatchioHeader> {
 class _HeaderMenuButton extends StatefulWidget {
   final ValueChanged<String> onSelected;
   final bool showClearHistory;
+  final Color accentColor;
 
   const _HeaderMenuButton({
     required this.onSelected,
     required this.showClearHistory,
+    required this.accentColor,
   });
 
   @override
@@ -198,7 +207,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = Theme.of(context).colorScheme.primary;
+    final accent = widget.accentColor;
     final active = _isFocused || _isHovered;
     return Theme(
       data: Theme.of(context).copyWith(
@@ -226,6 +235,7 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton> {
                 child: _ThemedMenuItem(
                   icon: Icons.tune_rounded,
                   label: 'Setup',
+                  accentColor: accent,
                 ),
               ),
               if (widget.showClearHistory)
@@ -237,11 +247,12 @@ class _HeaderMenuButtonState extends State<_HeaderMenuButton> {
                     danger: true,
                   ),
                 ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'settings',
                 child: _ThemedMenuItem(
                   icon: Icons.settings_rounded,
                   label: 'Settings',
+                  accentColor: accent,
                 ),
               ),
             ],
@@ -285,18 +296,20 @@ class _ThemedMenuItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool danger;
+  final Color? accentColor;
 
   const _ThemedMenuItem({
     required this.icon,
     required this.label,
     this.danger = false,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final color = danger
         ? Colors.redAccent
-        : Theme.of(context).colorScheme.primary;
+        : (accentColor ?? Theme.of(context).colorScheme.primary);
     return Row(
       children: [
         Icon(icon, color: color, size: 20),
@@ -311,10 +324,12 @@ class _HeaderIconButton extends StatefulWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
+  final Color? accentColor;
   const _HeaderIconButton({
     required this.icon,
     required this.tooltip,
     required this.onTap,
+    this.accentColor,
   });
 
   @override
@@ -328,7 +343,7 @@ class _HeaderIconButtonState extends State<_HeaderIconButton> {
   @override
   Widget build(BuildContext context) {
     final active = _isFocused || _isHovered;
-    final accent = Theme.of(context).colorScheme.primary;
+    final accent = widget.accentColor ?? Theme.of(context).colorScheme.primary;
     return Tooltip(
       message: widget.tooltip,
       child: WatchioFocusAction(
