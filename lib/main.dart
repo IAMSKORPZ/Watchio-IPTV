@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:another_iptv_player/core/theme/theme_manager.dart';
+import 'package:watchio/core/theme/theme_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:another_iptv_player/services/service_locator.dart';
+import 'package:watchio/services/service_locator.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'controllers/locale_provider.dart';

@@ -1,13 +1,13 @@
-import 'package:another_iptv_player/models/import_progress_model.dart';
-import 'package:another_iptv_player/models/live_stream.dart';
-import 'package:another_iptv_player/models/series.dart';
-import 'package:another_iptv_player/models/stalker_provider_config.dart';
-import 'package:another_iptv_player/models/vod_streams.dart';
-import 'package:another_iptv_player/database/database.dart';
-import 'package:another_iptv_player/repositories/search_repository.dart';
-import 'package:another_iptv_player/services/service_locator.dart';
-import 'package:another_iptv_player/services/stalker_api_service.dart';
-import 'package:another_iptv_player/utils/type_convertions.dart';
+import 'package:watchio/models/import_progress_model.dart';
+import 'package:watchio/models/live_stream.dart';
+import 'package:watchio/models/series.dart';
+import 'package:watchio/models/stalker_provider_config.dart';
+import 'package:watchio/models/vod_streams.dart';
+import 'package:watchio/database/database.dart';
+import 'package:watchio/repositories/search_repository.dart';
+import 'package:watchio/services/service_locator.dart';
+import 'package:watchio/services/stalker_api_service.dart';
+import 'package:watchio/utils/type_convertions.dart';
 
 class StalkerImportService {
   final StalkerApiService api;

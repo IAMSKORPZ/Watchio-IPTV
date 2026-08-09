@@ -55,11 +55,11 @@ class GitHubReleaseService {
 
   GitHubReleaseService({
     String owner = const String.fromEnvironment(
-      'BINGIETV_GITHUB_OWNER',
+      'Watchio IPTV_GITHUB_OWNER',
       defaultValue: 'IAMSKORPZ',
     ),
     String repo = const String.fromEnvironment(
-      'BINGIETV_GITHUB_REPO',
+      'Watchio IPTV_GITHUB_REPO',
       defaultValue: 'Watchio',
     ),
     http.Client? client,

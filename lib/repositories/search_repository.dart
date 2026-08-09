@@ -1,12 +1,12 @@
-import 'package:another_iptv_player/database/database.dart';
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/models/live_stream.dart';
-import 'package:another_iptv_player/models/paged_result.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/models/series.dart';
-import 'package:another_iptv_player/models/vod_streams.dart';
-import 'package:another_iptv_player/services/performance_service.dart';
-import 'package:another_iptv_player/services/service_locator.dart';
+import 'package:watchio/database/database.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/models/live_stream.dart';
+import 'package:watchio/models/paged_result.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/models/series.dart';
+import 'package:watchio/models/vod_streams.dart';
+import 'package:watchio/services/performance_service.dart';
+import 'package:watchio/services/service_locator.dart';
 import 'package:drift/drift.dart';
 
 class SearchRepository {

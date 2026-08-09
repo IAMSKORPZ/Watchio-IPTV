@@ -1,6 +1,6 @@
 {
-    "name": "BingieTV",
-    "short_name": "BingieTV",
+    "name": "Watchio IPTV",
+    "short_name": "Watchio IPTV",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

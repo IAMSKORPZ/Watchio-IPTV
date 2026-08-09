@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/screens/player/unified_player_screen.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/services/app_state.dart';
+import 'package:watchio/screens/player/unified_player_screen.dart';
 import '../../../models/content_type.dart';
 import '../../../services/event_bus.dart';
 import '../../../utils/get_playlist_type.dart';

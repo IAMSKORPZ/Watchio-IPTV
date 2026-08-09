@@ -67,7 +67,7 @@ class _HomeTileState extends State<HomeTile> {
   @override
   Widget build(BuildContext context) {
     final manager = context.watch<ThemeManager>();
-    final panelGradient = BingieThemeExtension.of(context).panelGradient;
+    final panelGradient = WatchioThemeExtension.of(context).panelGradient;
     final isAnyFocused = _isTileFocused || _isRefreshFocused;
 
     return AnimatedScale(

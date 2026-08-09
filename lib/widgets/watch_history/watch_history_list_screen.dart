@@ -1,5 +1,5 @@
-import 'package:another_iptv_player/l10n/localization_extension.dart';
-import 'package:another_iptv_player/widgets/watch_history/watch_history_card.dart';
+import 'package:watchio/l10n/localization_extension.dart';
+import 'package:watchio/widgets/watch_history/watch_history_card.dart';
 import 'package:flutter/material.dart';
 import '../../models/watch_history.dart';
 import '../../utils/responsive_helper.dart';

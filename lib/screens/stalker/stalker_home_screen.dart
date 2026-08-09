@@ -1,9 +1,9 @@
-import 'package:another_iptv_player/models/playlist_model.dart';
-import 'package:another_iptv_player/models/stalker_provider_config.dart';
-import 'package:another_iptv_player/repositories/stalker_repository.dart';
+import 'package:watchio/models/playlist_model.dart';
+import 'package:watchio/models/stalker_provider_config.dart';
+import 'package:watchio/repositories/stalker_repository.dart';
 import 'package:flutter/material.dart';
 
-import 'package:another_iptv_player/screens/home/bingie_dashboard_home.dart';
+import 'package:watchio/screens/home/watchio_dashboard_home.dart';
 
 class StalkerHomeScreen extends StatefulWidget {
   final Playlist playlist;
@@ -39,7 +39,7 @@ class _StalkerHomeScreenState extends State<StalkerHomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF050812),
       body: SafeArea(
-        child: BingieDashboardHome(
+        child: WatchioDashboardHome(
           onLiveTv: () {},
           onMovies: () {},
           onSeries: () {},

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:drift/drift.dart';
 import 'package:drift/wasm.dart';
-import 'package:another_iptv_player/database/connection/connect.dart';
+import 'package:watchio/database/connection/connect.dart';
 
 QueryExecutor driftDatabase({
   required String name,

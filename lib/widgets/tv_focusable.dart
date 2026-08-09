@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/core/theme/theme_extensions.dart';
-import 'package:another_iptv_player/shared/widgets/watchio_focus_action.dart';
+import 'package:watchio/core/theme/theme_extensions.dart';
+import 'package:watchio/shared/widgets/watchio_focus_action.dart';
 import 'package:provider/provider.dart';
 import '../services/input_mode_controller.dart';
 import '../utils/firestick_performance.dart';
@@ -30,7 +30,7 @@ class _TvFocusableState extends State<TvFocusable> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = BingieThemeExtension.of(context);
+    final tokens = WatchioThemeExtension.of(context);
     final inputMode = context.watch<InputModeController>();
 
     return Padding(

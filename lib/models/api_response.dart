@@ -1,5 +1,5 @@
-import 'package:another_iptv_player/models/server_info.dart';
-import 'package:another_iptv_player/models/user_info.dart';
+import 'package:watchio/models/server_info.dart';
+import 'package:watchio/models/user_info.dart';
 
 class ApiResponse {
   final UserInfo userInfo;

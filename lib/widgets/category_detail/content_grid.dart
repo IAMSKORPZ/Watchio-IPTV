@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/shared/widgets/poster_card.dart';
-import 'package:another_iptv_player/utils/responsive_helper.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/shared/widgets/poster_card.dart';
+import 'package:watchio/utils/responsive_helper.dart';
 
 import '../content_card.dart';
 

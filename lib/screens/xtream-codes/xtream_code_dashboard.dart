@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
-import 'package:another_iptv_player/models/playlist_model.dart';
-import 'package:another_iptv_player/controllers/xtream_code_home_controller.dart';
-import 'package:another_iptv_player/screens/live_stream/xtream_live_screen.dart';
-import 'package:another_iptv_player/screens/settings/announcement_center_screen.dart';
-import 'package:another_iptv_player/widgets/tv_focusable.dart';
+import 'package:watchio/l10n/localization_extension.dart';
+import 'package:watchio/models/playlist_model.dart';
+import 'package:watchio/controllers/xtream_code_home_controller.dart';
+import 'package:watchio/screens/live_stream/xtream_live_screen.dart';
+import 'package:watchio/screens/settings/announcement_center_screen.dart';
+import 'package:watchio/widgets/tv_focusable.dart';
 import 'package:provider/provider.dart';
 
 class XtreamCodeDashboard extends StatefulWidget {

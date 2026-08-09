@@ -1,6 +1,6 @@
-import 'package:another_iptv_player/core/theme/theme_manager.dart';
-import 'package:another_iptv_player/core/theme/app_theme.dart';
-import 'package:another_iptv_player/shared/widgets/app_card.dart';
+import 'package:watchio/core/theme/theme_manager.dart';
+import 'package:watchio/core/theme/app_theme.dart';
+import 'package:watchio/shared/widgets/app_card.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

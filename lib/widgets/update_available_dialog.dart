@@ -1,5 +1,5 @@
-import 'package:another_iptv_player/controllers/update_controller.dart';
-import 'package:another_iptv_player/screens/update/update_screen.dart';
+import 'package:watchio/controllers/update_controller.dart';
+import 'package:watchio/screens/update/update_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

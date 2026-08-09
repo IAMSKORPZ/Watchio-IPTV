@@ -1,14 +1,14 @@
 import 'dart:async';
 
-import 'package:another_iptv_player/l10n/localization_extension.dart';
+import 'package:watchio/l10n/localization_extension.dart';
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/repositories/search_repository.dart';
-import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/services/input_mode_controller.dart';
-import 'package:another_iptv_player/utils/navigate_by_content_type.dart';
-import 'package:another_iptv_player/utils/responsive_helper.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/repositories/search_repository.dart';
+import 'package:watchio/services/app_state.dart';
+import 'package:watchio/services/input_mode_controller.dart';
+import 'package:watchio/utils/navigate_by_content_type.dart';
+import 'package:watchio/utils/responsive_helper.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../widgets/content_card.dart';
 import '../../widgets/tv_focusable.dart';

@@ -6,7 +6,7 @@ import '../../utils/firestick_performance.dart';
 import 'package:provider/provider.dart';
 
 LinearGradient contentPanelGradientOf(BuildContext context) =>
-    BingieThemeExtension.of(context).panelGradient;
+    WatchioThemeExtension.of(context).panelGradient;
 
 class GlassPanel extends StatelessWidget {
   final Widget child;
@@ -30,7 +30,7 @@ class GlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = BingieThemeExtension.of(context);
+    final theme = WatchioThemeExtension.of(context);
     final manager = context.watch<ThemeManager>();
     final effectiveRadius = borderRadius == 16
         ? manager.tileRadius

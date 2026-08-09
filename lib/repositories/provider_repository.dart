@@ -1,15 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:another_iptv_player/models/api_configuration_model.dart';
-import 'package:another_iptv_player/models/provider_model.dart';
-import 'package:another_iptv_player/models/stalker_provider_config.dart';
-import 'package:another_iptv_player/repositories/iptv_repository.dart';
-import 'package:another_iptv_player/repositories/user_preferences.dart';
-import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/services/playlist_service.dart';
-import 'package:another_iptv_player/services/secure_storage_service.dart';
-import 'package:another_iptv_player/services/stalker_auth_service.dart';
+import 'package:watchio/models/api_configuration_model.dart';
+import 'package:watchio/models/provider_model.dart';
+import 'package:watchio/models/stalker_provider_config.dart';
+import 'package:watchio/repositories/iptv_repository.dart';
+import 'package:watchio/repositories/user_preferences.dart';
+import 'package:watchio/services/app_state.dart';
+import 'package:watchio/services/playlist_service.dart';
+import 'package:watchio/services/secure_storage_service.dart';
+import 'package:watchio/services/stalker_auth_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 abstract class ProviderRepository {
@@ -27,7 +27,7 @@ abstract class ProviderRepository {
 }
 
 class SharedPreferencesProviderRepository implements ProviderRepository {
-  static const _providersKey = 'bingietv.providers.v1';
+  static const _providersKey = 'Watchio IPTV.providers.v1';
 
   @override
   Future<IptvProvider> createProvider(IptvProvider provider) async {

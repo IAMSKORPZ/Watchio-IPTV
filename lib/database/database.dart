@@ -1,14 +1,14 @@
 import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' hide Category;
-import 'package:another_iptv_player/database/drift_flutter.dart';
-import 'package:another_iptv_player/models/category.dart';
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/models/live_stream.dart';
-import 'package:another_iptv_player/models/series.dart';
-import 'package:another_iptv_player/models/vod_streams.dart';
-import 'package:another_iptv_player/models/server_info.dart';
-import 'package:another_iptv_player/models/user_info.dart';
+import 'package:watchio/database/drift_flutter.dart';
+import 'package:watchio/models/category.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/models/live_stream.dart';
+import 'package:watchio/models/series.dart';
+import 'package:watchio/models/vod_streams.dart';
+import 'package:watchio/models/server_info.dart';
+import 'package:watchio/models/user_info.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import '../models/category_type.dart';
@@ -499,7 +499,7 @@ class AppDatabase extends _$AppDatabase {
     : super(
         e ??
             driftDatabase(
-              name: 'another-iptv-player',
+              name: 'watchio',
               native: const DriftNativeOptions(
                 databaseDirectory: getApplicationSupportDirectory,
               ),

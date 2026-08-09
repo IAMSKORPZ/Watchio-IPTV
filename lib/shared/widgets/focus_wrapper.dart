@@ -40,7 +40,7 @@ class _FocusWrapperState extends State<FocusWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = BingieThemeExtension.of(context);
+    final tokens = WatchioThemeExtension.of(context);
     final accent = widget.accentColor ?? tokens.highlightColor;
     final glow = widget.accentColor ?? tokens.glowColor;
     final inputMode = context.watch<InputModeController>();

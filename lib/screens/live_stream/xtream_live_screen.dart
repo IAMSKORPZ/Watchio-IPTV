@@ -3111,7 +3111,7 @@ class _GuideCategoryTileState extends State<_GuideCategoryTile> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = BingieThemeExtension.of(context);
+    final tokens = WatchioThemeExtension.of(context);
     final active = _focused || widget.isSelected;
 
     return FocusableActionDetector(
@@ -3240,7 +3240,7 @@ class _GuideChannelRowState extends State<_GuideChannelRow> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = BingieThemeExtension.of(context);
+    final tokens = WatchioThemeExtension.of(context);
     final active = _focused || widget.isPreviewed;
     final selectedProgram = _currentProgram(widget.programs);
 
@@ -3394,7 +3394,7 @@ class _GuideChannelRowState extends State<_GuideChannelRow> {
     EpgProgramWindow program,
     Duration visibleDuration,
   ) {
-    final tokens = BingieThemeExtension.of(context);
+    final tokens = WatchioThemeExtension.of(context);
     final now = DateTime.now();
     final isNow = !program.start.isAfter(now) && program.end.isAfter(now);
 
@@ -3571,7 +3571,7 @@ class _ChannelItemState extends State<_ChannelItem> {
     final showProgram = widget.showCurrentProgram;
     final showName = widget.showChannelNames;
     final fallbackTitle = currentProgram?.title ?? widget.channel.name;
-    final tokens = BingieThemeExtension.of(context);
+    final tokens = WatchioThemeExtension.of(context);
     final panelGradient = contentPanelGradientOf(context);
 
     return FocusableActionDetector(

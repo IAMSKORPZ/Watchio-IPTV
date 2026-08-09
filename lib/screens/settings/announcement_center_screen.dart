@@ -1,4 +1,4 @@
-import 'package:another_iptv_player/controllers/branding_controller.dart';
+import 'package:watchio/controllers/branding_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

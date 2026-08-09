@@ -1,8 +1,8 @@
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/models/playlist_model.dart';
-import 'package:another_iptv_player/models/provider_model.dart';
-import 'package:another_iptv_player/services/app_state.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/models/playlist_model.dart';
+import 'package:watchio/models/provider_model.dart';
+import 'package:watchio/services/app_state.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 

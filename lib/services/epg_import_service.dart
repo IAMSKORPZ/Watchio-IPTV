@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:another_iptv_player/models/import_progress_model.dart';
-import 'package:another_iptv_player/services/cache_metadata_service.dart';
-import 'package:another_iptv_player/services/epg_storage_service.dart';
+import 'package:watchio/models/import_progress_model.dart';
+import 'package:watchio/services/cache_metadata_service.dart';
+import 'package:watchio/services/epg_storage_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 

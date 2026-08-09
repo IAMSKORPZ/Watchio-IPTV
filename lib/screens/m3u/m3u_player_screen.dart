@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:another_iptv_player/screens/player/unified_player_screen.dart';
+import 'package:watchio/screens/player/unified_player_screen.dart';
 import '../../models/playlist_content_model.dart';
 
 class M3uPlayerScreen extends StatefulWidget {

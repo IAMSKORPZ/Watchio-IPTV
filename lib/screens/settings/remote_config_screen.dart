@@ -1,5 +1,5 @@
-import 'package:another_iptv_player/controllers/branding_controller.dart';
-import 'package:another_iptv_player/screens/settings/announcement_center_screen.dart';
+import 'package:watchio/controllers/branding_controller.dart';
+import 'package:watchio/screens/settings/announcement_center_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

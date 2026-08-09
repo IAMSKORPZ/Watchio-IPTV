@@ -1,9 +1,9 @@
-import 'package:another_iptv_player/models/playlist_model.dart';
-import 'package:another_iptv_player/repositories/user_preferences.dart';
-import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/services/config_service.dart';
-import 'package:another_iptv_player/services/input_mode_controller.dart';
-import 'package:another_iptv_player/services/playlist_service.dart';
+import 'package:watchio/models/playlist_model.dart';
+import 'package:watchio/repositories/user_preferences.dart';
+import 'package:watchio/services/app_state.dart';
+import 'package:watchio/services/config_service.dart';
+import 'package:watchio/services/input_mode_controller.dart';
+import 'package:watchio/services/playlist_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'onboarding/device_mode_selection_screen.dart';

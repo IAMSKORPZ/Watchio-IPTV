@@ -139,7 +139,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       extensions: [
-        BingieThemeExtension(
+        WatchioThemeExtension(
           primaryGradient: primaryGradient,
           secondaryGradient: LinearGradient(
             colors: [secondary, primary],

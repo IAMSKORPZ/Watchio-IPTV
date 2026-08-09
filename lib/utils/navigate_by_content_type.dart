@@ -1,9 +1,9 @@
-import 'package:another_iptv_player/screens/m3u/series/m3u_series_screen.dart';
-import 'package:another_iptv_player/screens/player/unified_player_screen.dart';
-import 'package:another_iptv_player/utils/get_playlist_type.dart';
+import 'package:watchio/screens/m3u/series/m3u_series_screen.dart';
+import 'package:watchio/screens/player/unified_player_screen.dart';
+import 'package:watchio/utils/get_playlist_type.dart';
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/models/playlist_content_model.dart';
 import '../screens/movies/movie_details_screen.dart';
 import '../screens/series/series_details_screen.dart';
 

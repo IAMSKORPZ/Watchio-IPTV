@@ -1,5 +1,5 @@
-import 'package:another_iptv_player/database/database.dart';
-import 'package:another_iptv_player/services/service_locator.dart';
+import 'package:watchio/database/database.dart';
+import 'package:watchio/services/service_locator.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 

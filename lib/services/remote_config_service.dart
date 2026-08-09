@@ -1,12 +1,12 @@
 import 'dart:convert';
 
-import 'package:another_iptv_player/models/announcement_model.dart';
-import 'package:another_iptv_player/models/branding_model.dart';
-import 'package:another_iptv_player/models/maintenance_model.dart';
-import 'package:another_iptv_player/models/theme_model.dart';
-import 'package:another_iptv_player/models/update_info_model.dart';
-import 'package:another_iptv_player/providers/github_remote_config_provider.dart';
-import 'package:another_iptv_player/providers/remote_config_provider.dart';
+import 'package:watchio/models/announcement_model.dart';
+import 'package:watchio/models/branding_model.dart';
+import 'package:watchio/models/maintenance_model.dart';
+import 'package:watchio/models/theme_model.dart';
+import 'package:watchio/models/update_info_model.dart';
+import 'package:watchio/providers/github_remote_config_provider.dart';
+import 'package:watchio/providers/remote_config_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class RemoteConfigSnapshot {
@@ -41,8 +41,8 @@ class RemoteConfigSnapshot {
 }
 
 class RemoteConfigService {
-  static const _cacheKey = 'bingietv.remote_config.v1';
-  static const _lastSyncKey = 'bingietv.remote_config.last_sync.v1';
+  static const _cacheKey = 'Watchio IPTV.remote_config.v1';
+  static const _lastSyncKey = 'Watchio IPTV.remote_config.last_sync.v1';
 
   final RemoteConfigProvider provider;
 

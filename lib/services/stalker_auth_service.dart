@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:another_iptv_player/models/stalker_provider_config.dart';
-import 'package:another_iptv_player/services/secure_storage_service.dart';
+import 'package:watchio/models/stalker_provider_config.dart';
+import 'package:watchio/services/secure_storage_service.dart';
 import 'package:http/http.dart' as http;
 
 class StalkerAuthService {

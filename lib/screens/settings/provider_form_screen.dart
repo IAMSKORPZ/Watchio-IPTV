@@ -1,6 +1,6 @@
-import 'package:another_iptv_player/controllers/provider_controller.dart';
-import 'package:another_iptv_player/models/provider_model.dart';
-import 'package:another_iptv_player/services/secure_storage_service.dart';
+import 'package:watchio/controllers/provider_controller.dart';
+import 'package:watchio/models/provider_model.dart';
+import 'package:watchio/services/secure_storage_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

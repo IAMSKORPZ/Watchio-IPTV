@@ -1,9 +1,9 @@
-import 'package:another_iptv_player/models/announcement_model.dart';
-import 'package:another_iptv_player/models/branding_model.dart';
-import 'package:another_iptv_player/models/maintenance_model.dart';
-import 'package:another_iptv_player/models/theme_model.dart';
-import 'package:another_iptv_player/models/update_info_model.dart';
-import 'package:another_iptv_player/services/remote_config_service.dart';
+import 'package:watchio/models/announcement_model.dart';
+import 'package:watchio/models/branding_model.dart';
+import 'package:watchio/models/maintenance_model.dart';
+import 'package:watchio/models/theme_model.dart';
+import 'package:watchio/models/update_info_model.dart';
+import 'package:watchio/services/remote_config_service.dart';
 
 class BrandingService {
   final RemoteConfigService remoteConfigService;

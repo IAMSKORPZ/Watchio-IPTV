@@ -1,11 +1,11 @@
-import 'package:another_iptv_player/controllers/provider_controller.dart';
-import 'package:another_iptv_player/models/provider_model.dart';
-import 'package:another_iptv_player/models/stalker_provider_config.dart';
-import 'package:another_iptv_player/screens/m3u/m3u_home_screen.dart';
-import 'package:another_iptv_player/screens/settings/provider_form_screen.dart';
-import 'package:another_iptv_player/screens/stalker/stalker_home_screen.dart';
-import 'package:another_iptv_player/screens/xtream-codes/xtream_code_home_screen.dart';
-import 'package:another_iptv_player/widgets/tv_focusable.dart';
+import 'package:watchio/controllers/provider_controller.dart';
+import 'package:watchio/models/provider_model.dart';
+import 'package:watchio/models/stalker_provider_config.dart';
+import 'package:watchio/screens/m3u/m3u_home_screen.dart';
+import 'package:watchio/screens/settings/provider_form_screen.dart';
+import 'package:watchio/screens/stalker/stalker_home_screen.dart';
+import 'package:watchio/screens/xtream-codes/xtream_code_home_screen.dart';
+import 'package:watchio/widgets/tv_focusable.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

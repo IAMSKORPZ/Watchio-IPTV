@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/repositories/user_preferences.dart';
-import 'package:another_iptv_player/repositories/provider_repository.dart';
-import 'package:another_iptv_player/services/app_state.dart';
+import 'package:watchio/repositories/user_preferences.dart';
+import 'package:watchio/repositories/provider_repository.dart';
+import 'package:watchio/services/app_state.dart';
 import '../models/playlist_model.dart';
 import '../screens/xtream-codes/xtream_code_home_screen.dart';
 import '../services/playlist_service.dart';

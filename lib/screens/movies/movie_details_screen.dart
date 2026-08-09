@@ -1,10 +1,10 @@
 import 'dart:ui';
-import 'package:another_iptv_player/models/api_configuration_model.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/repositories/iptv_repository.dart';
-import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/utils/get_playlist_type.dart';
-import 'package:another_iptv_player/screens/player/unified_player_screen.dart';
+import 'package:watchio/models/api_configuration_model.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/repositories/iptv_repository.dart';
+import 'package:watchio/services/app_state.dart';
+import 'package:watchio/utils/get_playlist_type.dart';
+import 'package:watchio/screens/player/unified_player_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';

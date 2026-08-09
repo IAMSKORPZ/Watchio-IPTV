@@ -1,8 +1,8 @@
-import 'package:another_iptv_player/models/announcement_model.dart';
-import 'package:another_iptv_player/models/branding_model.dart';
-import 'package:another_iptv_player/models/maintenance_model.dart';
-import 'package:another_iptv_player/models/theme_model.dart';
-import 'package:another_iptv_player/models/update_info_model.dart';
+import 'package:watchio/models/announcement_model.dart';
+import 'package:watchio/models/branding_model.dart';
+import 'package:watchio/models/maintenance_model.dart';
+import 'package:watchio/models/theme_model.dart';
+import 'package:watchio/models/update_info_model.dart';
 
 abstract class RemoteConfigProvider {
   String get sourceName;

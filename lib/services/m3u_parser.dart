@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'dart:convert' show utf8;
 import 'dart:io' show File, HttpClient;
-import 'package:another_iptv_player/models/content_type.dart';
+import 'package:watchio/models/content_type.dart';
 import 'package:uuid/uuid.dart';
 import '../models/m3u_item.dart';
 

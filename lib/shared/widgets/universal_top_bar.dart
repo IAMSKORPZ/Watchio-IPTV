@@ -155,7 +155,7 @@ class _UniversalTopBarState extends State<UniversalTopBar> {
       children: [
         Icon(
           Icons.play_arrow_rounded,
-          color: BingieThemeExtension.of(context).glowColor,
+          color: WatchioThemeExtension.of(context).glowColor,
           size: isSmallHeight ? 18 : 22,
         ),
         const SizedBox(width: 8),

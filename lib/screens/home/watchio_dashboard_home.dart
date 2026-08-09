@@ -10,7 +10,7 @@ import '../../../utils/responsive_helper.dart';
 import '../../../utils/firestick_performance.dart';
 import '../../widgets/announcement_popup_gate.dart';
 
-class BingieDashboardHome extends StatefulWidget {
+class WatchioDashboardHome extends StatefulWidget {
   final VoidCallback onLiveTv;
   final VoidCallback onMovies;
   final VoidCallback onSeries;
@@ -37,7 +37,7 @@ class BingieDashboardHome extends StatefulWidget {
   final String moviesLastUpdatedLabel;
   final String seriesLastUpdatedLabel;
 
-  const BingieDashboardHome({
+  const WatchioDashboardHome({
     super.key,
     required this.onLiveTv,
     required this.onMovies,
@@ -67,10 +67,10 @@ class BingieDashboardHome extends StatefulWidget {
   });
 
   @override
-  State<BingieDashboardHome> createState() => _BingieDashboardHomeState();
+  State<WatchioDashboardHome> createState() => _WatchioDashboardHomeState();
 }
 
-class _BingieDashboardHomeState extends State<BingieDashboardHome>
+class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
     with SingleTickerProviderStateMixin {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;

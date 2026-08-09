@@ -1,13 +1,13 @@
-import 'package:another_iptv_player/database/database.dart';
-import 'package:another_iptv_player/screens/settings/subtitle_settings_section.dart';
-import 'package:another_iptv_player/services/service_locator.dart';
-import 'package:another_iptv_player/utils/get_playlist_type.dart';
-import 'package:another_iptv_player/utils/show_loading_dialog.dart';
+import 'package:watchio/database/database.dart';
+import 'package:watchio/screens/settings/subtitle_settings_section.dart';
+import 'package:watchio/services/service_locator.dart';
+import 'package:watchio/utils/get_playlist_type.dart';
+import 'package:watchio/utils/show_loading_dialog.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
+import 'package:watchio/l10n/localization_extension.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../controllers/locale_provider.dart';
@@ -478,7 +478,7 @@ class _GeneralSettingsWidgetState extends State<GeneralSettingsWidget> {
                       dense: true,
                       onTap: () async {
                         final url = Uri.parse(
-                          'https://github.com/bsogulcan/another-iptv-player',
+                          'https://github.com/iamSkorpz/watchio',
                         );
                         if (await canLaunchUrl(url)) {
                           await launchUrl(

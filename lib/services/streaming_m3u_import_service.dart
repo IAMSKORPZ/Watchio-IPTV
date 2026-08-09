@@ -2,19 +2,19 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:another_iptv_player/database/database.dart'
+import 'package:watchio/database/database.dart'
     hide M3uEpisodes, M3uSeries;
-import 'package:another_iptv_player/models/category.dart';
-import 'package:another_iptv_player/models/category_type.dart';
-import 'package:another_iptv_player/models/category_with_content_type.dart';
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/models/import_progress_model.dart';
-import 'package:another_iptv_player/models/import_session_model.dart';
-import 'package:another_iptv_player/models/m3u_item.dart';
-import 'package:another_iptv_player/models/m3u_series.dart';
-import 'package:another_iptv_player/services/import_recovery_service.dart';
-import 'package:another_iptv_player/services/m3u_parser.dart';
-import 'package:another_iptv_player/repositories/search_repository.dart';
+import 'package:watchio/models/category.dart';
+import 'package:watchio/models/category_type.dart';
+import 'package:watchio/models/category_with_content_type.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/models/import_progress_model.dart';
+import 'package:watchio/models/import_session_model.dart';
+import 'package:watchio/models/m3u_item.dart';
+import 'package:watchio/models/m3u_series.dart';
+import 'package:watchio/services/import_recovery_service.dart';
+import 'package:watchio/services/m3u_parser.dart';
+import 'package:watchio/repositories/search_repository.dart';
 import 'package:collection/collection.dart';
 import 'package:uuid/uuid.dart';
 

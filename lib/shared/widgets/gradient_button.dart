@@ -29,7 +29,7 @@ class GradientButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = BingieThemeExtension.of(context);
+    final theme = WatchioThemeExtension.of(context);
 
     return Container(
       width: width,

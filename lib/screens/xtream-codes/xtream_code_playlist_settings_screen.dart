@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/models/api_response.dart';
-import 'package:another_iptv_player/models/playlist_model.dart';
-import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
+import 'package:watchio/models/api_response.dart';
+import 'package:watchio/models/playlist_model.dart';
+import 'package:watchio/services/app_state.dart';
+import 'package:watchio/l10n/localization_extension.dart';
 import '../../widgets/playlist_info_widget.dart';
 import '../../widgets/server_info_widget.dart';
 import '../../widgets/status_card_widget.dart';

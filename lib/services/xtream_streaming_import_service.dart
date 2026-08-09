@@ -1,15 +1,15 @@
 import 'dart:convert';
 
-import 'package:another_iptv_player/database/database.dart';
-import 'package:another_iptv_player/models/api_configuration_model.dart';
-import 'package:another_iptv_player/models/import_progress_model.dart';
-import 'package:another_iptv_player/models/live_stream.dart';
-import 'package:another_iptv_player/models/series.dart';
-import 'package:another_iptv_player/models/vod_streams.dart';
-import 'package:another_iptv_player/models/import_session_model.dart';
-import 'package:another_iptv_player/services/import_recovery_service.dart';
-import 'package:another_iptv_player/repositories/search_repository.dart';
-import 'package:another_iptv_player/services/streaming_json_array_decoder.dart';
+import 'package:watchio/database/database.dart';
+import 'package:watchio/models/api_configuration_model.dart';
+import 'package:watchio/models/import_progress_model.dart';
+import 'package:watchio/models/live_stream.dart';
+import 'package:watchio/models/series.dart';
+import 'package:watchio/models/vod_streams.dart';
+import 'package:watchio/models/import_session_model.dart';
+import 'package:watchio/services/import_recovery_service.dart';
+import 'package:watchio/repositories/search_repository.dart';
+import 'package:watchio/services/streaming_json_array_decoder.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 

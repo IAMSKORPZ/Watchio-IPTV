@@ -1,15 +1,15 @@
-import 'package:another_iptv_player/l10n/localization_extension.dart';
-import 'package:another_iptv_player/models/favorite.dart';
-import 'package:another_iptv_player/models/content_type.dart';
+import 'package:watchio/l10n/localization_extension.dart';
+import 'package:watchio/models/favorite.dart';
+import 'package:watchio/models/content_type.dart';
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/widgets/content_card.dart';
-import 'package:another_iptv_player/utils/navigate_by_content_type.dart';
-import 'package:another_iptv_player/utils/get_playlist_type.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/models/live_stream.dart';
-import 'package:another_iptv_player/models/vod_streams.dart';
-import 'package:another_iptv_player/models/series.dart';
-import 'package:another_iptv_player/models/m3u_item.dart';
+import 'package:watchio/widgets/content_card.dart';
+import 'package:watchio/utils/navigate_by_content_type.dart';
+import 'package:watchio/utils/get_playlist_type.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/models/live_stream.dart';
+import 'package:watchio/models/vod_streams.dart';
+import 'package:watchio/models/series.dart';
+import 'package:watchio/models/m3u_item.dart';
 import '../../repositories/favorites_repository.dart';
 
 class FavoritesSection extends StatelessWidget {

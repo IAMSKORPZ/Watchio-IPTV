@@ -1,10 +1,10 @@
-import 'package:another_iptv_player/models/m3u_series.dart';
-import 'package:another_iptv_player/repositories/m3u_repository.dart';
-import 'package:another_iptv_player/screens/m3u/series/m3u_episode_screen.dart';
+import 'package:watchio/models/m3u_series.dart';
+import 'package:watchio/repositories/m3u_repository.dart';
+import 'package:watchio/screens/m3u/series/m3u_episode_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/services/app_state.dart';
+import 'package:watchio/l10n/localization_extension.dart';
 import '../../../controllers/favorites_controller.dart';
 
 import '../../../models/content_type.dart';

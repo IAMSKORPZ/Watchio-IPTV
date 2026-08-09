@@ -1,4 +1,4 @@
-import 'package:another_iptv_player/services/config_service.dart';
+import 'package:watchio/services/config_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

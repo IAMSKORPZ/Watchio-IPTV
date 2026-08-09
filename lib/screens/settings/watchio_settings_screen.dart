@@ -139,7 +139,7 @@ class _SettingsTileState extends State<SettingsTile> {
   Widget build(BuildContext context) {
     final accentColor = Theme.of(context).colorScheme.primary;
     final themeManager = context.watch<ThemeManager>();
-    final panelGradient = BingieThemeExtension.of(context).panelGradient;
+    final panelGradient = WatchioThemeExtension.of(context).panelGradient;
 
     return LayoutBuilder(
       builder: (context, constraints) {

@@ -1,7 +1,7 @@
-import 'package:another_iptv_player/models/update_info_model.dart';
-import 'package:another_iptv_player/services/apk_installer_service.dart';
-import 'package:another_iptv_player/services/github_release_service.dart';
-import 'package:another_iptv_player/services/update_service.dart';
+import 'package:watchio/models/update_info_model.dart';
+import 'package:watchio/services/apk_installer_service.dart';
+import 'package:watchio/services/github_release_service.dart';
+import 'package:watchio/services/update_service.dart';
 import 'package:flutter/material.dart';
 
 class UpdateController extends ChangeNotifier {

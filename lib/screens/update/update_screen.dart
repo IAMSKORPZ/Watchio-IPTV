@@ -1,6 +1,6 @@
-import 'package:another_iptv_player/controllers/branding_controller.dart';
-import 'package:another_iptv_player/controllers/update_controller.dart';
-import 'package:another_iptv_player/services/update_service.dart';
+import 'package:watchio/controllers/branding_controller.dart';
+import 'package:watchio/controllers/update_controller.dart';
+import 'package:watchio/services/update_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

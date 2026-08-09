@@ -1,8 +1,8 @@
-import 'package:another_iptv_player/models/m3u_item.dart';
-import 'package:another_iptv_player/models/playlist_model.dart';
-import 'package:another_iptv_player/models/provider_model.dart';
-import 'package:another_iptv_player/repositories/iptv_repository.dart';
-import 'package:another_iptv_player/repositories/m3u_repository.dart';
+import 'package:watchio/models/m3u_item.dart';
+import 'package:watchio/models/playlist_model.dart';
+import 'package:watchio/models/provider_model.dart';
+import 'package:watchio/repositories/iptv_repository.dart';
+import 'package:watchio/repositories/m3u_repository.dart';
 
 abstract class AppState {
   static IptvProvider? currentProvider;

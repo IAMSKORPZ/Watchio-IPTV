@@ -1,6 +1,6 @@
-import 'package:another_iptv_player/repositories/user_preferences.dart';
+import 'package:watchio/repositories/user_preferences.dart';
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
+import 'package:watchio/l10n/localization_extension.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/xtream_code_home_controller.dart';
 

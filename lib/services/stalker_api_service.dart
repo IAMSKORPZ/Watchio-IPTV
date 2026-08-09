@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:another_iptv_player/models/stalker_provider_config.dart';
+import 'package:watchio/models/stalker_provider_config.dart';
 import 'package:http/http.dart' as http;
 
 class StalkerApiService {

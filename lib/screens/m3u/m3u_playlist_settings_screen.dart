@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/models/playlist_model.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
+import 'package:watchio/models/playlist_model.dart';
+import 'package:watchio/l10n/localization_extension.dart';
 import '../../widgets/playlist_info_widget.dart';
 import '../settings/general_settings_section.dart';
 

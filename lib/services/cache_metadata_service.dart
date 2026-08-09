@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:another_iptv_player/models/category_type.dart';
+import 'package:watchio/models/category_type.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum CacheSection { live, vod, series, epg, account }

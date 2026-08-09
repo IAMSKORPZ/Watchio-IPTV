@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:another_iptv_player/database/database.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/models/watch_history.dart';
-import 'package:another_iptv_player/screens/player/unified_player_screen.dart';
+import 'package:watchio/database/database.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/models/watch_history.dart';
+import 'package:watchio/screens/player/unified_player_screen.dart';
 import '../../../models/content_type.dart';
 import '../../../services/event_bus.dart';
 import '../../../widgets/loading_widget.dart';

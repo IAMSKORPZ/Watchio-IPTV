@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
-import 'package:another_iptv_player/database/database.dart';
-import 'package:another_iptv_player/models/content_type.dart';
+import 'package:watchio/database/database.dart';
+import 'package:watchio/models/content_type.dart';
 
 class WatchHistory {
   late String playlistId;

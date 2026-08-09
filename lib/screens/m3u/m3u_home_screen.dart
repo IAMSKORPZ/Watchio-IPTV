@@ -1,14 +1,14 @@
-import 'package:another_iptv_player/l10n/localization_extension.dart';
-import 'package:another_iptv_player/screens/m3u/m3u_items_screen.dart';
-import 'package:another_iptv_player/screens/m3u/m3u_playlist_settings_screen.dart';
+import 'package:watchio/l10n/localization_extension.dart';
+import 'package:watchio/screens/m3u/m3u_items_screen.dart';
+import 'package:watchio/screens/m3u/m3u_playlist_settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:another_iptv_player/controllers/m3u_home_controller.dart';
-import 'package:another_iptv_player/models/playlist_model.dart';
-import 'package:another_iptv_player/repositories/m3u_repository.dart';
+import 'package:watchio/controllers/m3u_home_controller.dart';
+import 'package:watchio/models/playlist_model.dart';
+import 'package:watchio/repositories/m3u_repository.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../services/app_state.dart';
-import '../home/bingie_dashboard_home.dart';
+import '../home/watchio_dashboard_home.dart';
 import '../sports/sports_hub_screen.dart';
 
 class M3UHomeScreen extends StatefulWidget {
@@ -62,7 +62,7 @@ class _M3UHomeScreenState extends State<M3UHomeScreen> {
               child: IndexedStack(
                 index: controller.currentIndex,
                 children: [
-                  BingieDashboardHome(
+                  WatchioDashboardHome(
                     onLiveTv: () => controller.onNavigationTap(1),
                     onMovies: () => controller.onNavigationTap(1),
                     onSeries: () => controller.onNavigationTap(1),

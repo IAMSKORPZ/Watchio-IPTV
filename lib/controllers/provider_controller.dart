@@ -1,6 +1,6 @@
-import 'package:another_iptv_player/models/provider_model.dart';
-import 'package:another_iptv_player/repositories/provider_repository.dart';
-import 'package:another_iptv_player/services/performance_service.dart';
+import 'package:watchio/models/provider_model.dart';
+import 'package:watchio/repositories/provider_repository.dart';
+import 'package:watchio/services/performance_service.dart';
 import 'package:flutter/material.dart';
 
 class ProviderController extends ChangeNotifier {

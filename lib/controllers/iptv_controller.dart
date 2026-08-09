@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart' hide Category;
-import 'package:another_iptv_player/models/api_response.dart';
-import 'package:another_iptv_player/models/category.dart';
-import 'package:another_iptv_player/models/live_stream.dart';
-import 'package:another_iptv_player/models/import_progress_model.dart';
-import 'package:another_iptv_player/models/vod_streams.dart';
-import 'package:another_iptv_player/models/progress_step.dart';
-import 'package:another_iptv_player/models/series.dart';
-import 'package:another_iptv_player/repositories/iptv_repository.dart';
+import 'package:watchio/models/api_response.dart';
+import 'package:watchio/models/category.dart';
+import 'package:watchio/models/live_stream.dart';
+import 'package:watchio/models/import_progress_model.dart';
+import 'package:watchio/models/vod_streams.dart';
+import 'package:watchio/models/progress_step.dart';
+import 'package:watchio/models/series.dart';
+import 'package:watchio/repositories/iptv_repository.dart';
 
 import '../models/category_type.dart';
 

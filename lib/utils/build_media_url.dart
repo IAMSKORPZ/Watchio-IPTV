@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
-import 'package:another_iptv_player/services/app_state.dart';
+import 'package:watchio/services/app_state.dart';
 
 import '../models/content_type.dart';
 import '../models/playlist_content_model.dart';

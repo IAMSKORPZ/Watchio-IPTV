@@ -1,5 +1,5 @@
-import 'package:another_iptv_player/models/category.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
+import 'package:watchio/models/category.dart';
+import 'package:watchio/models/playlist_content_model.dart';
 
 class CategoryViewModel {
   final Category category;

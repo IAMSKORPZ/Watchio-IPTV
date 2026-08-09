@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
+class WatchioThemeExtension extends ThemeExtension<WatchioThemeExtension> {
   final LinearGradient primaryGradient;
   final LinearGradient secondaryGradient;
   final LinearGradient panelGradient;
@@ -10,7 +10,7 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
   final Color glowColor;
   final Color panelColor;
 
-  const BingieThemeExtension({
+  const WatchioThemeExtension({
     required this.primaryGradient,
     required this.secondaryGradient,
     required this.panelGradient,
@@ -22,7 +22,7 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
   });
 
   @override
-  ThemeExtension<BingieThemeExtension> copyWith({
+  ThemeExtension<WatchioThemeExtension> copyWith({
     LinearGradient? primaryGradient,
     LinearGradient? secondaryGradient,
     LinearGradient? panelGradient,
@@ -32,7 +32,7 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
     Color? glowColor,
     Color? panelColor,
   }) {
-    return BingieThemeExtension(
+    return WatchioThemeExtension(
       primaryGradient: primaryGradient ?? this.primaryGradient,
       secondaryGradient: secondaryGradient ?? this.secondaryGradient,
       panelGradient: panelGradient ?? this.panelGradient,
@@ -45,14 +45,14 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
   }
 
   @override
-  ThemeExtension<BingieThemeExtension> lerp(
-    ThemeExtension<BingieThemeExtension>? other,
+  ThemeExtension<WatchioThemeExtension> lerp(
+    ThemeExtension<WatchioThemeExtension>? other,
     double t,
   ) {
-    if (other is! BingieThemeExtension) {
+    if (other is! WatchioThemeExtension) {
       return this;
     }
-    return BingieThemeExtension(
+    return WatchioThemeExtension(
       primaryGradient: LinearGradient.lerp(
         primaryGradient,
         other.primaryGradient,
@@ -76,11 +76,11 @@ class BingieThemeExtension extends ThemeExtension<BingieThemeExtension> {
     );
   }
 
-  static BingieThemeExtension of(BuildContext context) {
-    return Theme.of(context).extension<BingieThemeExtension>() ?? defaults;
+  static WatchioThemeExtension of(BuildContext context) {
+    return Theme.of(context).extension<WatchioThemeExtension>() ?? defaults;
   }
 
-  static const defaults = BingieThemeExtension(
+  static const defaults = WatchioThemeExtension(
     primaryGradient: LinearGradient(
       colors: [Color(0xFFFF3D9A), Color(0xFFA855F7)],
     ),

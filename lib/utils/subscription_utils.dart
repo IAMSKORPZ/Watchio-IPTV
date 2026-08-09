@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/models/api_response.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
+import 'package:watchio/models/api_response.dart';
+import 'package:watchio/l10n/localization_extension.dart';
 
 class SubscriptionUtils {
   /// Calculates the remaining days for a subscription

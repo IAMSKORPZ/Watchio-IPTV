@@ -1,4 +1,4 @@
-import 'package:another_iptv_player/models/content_type.dart';
+import 'package:watchio/models/content_type.dart';
 
 class CategoryWithContentType {
   final String categoryName;

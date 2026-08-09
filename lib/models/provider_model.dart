@@ -1,4 +1,4 @@
-import 'package:another_iptv_player/models/playlist_model.dart';
+import 'package:watchio/models/playlist_model.dart';
 
 enum IptvProviderType { xtreamCodes, m3uUrl, m3uFile, stalker }
 

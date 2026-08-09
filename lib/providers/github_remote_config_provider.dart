@@ -1,11 +1,11 @@
 import 'dart:convert';
 
-import 'package:another_iptv_player/models/announcement_model.dart';
-import 'package:another_iptv_player/models/branding_model.dart';
-import 'package:another_iptv_player/models/maintenance_model.dart';
-import 'package:another_iptv_player/models/theme_model.dart';
-import 'package:another_iptv_player/models/update_info_model.dart';
-import 'package:another_iptv_player/providers/remote_config_provider.dart';
+import 'package:watchio/models/announcement_model.dart';
+import 'package:watchio/models/branding_model.dart';
+import 'package:watchio/models/maintenance_model.dart';
+import 'package:watchio/models/theme_model.dart';
+import 'package:watchio/models/update_info_model.dart';
+import 'package:watchio/providers/remote_config_provider.dart';
 import 'package:http/http.dart' as http;
 
 class GitHubRemoteConfigProvider implements RemoteConfigProvider {
@@ -15,8 +15,8 @@ class GitHubRemoteConfigProvider implements RemoteConfigProvider {
 
   GitHubRemoteConfigProvider({
     String configUrl = const String.fromEnvironment(
-      'BINGIETV_REMOTE_CONFIG_URL',
-      defaultValue: 'https://raw.githubusercontent.com/IAMSKORPZ/BingieTV_App/main/remote_config.json',
+      'Watchio IPTV_REMOTE_CONFIG_URL',
+      defaultValue: 'https://raw.githubusercontent.com/IAMSKORPZ/Watchio IPTV_App/main/remote_config.json',
     ),
     http.Client? client,
   })  : configUri = configUrl.trim().isEmpty ? null : Uri.tryParse(configUrl),

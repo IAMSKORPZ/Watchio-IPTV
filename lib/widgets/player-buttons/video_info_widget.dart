@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/services/event_bus.dart';
-import 'package:another_iptv_player/services/player_state.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/services/event_bus.dart';
+import 'package:watchio/services/player_state.dart';
+import 'package:watchio/l10n/localization_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';

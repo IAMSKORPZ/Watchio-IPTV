@@ -1,7 +1,7 @@
-import 'package:another_iptv_player/models/stalker_provider_config.dart';
-import 'package:another_iptv_player/services/secure_storage_service.dart';
-import 'package:another_iptv_player/services/stalker_api_service.dart';
-import 'package:another_iptv_player/services/stalker_auth_service.dart';
+import 'package:watchio/models/stalker_provider_config.dart';
+import 'package:watchio/services/secure_storage_service.dart';
+import 'package:watchio/services/stalker_api_service.dart';
+import 'package:watchio/services/stalker_auth_service.dart';
 
 class StalkerRepository {
   final String providerId;

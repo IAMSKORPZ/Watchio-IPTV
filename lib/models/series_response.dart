@@ -1,4 +1,4 @@
-import 'package:another_iptv_player/database/database.dart';
+import 'package:watchio/database/database.dart';
 
 class SeriesDetailResponse {
   final SeriesInfosData seriesInfo;

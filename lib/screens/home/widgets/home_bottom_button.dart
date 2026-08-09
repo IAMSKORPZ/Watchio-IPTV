@@ -29,7 +29,7 @@ class _HomeBottomButtonState extends State<HomeBottomButton> {
 
   @override
   Widget build(BuildContext context) {
-    final panelGradient = BingieThemeExtension.of(context).panelGradient;
+    final panelGradient = WatchioThemeExtension.of(context).panelGradient;
     final deviceType = ResponsiveHelper.getDeviceType(context);
     final isDesktop = deviceType == DeviceType.desktop;
     final isTablet = deviceType == DeviceType.tablet;

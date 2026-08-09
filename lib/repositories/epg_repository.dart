@@ -1,4 +1,4 @@
-import 'package:another_iptv_player/models/epg_models.dart';
+import 'package:watchio/models/epg_models.dart';
 
 abstract class EpgRepository {
   Future<EpgProgram?> getCurrentProgram(String channelId);

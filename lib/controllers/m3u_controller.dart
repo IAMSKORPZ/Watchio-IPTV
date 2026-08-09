@@ -1,12 +1,12 @@
-import 'package:another_iptv_player/database/database.dart'
+import 'package:watchio/database/database.dart'
     hide M3uEpisodes, M3uSeries;
-import 'package:another_iptv_player/models/category.dart';
-import 'package:another_iptv_player/models/category_type.dart';
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/models/m3u_item.dart';
-import 'package:another_iptv_player/models/progress_step.dart';
-import 'package:another_iptv_player/services/m3u_parser.dart';
-import 'package:another_iptv_player/services/service_locator.dart';
+import 'package:watchio/models/category.dart';
+import 'package:watchio/models/category_type.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/models/m3u_item.dart';
+import 'package:watchio/models/progress_step.dart';
+import 'package:watchio/services/m3u_parser.dart';
+import 'package:watchio/services/service_locator.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:uuid/uuid.dart';

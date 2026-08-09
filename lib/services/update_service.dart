@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:another_iptv_player/models/update_info_model.dart';
-import 'package:another_iptv_player/services/github_release_service.dart';
+import 'package:watchio/models/update_info_model.dart';
+import 'package:watchio/services/github_release_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
@@ -32,9 +32,9 @@ class UpdateCheckResult {
 }
 
 class UpdateService {
-  static const _lastCheckKey = 'bingietv.update.last_check.v1';
+  static const _lastCheckKey = 'Watchio IPTV.update.last_check.v1';
   static const _lastKnownVersionKey = 'watchio.update.last_known_version.v2';
-  static const _channelKey = 'bingietv.update.channel.v1';
+  static const _channelKey = 'Watchio IPTV.update.channel.v1';
   static const _cachedReleaseKey = 'watchio.update.cached_release.v2';
 
   final GitHubReleaseService releaseService;
@@ -130,7 +130,7 @@ class UpdateService {
 
     final dir = await getTemporaryDirectory();
     final name = p.basename(uri.path).isEmpty
-        ? 'BingieTV-${release.version}'
+        ? 'Watchio IPTV-${release.version}'
         : p.basename(uri.path);
     final file = File(p.join(dir.path, name));
     await file.writeAsBytes(response.bodyBytes);

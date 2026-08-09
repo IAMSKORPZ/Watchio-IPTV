@@ -1,7 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/models/watch_history.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/models/watch_history.dart';
 import '../tv_focusable.dart';
 
 class WatchHistoryCard extends StatelessWidget {

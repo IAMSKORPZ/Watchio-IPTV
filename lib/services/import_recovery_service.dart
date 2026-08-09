@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:another_iptv_player/models/import_session_model.dart';
+import 'package:watchio/models/import_session_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ImportRecoveryService {
-  static const _sessionsKey = 'bingietv.import_sessions.v1';
+  static const _sessionsKey = 'Watchio IPTV.import_sessions.v1';
 
   Future<List<ImportSessionModel>> loadSessions() async {
     final prefs = await SharedPreferences.getInstance();

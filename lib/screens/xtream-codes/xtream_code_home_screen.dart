@@ -1,17 +1,17 @@
 import 'dart:async';
 
-import 'package:another_iptv_player/models/api_configuration_model.dart';
-import 'package:another_iptv_player/models/category_type.dart';
-import 'package:another_iptv_player/repositories/iptv_repository.dart';
-import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/services/cache_metadata_service.dart';
+import 'package:watchio/models/api_configuration_model.dart';
+import 'package:watchio/models/category_type.dart';
+import 'package:watchio/repositories/iptv_repository.dart';
+import 'package:watchio/services/app_state.dart';
+import 'package:watchio/services/cache_metadata_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/xtream_code_home_controller.dart';
 import '../../models/playlist_model.dart';
 import '../../models/content_type.dart';
 import '../../shared/widgets/app_shell.dart';
-import '../home/bingie_dashboard_home.dart';
+import '../home/watchio_dashboard_home.dart';
 import '../watch_history_screen.dart';
 import '../announcements/announcements_screen.dart';
 import '../../l10n/localization_extension.dart';
@@ -187,7 +187,7 @@ class _XtreamCodeHomeScreenState extends State<XtreamCodeHomeScreen> {
             onRefreshTap: _openTvGuide,
             onSettingsTap: () => controller.onNavigationTap(5),
             pages: [
-              BingieDashboardHome(
+              WatchioDashboardHome(
                 onLiveTv: () => unawaited(
                   controller.openContentSection(2, CategoryType.live),
                 ),

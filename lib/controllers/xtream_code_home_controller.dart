@@ -1,16 +1,16 @@
 import 'dart:async';
 
-import 'package:another_iptv_player/models/api_response.dart';
+import 'package:watchio/models/api_response.dart';
 import 'package:flutter/material.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
-import 'package:another_iptv_player/models/category.dart';
-import 'package:another_iptv_player/models/category_type.dart';
-import 'package:another_iptv_player/models/category_view_model.dart';
-import 'package:another_iptv_player/models/content_type.dart';
-import 'package:another_iptv_player/models/playlist_content_model.dart';
-import 'package:another_iptv_player/repositories/iptv_repository.dart';
-import 'package:another_iptv_player/services/app_state.dart';
-import 'package:another_iptv_player/services/cache_metadata_service.dart';
+import 'package:watchio/l10n/localization_extension.dart';
+import 'package:watchio/models/category.dart';
+import 'package:watchio/models/category_type.dart';
+import 'package:watchio/models/category_view_model.dart';
+import 'package:watchio/models/content_type.dart';
+import 'package:watchio/models/playlist_content_model.dart';
+import 'package:watchio/repositories/iptv_repository.dart';
+import 'package:watchio/services/app_state.dart';
+import 'package:watchio/services/cache_metadata_service.dart';
 import '../screens/xtream-codes/xtream_code_data_loader_screen.dart';
 
 class XtreamCodeHomeController extends ChangeNotifier {

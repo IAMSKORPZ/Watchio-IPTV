@@ -1,6 +1,6 @@
-import 'package:another_iptv_player/models/playlist_model.dart';
-import 'package:another_iptv_player/screens/m3u/m3u_data_loader_screen.dart';
-import 'package:another_iptv_player/l10n/localization_extension.dart';
+import 'package:watchio/models/playlist_model.dart';
+import 'package:watchio/screens/m3u/m3u_data_loader_screen.dart';
+import 'package:watchio/l10n/localization_extension.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
