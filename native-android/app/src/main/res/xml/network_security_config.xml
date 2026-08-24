@@ -1,0 +1,4 @@
+<network-security-config>
+    <!-- User-supplied IPTV providers often require HTTP streams. Keep cleartext explicit for dev foundation. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

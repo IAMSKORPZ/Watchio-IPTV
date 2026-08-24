@@ -1,0 +1,5 @@
+<tv>
+  <channel id="bad"><display-name>Bad</display-name></channel>
+  <programme channel="bad" start="bad" stop="20260101010000 +0000"><title>Skipped</title></programme>
+  <programme start="20260101000000 +0000" stop="20260101010000 +0000"><title>Skipped</title></programme>
+</tv>

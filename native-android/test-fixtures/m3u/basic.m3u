@@ -1,0 +1,7 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="live-one" tvg-name="Live One" group-title="Live",Live One
+http://example.invalid/live/one.ts
+#EXTINF:-1 group-title="Movies",Movie One
+http://example.invalid/movie/one.mp4
+#EXTINF:-1 group-title="Series",Series One S01E01
+http://example.invalid/series/one.mkv

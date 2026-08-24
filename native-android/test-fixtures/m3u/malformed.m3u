@@ -1,0 +1,5 @@
+#EXTM3U
+http://example.invalid/live/orphan.ts
+#EXTINF:-1 tvg-shift="bad" catchup-days="bad",Broken But Usable
+http://example.invalid/live/broken.ts
+#EXTINF:-1,Missing URL

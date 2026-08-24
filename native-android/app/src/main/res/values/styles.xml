@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.WatchioNative" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">#050712</item>
+        <item name="android:statusBarColor">#050712</item>
+    </style>
+</resources>

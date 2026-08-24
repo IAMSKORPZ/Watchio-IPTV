@@ -71,10 +71,6 @@ class WatchioDashboardHome extends StatefulWidget {
 
 class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
     with SingleTickerProviderStateMixin {
-  static const double _referenceWidth = 1280;
-  static const double _referenceHeight = 580;
-  static const double _maxDashboardScale = 1.15;
-
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
@@ -158,54 +154,13 @@ class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
                   builder: (context, constraints) {
                     final double width = constraints.maxWidth;
                     final double height = constraints.maxHeight;
-                    final useWideLayout = width > height && width >= 600;
-
-                    if (useWideLayout) {
-                      return _buildScaledLandscapeDashboard(width, height);
-                    }
-
-                    return Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1280),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: width * 0.05,
-                            vertical: height * 0.04,
-                          ),
-                          child: Column(
-                            children: [
-                              // TOP HEADER
-                              HomeHeader(
-                                onSearch: widget.onSearch,
-                                onProfile: widget.onProfile,
-                                onSports: widget.onSports,
-                                onSwitchPlaylist: widget.onSwitchPlaylist,
-                                onAnnouncements: widget.onAnnouncements,
-                              ),
-
-                              const Spacer(flex: 2),
-
-                              // MAIN CONTENT - 3 CARDS
-                              Expanded(flex: 14, child: _buildCompactContent()),
-
-                              const SizedBox(height: 8),
-
-                              // SECONDARY ACTION ROW
-                              Expanded(flex: 4, child: _buildCompactButtons()),
-
-                              const Spacer(flex: 2),
-
-                              // BOTTOM STATUS BAR
-                              HomeFooter(
-                                username: widget.username,
-                                expiryDate: widget.expiryDate,
-                                version: widget.version,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
+                    // Breakpoint rule: true phones keep the compact layout;
+                    // tablets, desktop and TV share the restored dashboard:
+                    // Live TV anchor left, Movies/Series right, two actions.
+                    final isWide = width >= 600;
+                    return isWide
+                        ? _buildAdaptiveWideDashboard(width, height)
+                        : _buildMobileDashboard(width, height);
                   },
                 ),
               ),
@@ -216,120 +171,142 @@ class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
     );
   }
 
-  Widget _buildScaledLandscapeDashboard(double width, double height) {
+  Widget _buildAdaptiveWideDashboard(double width, double height) {
     final safe = MediaQuery.paddingOf(context);
-    final availableWidth = (width - safe.left - safe.right).clamp(
-      1.0,
-      double.infinity,
+    final availableWidth = width - safe.left - safe.right;
+    final availableHeight = height - safe.top - safe.bottom;
+    final horizontalPadding = (availableWidth * 0.04).clamp(18.0, 64.0);
+    final verticalPadding = (availableHeight * 0.045).clamp(16.0, 42.0);
+    final gap = (availableWidth * 0.018).clamp(14.0, 30.0);
+    final contentWidth = (availableWidth - horizontalPadding * 2).clamp(
+      720.0,
+      1760.0,
     );
-    final availableHeight = (height - safe.top - safe.bottom).clamp(
-      1.0,
-      double.infinity,
-    );
-    final maxWidth = (_referenceWidth * _maxDashboardScale).clamp(
-      1.0,
-      availableWidth,
-    );
-    final maxHeight = (_referenceHeight * _maxDashboardScale).clamp(
-      1.0,
-      availableHeight,
-    );
+    final headerHeight = (availableHeight * 0.12).clamp(64.0, 92.0);
+    final gridMaxHeight = (availableHeight * 0.72).clamp(420.0, 760.0);
 
     return Center(
-      child: SizedBox(
-        width: maxWidth,
-        height: maxHeight,
-        child: FittedBox(
-          fit: BoxFit.contain,
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: _referenceWidth,
-            height: _referenceHeight,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
-              child: Column(
-                children: [
-                  SizedBox(
-                    height: 82,
-                    child: HomeHeader(
-                      onSearch: widget.onSearch,
-                      onProfile: widget.onProfile,
-                      onSports: widget.onSports,
-                      onSwitchPlaylist: widget.onSwitchPlaylist,
-                      onAnnouncements: widget.onAnnouncements,
-                    ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: contentWidth),
+        child: Padding(
+          padding: EdgeInsets.only(
+            top: verticalPadding,
+            bottom: verticalPadding,
+          ),
+          child: Column(
+            children: [
+              // Wide screens use real viewport width, not FittedBox/mobile
+              // aspect scaling. Header/footer therefore spread to screen edges.
+              SizedBox(height: headerHeight, child: _buildHeader()),
+              SizedBox(height: gap),
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: gridMaxHeight),
+                    child: _buildWideGrid(gap),
                   ),
-                  const SizedBox(height: 28),
-                  SizedBox(
-                    height: 360,
-                    child: _buildWideContent(24, verticalGap: 14),
-                  ),
-                  const Spacer(),
-                  HomeFooter(
-                    username: widget.username,
-                    expiryDate: widget.expiryDate,
-                    version: widget.version,
-                  ),
-                ],
+                ),
               ),
-            ),
+              SizedBox(height: gap),
+              HomeFooter(
+                username: widget.username,
+                expiryDate: widget.expiryDate,
+                version: widget.version,
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildCompactContent() {
+  Widget _buildMobileDashboard(double width, double height) {
+    final gap = (width * 0.025).clamp(8.0, 14.0);
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: width * 0.05,
+          vertical: height * 0.04,
+        ),
+        child: Column(
+          children: [
+            _buildHeader(),
+            const Spacer(flex: 2),
+            Expanded(flex: 14, child: _buildCompactContent(gap)),
+            SizedBox(height: gap),
+            Expanded(flex: 4, child: _buildSecondaryActions(gap)),
+            const Spacer(flex: 2),
+            HomeFooter(
+              username: widget.username,
+              expiryDate: widget.expiryDate,
+              version: widget.version,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return HomeHeader(
+      onSearch: widget.onSearch,
+      onProfile: widget.onProfile,
+      onSports: widget.onSports,
+      onSwitchPlaylist: widget.onSwitchPlaylist,
+      onAnnouncements: widget.onAnnouncements,
+    );
+  }
+
+  Widget _buildWideGrid(double gap) {
+    // D-pad focus stays inside HomeTile/HomeBottomButton. This grid only
+    // controls responsive geometry, so focus bounds remain real widget bounds.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: HomeTile(
-            title: 'LIVE TV',
-            subtitle: 'Watch Live TV Channels',
-            icon: Icons.live_tv_rounded,
-            accentColor: const Color(0xFFFF3D9A),
-            onTap: widget.onLiveTv,
-            onRefresh: widget.onRefreshLiveTv,
-            isUpdating: widget.isLiveTvUpdating,
-            updateProgress: widget.liveTvUpdateProgress,
-            lastUpdatedLabel: widget.liveTvLastUpdatedLabel,
-            autofocus: true,
-          ),
+          flex: 11,
+          // Wide breakpoint: Live TV stays the tall anchor tile on the left.
+          // Right side splits 3:1 so bottom actions stay chunky, not squashed.
+          child: _buildLiveTile(autofocus: true),
         ),
-        const SizedBox(width: 14),
+        SizedBox(width: gap),
         Expanded(
-          child: HomeTile(
-            title: 'MOVIES',
-            subtitle: 'Browse a wide selection',
-            icon: Icons.play_arrow_rounded,
-            accentColor: const Color(0xFFA855F7),
-            onTap: widget.onMovies,
-            onRefresh: widget.onRefreshMovies,
-            isUpdating: widget.isMoviesUpdating,
-            updateProgress: widget.moviesUpdateProgress,
-            lastUpdatedLabel: widget.moviesLastUpdatedLabel,
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: HomeTile(
-            title: 'SERIES',
-            subtitle: 'Discover and binge-watch',
-            icon: Icons.movie_rounded,
-            accentColor: const Color(0xFF20D9D2),
-            onTap: widget.onSeries,
-            onRefresh: widget.onRefreshSeries,
-            isUpdating: widget.isSeriesUpdating,
-            updateProgress: widget.seriesUpdateProgress,
-            lastUpdatedLabel: widget.seriesLastUpdatedLabel,
+          flex: 20,
+          child: Column(
+            children: [
+              Expanded(
+                flex: 3,
+                child: Row(
+                  children: [
+                    Expanded(child: _buildMoviesTile()),
+                    SizedBox(width: gap),
+                    Expanded(child: _buildSeriesTile()),
+                  ],
+                ),
+              ),
+              SizedBox(height: gap),
+              Expanded(flex: 1, child: _buildSecondaryActions(gap)),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildCompactButtons() {
+  Widget _buildCompactContent(double gap) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: _buildLiveTile(autofocus: true)),
+        SizedBox(width: gap),
+        Expanded(child: _buildMoviesTile()),
+        SizedBox(width: gap),
+        Expanded(child: _buildSeriesTile()),
+      ],
+    );
+  }
+
+  Widget _buildSecondaryActions(double gap) {
     return Row(
       children: [
         Expanded(
@@ -340,7 +317,7 @@ class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
             accentColor: const Color(0xFFA855F7),
           ),
         ),
-        const SizedBox(width: 14),
+        SizedBox(width: gap),
         Expanded(
           child: HomeBottomButton(
             label: 'SETTINGS',
@@ -353,87 +330,46 @@ class _WatchioDashboardHomeState extends State<WatchioDashboardHome>
     );
   }
 
-  Widget _buildWideContent(double gap, {required double verticalGap}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: HomeTile(
-            title: 'LIVE TV',
-            subtitle: 'Watch Live TV Channels',
-            icon: Icons.live_tv_rounded,
-            accentColor: const Color(0xFFFF3D9A),
-            onTap: widget.onLiveTv,
-            onRefresh: widget.onRefreshLiveTv,
-            isUpdating: widget.isLiveTvUpdating,
-            updateProgress: widget.liveTvUpdateProgress,
-            lastUpdatedLabel: widget.liveTvLastUpdatedLabel,
-            autofocus: true,
-          ),
-        ),
-        SizedBox(width: gap),
-        Expanded(
-          child: Column(
-            children: [
-              Expanded(
-                flex: 14,
-                child: HomeTile(
-                  title: 'MOVIES',
-                  subtitle: 'Browse a wide selection',
-                  icon: Icons.play_arrow_rounded,
-                  accentColor: const Color(0xFFA855F7),
-                  onTap: widget.onMovies,
-                  onRefresh: widget.onRefreshMovies,
-                  isUpdating: widget.isMoviesUpdating,
-                  updateProgress: widget.moviesUpdateProgress,
-                  lastUpdatedLabel: widget.moviesLastUpdatedLabel,
-                ),
-              ),
-              SizedBox(height: verticalGap),
-              Expanded(
-                flex: 4,
-                child: HomeBottomButton(
-                  label: 'TV GUIDE',
-                  icon: Icons.live_tv_rounded,
-                  onTap: widget.onUpdate,
-                  accentColor: const Color(0xFFA855F7),
-                ),
-              ),
-            ],
-          ),
-        ),
-        SizedBox(width: gap),
-        Expanded(
-          child: Column(
-            children: [
-              Expanded(
-                flex: 14,
-                child: HomeTile(
-                  title: 'SERIES',
-                  subtitle: 'Discover and binge-watch',
-                  icon: Icons.movie_rounded,
-                  accentColor: const Color(0xFF20D9D2),
-                  onTap: widget.onSeries,
-                  onRefresh: widget.onRefreshSeries,
-                  isUpdating: widget.isSeriesUpdating,
-                  updateProgress: widget.seriesUpdateProgress,
-                  lastUpdatedLabel: widget.seriesLastUpdatedLabel,
-                ),
-              ),
-              SizedBox(height: verticalGap),
-              Expanded(
-                flex: 4,
-                child: HomeBottomButton(
-                  label: 'SETTINGS',
-                  icon: Icons.settings_rounded,
-                  onTap: widget.onSettings,
-                  accentColor: const Color(0xFF20D9D2),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+  Widget _buildLiveTile({bool autofocus = false}) {
+    return HomeTile(
+      title: 'LIVE TV',
+      subtitle: 'Watch Live TV Channels',
+      icon: Icons.live_tv_rounded,
+      accentColor: const Color(0xFFFF3D9A),
+      onTap: widget.onLiveTv,
+      onRefresh: widget.onRefreshLiveTv,
+      isUpdating: widget.isLiveTvUpdating,
+      updateProgress: widget.liveTvUpdateProgress,
+      lastUpdatedLabel: widget.liveTvLastUpdatedLabel,
+      autofocus: autofocus,
+    );
+  }
+
+  Widget _buildMoviesTile() {
+    return HomeTile(
+      title: 'MOVIES',
+      subtitle: 'Browse a wide selection',
+      icon: Icons.play_arrow_rounded,
+      accentColor: const Color(0xFFA855F7),
+      onTap: widget.onMovies,
+      onRefresh: widget.onRefreshMovies,
+      isUpdating: widget.isMoviesUpdating,
+      updateProgress: widget.moviesUpdateProgress,
+      lastUpdatedLabel: widget.moviesLastUpdatedLabel,
+    );
+  }
+
+  Widget _buildSeriesTile() {
+    return HomeTile(
+      title: 'SERIES',
+      subtitle: 'Discover and binge-watch',
+      icon: Icons.movie_rounded,
+      accentColor: const Color(0xFF20D9D2),
+      onTap: widget.onSeries,
+      onRefresh: widget.onRefreshSeries,
+      isUpdating: widget.isSeriesUpdating,
+      updateProgress: widget.seriesUpdateProgress,
+      lastUpdatedLabel: widget.seriesLastUpdatedLabel,
     );
   }
 }

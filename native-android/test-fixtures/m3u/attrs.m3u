@@ -1,0 +1,4 @@
+#EXTM3U url-tvg="http://example.invalid/epg.xml"
+#EXTINF:-1 tvg-id='id-1' tvg-logo=http://example.invalid/logo.png user-agent="Fake UA" http-referrer='http://example.invalid/ref' catchup="default" catchup-source="{utc}" catchup-days="7" tvg-shift="-2" channel-number="101",
+#EXTGRP:Fallback Group
+http://example.invalid/live/attrs.ts

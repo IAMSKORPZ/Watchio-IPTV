@@ -128,6 +128,13 @@ firebase_options.dart
 **/macos/build/
 **/linux/build/
 
+# Native Android app build outputs
+native-android/.gradle/
+native-android/.kotlin/
+native-android/build/
+native-android/app/build/
+native-android/local.properties
+
 docs/.vitepress/cache/
 
 docs/.vitepress/dist/

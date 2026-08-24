@@ -1,0 +1,12 @@
+{
+  "user_info": {
+    "username": "fake-user",
+    "password": "fake-password",
+    "auth": 1,
+    "status": "Active"
+  },
+  "server_info": {
+    "url": "example.invalid",
+    "server_protocol": "http"
+  }
+}

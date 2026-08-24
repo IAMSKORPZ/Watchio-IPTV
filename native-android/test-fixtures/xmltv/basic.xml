@@ -1,0 +1,7 @@
+<tv>
+  <channel id="bbc.one"><display-name>BBC One</display-name></channel>
+  <programme channel="bbc.one" start="20260101000000 +0000" stop="20260101010000 +0000">
+    <title>Morning &amp; News</title>
+    <desc>Desc &lt;x&gt;</desc>
+  </programme>
+</tv>
