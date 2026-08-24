@@ -1,13 +1,13 @@
 # Watchio Native Architecture
 
-Phase 5 adds XMLTV/EPG source, import, matching, and query foundations on top of the provider catalog foundation. Flutter Watchio remains reference app.
+This document describes the current native Android application. The active app is Kotlin/Compose in `native-android`; historical Flutter migration notes live under `docs/historical/` and are not current architecture.
 
 ## Decisions
 
 - Kotlin-first: new application code is Kotlin. Java only for Android/library interop.
 - Compose-first: app UI uses Jetpack Compose, Material 3, and TV-friendly focus patterns.
 - DI: manual `AppContainer` for Phase 1. It keeps generated DI out until real feature graph and scopes justify Hilt.
-- Room: `WatchioDatabase` version 2 contains provider, catalog, favorites, history, and EPG contract entities. It does not store secrets.
+- Room: `WatchioDatabase` version 6 contains provider, catalog, favorites, history, EPG, playback, and app metadata entities. It does not store secrets.
 - DataStore: `WatchioSettingsRepository` owns typed settings for selected provider, input mode, stream format, theme JSON, EPG auto-refresh, and resume playback.
 - Secrets: `SecretStore` plus `ProviderCredentialStore` store provider credentials. Provider credentials stay out of Room/DataStore.
 - Networking: OkHttp + Retrofit. Debug diagnostics pass through `SensitiveUrlMasker`; release avoids credential logs.
@@ -64,9 +64,9 @@ Phase 5 adds XMLTV/EPG source, import, matching, and query foundations on top of
 - Movies behavior: `docs/MOVIES.md`.
 - Series behavior: `docs/SERIES.md`.
 
-## Flutter Drift Parity
+## Historical Migration Context
 
-See `docs/DATABASE.md` for mapping. Native keeps behavior concepts but intentionally avoids line-for-line schema copying. Passwords move to `SecretStore`; catalog names gain normalized fields; favorites/history use stable composite identities.
+See `docs/historical/WATCHIO_NATIVE_MIGRATION.md` only for old migration context. Current architecture is defined by this file and the subsystem docs in `docs/`.
 ## Phase 9 Search And My List
 
 Search and My List follow the existing Compose -> ViewModel -> Repository -> Room boundary. `SearchRepository` searches only the selected provider. `MyListRepository` composes shared favourites/history repositories instead of creating duplicate library state.

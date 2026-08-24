@@ -55,9 +55,9 @@ Indexes reflect current Watchio query patterns:
 
 Passwords, tokens, full generated stream URLs, and authorization headers are not stored in Room. Xtream stream URLs must be generated later by `PlaybackUrlResolver` with secrets pulled only at resolve time.
 
-## Drift Parity Notes
+## Historical Storage Mapping Notes
 
-Native schema maps conceptually to Flutter Drift:
+Early migration work mapped old storage concepts into the native Room model:
 
 - `playlists` -> `providers` + `SecretStore`
 - `categories` -> `categories`
@@ -70,7 +70,7 @@ Native schema maps conceptually to Flutter Drift:
 - `watchHistories` -> `watch_history`
 - `epg_channels`/`epg_programs` -> native EPG contract tables
 
-This is not field-for-field parity. Native intentionally separates secrets and uses normalized names/indexes for future search/EPG matching.
+This is not field-for-field parity. Native separates secrets and uses normalized names/indexes for search and EPG matching.
 
 ## Migration Policy
 
@@ -78,7 +78,7 @@ Phase 2 uses a destructive fallback only from Phase 1 schema version `1`, becaus
 
 ## Xtream Import Notes
 
-Phase 3 imports Xtream categories, live streams, VOD streams, and series list rows into the existing version 2 schema. No credential-bearing stream URLs are stored. Refresh replaces provider-scoped catalog rows in a Room transaction while preserving favorites, watch history, provider settings, and secrets.
+Xtream import writes categories, live streams, VOD streams, and series list rows into the current Room v6 schema. No credential-bearing stream URLs are stored. Refresh replaces provider-scoped catalog rows in a Room transaction while preserving favorites, watch history, provider settings, and secrets.
 
 ## M3U Import Notes
 

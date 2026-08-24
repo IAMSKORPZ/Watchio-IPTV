@@ -4,7 +4,6 @@ This file is the current quick handoff for future AI work.
 
 ## Safety
 
-- Do not modify Flutter.
 - Do not commit or push unless explicitly asked.
 - Do not uninstall or clear `com.watchioiptv.nativeapp.debug` on real user devices.
 - Connected automation must use the isolated `uitest` package and `connectedUitestAndroidTest`.
