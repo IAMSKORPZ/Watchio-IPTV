@@ -50,7 +50,6 @@ jobs:
   release:
     name: Build and publish dev prerelease
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_call' || github.ref == 'refs/heads/dev'
 
     env:
       EXPECTED_CERT_SHA256: ${{ vars.WATCHIO_DEV_CERT_SHA256 }}
