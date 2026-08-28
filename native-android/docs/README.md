@@ -8,6 +8,7 @@ This directory is the authoritative documentation set for the current Watchio na
 - `AI_HANDOFF.md` - fast context for future AI/developer work
 - `TESTING.md` - unit, lint, build, and isolated connected testing
 - `TEST_ISOLATION.md` - package isolation and real-device data safety
+- `UPDATES.md` - GitHub Releases update manifest and APK distribution flow
 
 ## Architecture
 

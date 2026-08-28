@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "channel": "dev",
+  "versionCode": 2,
+  "versionName": "0.1.0-dev.1-debug",
+  "minimumSupportedVersionCode": 1,
+  "mandatory": false,
+  "publishedAt": "2026-08-28T16:36:29+01:00",
+  "releaseNotes": [
+    "Native Android Watchio development build.",
+    "Live TV preview and fullscreen playback.",
+    "Movies and Series browsing and playback.",
+    "Global search, My List, favourites, history, and continue watching.",
+    "XMLTV/EPG cache, TV Guide, Settings, and Media3 playback.",
+    "Debug-signed pre-release only, not a production build."
+  ],
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.1",
+  "apk": {
+    "fileName": "watchio-dev-0.1.0-dev.1-debug.apk",
+    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.1/watchio-dev-0.1.0-dev.1-debug.apk",
+    "sha256": "7453742ce6d876bdf153bfc699938ffa9aef6ba0efa3ab96acfc9bbe46d33b6a"
+  }
+}
