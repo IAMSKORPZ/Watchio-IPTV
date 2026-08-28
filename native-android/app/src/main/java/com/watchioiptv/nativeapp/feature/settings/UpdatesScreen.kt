@@ -17,9 +17,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -49,19 +46,7 @@ fun UpdatesScreen(
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
     val type = LocalWatchioTypography.current
-    val autoInstallAttempted = remember(state.verifiedFile?.filePath) { mutableStateOf(false) }
 
-    LaunchedEffect(state.status, state.verifiedFile?.filePath) {
-        val path = state.verifiedFile?.filePath
-        if (state.status == UpdateStatus.ReadyToInstall && path != null && !autoInstallAttempted.value) {
-            autoInstallAttempted.value = true
-            if (context.canInstallUnknownApps()) {
-                context.openPackageInstaller(path)
-            } else {
-                onPermissionRequired()
-            }
-        }
-    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -76,6 +61,8 @@ fun UpdatesScreen(
                     .padding(spacing.lg),
                 verticalArrangement = Arrangement.spacedBy(spacing.sm),
             ) {
+                Text(statusTitle(state), color = colors.textPrimary, style = type.cardTitle, fontWeight = FontWeight.Bold)
+                Text(statusBody(state), color = colors.textSecondary, style = type.body)
                 SettingsInfoRow("Current Version", state.installed.versionName)
                 SettingsInfoRow("Build", state.installed.versionCode.toString())
                 SettingsInfoRow("Update Channel", "Development")
@@ -90,11 +77,12 @@ fun UpdatesScreen(
             ProgressPanel(
                 title = "Downloading Update",
                 percent = state.progressPercent,
+                detail = downloadDetail(state),
                 indeterminate = state.progressPercent == null,
             )
         }
         if (state.status == UpdateStatus.Verifying) {
-            ProgressPanel("Verifying update...", indeterminate = true)
+            ProgressPanel("Verifying Update", detail = "Checking file integrity...", indeterminate = true)
         }
 
         state.manifest?.let { manifest ->
@@ -109,9 +97,12 @@ fun UpdatesScreen(
                     ) {
                         Text("New Version", color = colors.textMuted, style = type.label)
                         Text(manifest.versionName, color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold)
+                        SettingsInfoRow("Current", state.installed.versionName)
+                        SettingsInfoRow("New", manifest.versionName)
+                        SettingsInfoRow("Published", manifest.publishedAt)
                         Text("Release Notes", color = colors.textMuted, style = type.label)
                         manifest.releaseNotes.take(8).forEach { note ->
-                            Text("• ${note.take(180)}", color = colors.textSecondary, style = type.body, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("- ${note.take(180)}", color = colors.textSecondary, style = type.body, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -149,10 +140,11 @@ fun UpdatesScreen(
                 )
             }
             if (state.status == UpdateStatus.ReadyToInstall || state.status == UpdateStatus.InstallPermissionRequired) {
+                val needsPermission = !context.canInstallUnknownApps()
                 WatchioButton(
-                    text = "Install Update",
+                    text = if (state.status == UpdateStatus.InstallPermissionRequired && needsPermission) "Allow Installation" else "Install Update",
                     onClick = {
-                        if (!context.canInstallUnknownApps()) {
+                        if (needsPermission) {
                             onPermissionRequired()
                             context.openUnknownAppSources()
                         } else {
@@ -185,7 +177,7 @@ private fun SettingsInfoRow(label: String, value: String) {
 }
 
 @Composable
-private fun ProgressPanel(title: String, percent: Int? = null, indeterminate: Boolean) {
+private fun ProgressPanel(title: String, percent: Int? = null, detail: String? = null, indeterminate: Boolean) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
     val type = LocalWatchioTypography.current
@@ -200,6 +192,9 @@ private fun ProgressPanel(title: String, percent: Int? = null, indeterminate: Bo
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
                 CircularProgressIndicator(color = colors.seriesAccent)
                 Text(title, color = colors.textPrimary, style = type.body, fontWeight = FontWeight.Bold)
+            }
+            if (detail != null) {
+                Text(detail, color = colors.textSecondary, style = type.label)
             }
             if (indeterminate) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = colors.seriesAccent)
@@ -222,6 +217,47 @@ private fun statusLabel(state: UpdatesUiState): String = when (state.status) {
     UpdateStatus.ReadyToInstall -> "Update ready"
     UpdateStatus.InstallPermissionRequired -> "Install permission required"
     UpdateStatus.Error -> "Error"
+}
+
+private fun statusTitle(state: UpdatesUiState): String = when (state.status) {
+    UpdateStatus.Idle -> "Ready"
+    UpdateStatus.Checking -> "Checking for updates"
+    UpdateStatus.UpToDate,
+    UpdateStatus.DevelopmentBuildNewer -> "Watchio is up to date"
+    UpdateStatus.UpdateAvailable -> "Update Available"
+    UpdateStatus.Downloading -> "Downloading Update"
+    UpdateStatus.Verifying -> "Verifying Update"
+    UpdateStatus.ReadyToInstall -> "Update Ready"
+    UpdateStatus.InstallPermissionRequired -> "Installation Permission Required"
+    UpdateStatus.Error -> "Update Check Failed"
+}
+
+private fun statusBody(state: UpdatesUiState): String = when (state.status) {
+    UpdateStatus.Idle -> "Check the development channel when ready."
+    UpdateStatus.Checking -> "Looking for the latest development build."
+    UpdateStatus.UpToDate -> "You're running the latest development build."
+    UpdateStatus.DevelopmentBuildNewer -> "This build is newer than the published development manifest."
+    UpdateStatus.UpdateAvailable -> "A newer development build is available."
+    UpdateStatus.Downloading -> downloadDetail(state) ?: "Downloading the update package."
+    UpdateStatus.Verifying -> "Checking file integrity..."
+    UpdateStatus.ReadyToInstall -> "The update has been downloaded and verified."
+    UpdateStatus.InstallPermissionRequired -> "Allow Watchio to hand this update to Android's installer."
+    UpdateStatus.Error -> state.errorMessage ?: "Unable to check for updates."
+}
+
+private fun downloadDetail(state: UpdatesUiState): String? {
+    val downloaded = state.downloadedBytes ?: return null
+    val total = state.totalBytes
+    return if (total != null) {
+        "${formatBytes(downloaded)} / ${formatBytes(total)}"
+    } else {
+        "${formatBytes(downloaded)} downloaded"
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    val mb = bytes / (1024.0 * 1024.0)
+    return "%.1f MB".format(mb)
 }
 
 private fun Context.canInstallUnknownApps(): Boolean {

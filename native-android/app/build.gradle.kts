@@ -28,6 +28,26 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        val devKeystorePath = providers.environmentVariable("WATCHIO_DEV_KEYSTORE_PATH")
+        val devKeystorePassword = providers.environmentVariable("WATCHIO_DEV_KEYSTORE_PASSWORD")
+        val devKeyAlias = providers.environmentVariable("WATCHIO_DEV_KEY_ALIAS")
+        val devKeyPassword = providers.environmentVariable("WATCHIO_DEV_KEY_PASSWORD")
+        if (
+            devKeystorePath.isPresent &&
+            devKeystorePassword.isPresent &&
+            devKeyAlias.isPresent &&
+            devKeyPassword.isPresent
+        ) {
+            getByName("debug") {
+                storeFile = file(devKeystorePath.get())
+                storePassword = devKeystorePassword.get()
+                keyAlias = devKeyAlias.get()
+                keyPassword = devKeyPassword.get()
+            }
+        }
+    }
+
     sourceSets {
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
     }

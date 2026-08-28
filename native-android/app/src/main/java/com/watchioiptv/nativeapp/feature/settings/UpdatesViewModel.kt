@@ -19,6 +19,8 @@ data class UpdatesUiState(
     val manifest: UpdateManifest? = null,
     val verifiedFile: VerifiedUpdateFile? = null,
     val progressPercent: Int? = null,
+    val downloadedBytes: Long? = null,
+    val totalBytes: Long? = null,
     val errorMessage: String? = null,
 ) {
     val busy: Boolean = status == UpdateStatus.Checking || status == UpdateStatus.Downloading || status == UpdateStatus.Verifying
@@ -51,7 +53,13 @@ class UpdatesViewModel(
     fun checkForUpdates() {
         if (mutableState.value.busy) return
         job = viewModelScope.launch {
-            mutableState.value = mutableState.value.copy(status = UpdateStatus.Checking, errorMessage = null, progressPercent = null)
+            mutableState.value = mutableState.value.copy(
+                status = UpdateStatus.Checking,
+                errorMessage = null,
+                progressPercent = null,
+                downloadedBytes = null,
+                totalBytes = null,
+            )
             runCatching { repository.checkForUpdates() }
                 .onSuccess { result ->
                     val status = when (result.status) {
@@ -65,6 +73,8 @@ class UpdatesViewModel(
                         manifest = result.manifest,
                         verifiedFile = null,
                         errorMessage = null,
+                        downloadedBytes = null,
+                        totalBytes = null,
                     )
                 }
                 .onFailure { error ->
@@ -86,6 +96,8 @@ class UpdatesViewModel(
                     mutableState.value = mutableState.value.copy(
                         status = if (total == null) UpdateStatus.Downloading else UpdateStatus.Downloading,
                         progressPercent = total?.let { ((downloaded * 100) / it).toInt().coerceIn(0, 100) },
+                        downloadedBytes = downloaded,
+                        totalBytes = total,
                     )
                 }.also {
                     mutableState.value = mutableState.value.copy(status = UpdateStatus.Verifying, progressPercent = 100)
