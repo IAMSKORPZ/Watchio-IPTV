@@ -140,6 +140,10 @@ jobs:
           path.write_text(text, encoding='utf-8')
           PY
 
+      - name: Allow Gradle wrapper execution
+        working-directory: native-android
+        run: chmod +x ./gradlew
+
       - name: Validate native Android app
         working-directory: native-android
         run: ./gradlew test lintDebug assembleDebug assembleUitest
