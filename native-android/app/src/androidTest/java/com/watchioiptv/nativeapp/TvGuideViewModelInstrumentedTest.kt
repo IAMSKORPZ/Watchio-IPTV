@@ -143,14 +143,50 @@ class TvGuideViewModelInstrumentedTest {
     }
 
     private class FakePlayerManager : WatchioPlayerManager {
-        override val state: StateFlow<WatchioPlayerState> = MutableStateFlow(WatchioPlayerState.Idle())
-        override suspend fun load(media: PlaybackMedia) = Unit
-        override fun play() = Unit
-        override fun pause() = Unit
-        override fun stop() = Unit
+        private var metadata = WatchioPlayerMetadata()
+        private val mutableState = MutableStateFlow<WatchioPlayerState>(WatchioPlayerState.Idle(metadata))
+        override val state: StateFlow<WatchioPlayerState> = mutableState
+        override suspend fun load(media: PlaybackMedia) {
+            metadata = metadata.copy(currentMedia = media, isSeekable = !media.isLive)
+            mutableState.value = WatchioPlayerState.Playing(metadata)
+        }
+        override fun play() {
+            mutableState.value = WatchioPlayerState.Playing(metadata)
+        }
+        override fun pause() {
+            mutableState.value = WatchioPlayerState.Paused(metadata)
+        }
+        override fun stop() {
+            metadata = metadata.copy(currentMedia = null)
+            mutableState.value = WatchioPlayerState.Idle(metadata)
+        }
         override fun retry() = Unit
-        override fun seekTo(positionMs: Long) = Unit
-        override fun snapshot(): WatchioPlayerMetadata = WatchioPlayerMetadata()
+        override fun seekTo(positionMs: Long) {
+            metadata = metadata.copy(positionMs = positionMs)
+        }
+        override fun seekBy(deltaMs: Long) {
+            metadata = metadata.copy(positionMs = (metadata.positionMs + deltaMs).coerceAtLeast(0L))
+        }
+        override fun selectAudioTrack(track: com.watchioiptv.nativeapp.core.player.WatchioAudioTrack) {
+            metadata = metadata.copy(selectedAudioTrack = track)
+        }
+        override fun selectSubtitleTrack(track: com.watchioiptv.nativeapp.core.player.WatchioSubtitleTrack?) {
+            metadata = metadata.copy(selectedSubtitleTrack = track)
+        }
+        override fun setVideoScalingMode(mode: com.watchioiptv.nativeapp.domain.repository.VideoScalingMode) {
+            metadata = metadata.copy(videoScalingMode = mode)
+        }
+        override fun setPlaybackSpeed(speed: Float) {
+            metadata = metadata.copy(playbackSpeed = speed)
+        }
+        override fun setMuted(muted: Boolean) {
+            metadata = metadata.copy(isMuted = muted)
+        }
+        override fun restart() {
+            seekTo(0L)
+            play()
+        }
+        override fun snapshot(): WatchioPlayerMetadata = metadata
         override fun attachSurface(container: ViewGroup) = Unit
         override fun detachSurface(container: ViewGroup) = Unit
         override fun release() = Unit

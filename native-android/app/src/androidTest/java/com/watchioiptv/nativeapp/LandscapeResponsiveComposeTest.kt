@@ -2187,16 +2187,365 @@ class LandscapeResponsiveComposeTest {
         liveChannel = channel,
     )
 
+    // --------------------------------------------------------------------------
+    // Full Player Controls + TV Remote UX tests
+    // --------------------------------------------------------------------------
+
+    @Test
+    fun fullscreenPlayerVodShowsSeekAndProgressControls() {
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    currentMedia = PlaybackMedia("http://example.invalid/movie.mp4", "Sample Movie", isLive = false),
+                    positionMs = 120_000L,
+                    durationMs = 600_000L,
+                    isSeekable = true,
+                )
+            )
+        }
+        var seekDelta = 0L
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Movie(
+                            title = "Sample Movie",
+                            year = "2024",
+                            rating = "★ 8.5",
+                            runtime = "1h 40m",
+                            genre = "Sci-Fi",
+                        ),
+                        onPlayPause = {},
+                        onSeek = { seekDelta = it },
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-play-pause", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-rewind", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-forward", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-restart", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-position", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-duration", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-progress-bar", useUnmergedTree = true).assertIsDisplayed()
+
+        // Clicking rewind triggers seek feedback
+        composeRule.onNodeWithTag("player-rewind", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("seekDelta should be -10s; was $seekDelta", seekDelta == -10_000L)
+        composeRule.onNodeWithTag("player-seek-feedback", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullscreenPlayerLiveHidesFakeSeekControls() {
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    currentMedia = PlaybackMedia("http://example.invalid/live.ts", "Live Channel", isLive = true),
+                    isSeekable = false,
+                )
+            )
+        }
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            programmeTitle = "Evening News",
+                            programmeStartTime = "20:00",
+                            programmeEndTime = "21:00",
+                            programmeProgress = 0.5f,
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-play-pause", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-prev-channel", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-next-channel", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-live-epg-progress", useUnmergedTree = true).assertIsDisplayed()
+
+        // Standard live must not have rewind or forward controls
+        assertTrue(composeRule.onAllNodesWithTag("player-rewind").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeRule.onAllNodesWithTag("player-forward").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun fullscreenPlayerLiveSeekableShowsSeekControls() {
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    currentMedia = PlaybackMedia("http://example.invalid/timeshift.ts", "Timeshift Channel", isLive = true),
+                    positionMs = 30_000L,
+                    durationMs = 120_000L,
+                    isSeekable = true,
+                )
+            )
+        }
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "Timeshift Channel",
+                            programmeTitle = "Catchup Programme",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-play-pause", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-rewind", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-forward", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullscreenPlayerEpisodeShowsEpisodeNavigation() {
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    currentMedia = PlaybackMedia("http://example.invalid/ep2.mp4", "Episode 2", isLive = false),
+                    positionMs = 60_000L,
+                    durationMs = 300_000L,
+                    isSeekable = true,
+                )
+            )
+        }
+        var prevEpClicked = false
+        var nextEpClicked = false
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Episode(
+                            seriesTitle = "Great Series",
+                            seasonNumber = 1,
+                            episodeNumber = 2,
+                            episodeTitle = "The Next Chapter",
+                            hasPreviousEpisode = true,
+                            hasNextEpisode = true,
+                            onPreviousEpisode = { prevEpClicked = true },
+                            onNextEpisode = { nextEpClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-prev-episode", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-next-episode", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-prev-episode", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag("player-next-episode", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("prevEpClicked should be true", prevEpClicked)
+        assertTrue("nextEpClicked should be true", nextEpClicked)
+    }
+
+    @Test
+    fun fullscreenPlayerAudioAndSubtitleDialogsOpenAndDismiss() {
+        val audio1 = com.watchioiptv.nativeapp.core.player.WatchioAudioTrack("a1", "English • 5.1", isSelected = true)
+        val audio2 = com.watchioiptv.nativeapp.core.player.WatchioAudioTrack("a2", "Spanish • Stereo", isSelected = false)
+        val sub1 = com.watchioiptv.nativeapp.core.player.WatchioSubtitleTrack("s1", "English", isSelected = true)
+
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    audioTracks = listOf(audio1, audio2),
+                    selectedAudioTrack = audio1,
+                    subtitleTracks = listOf(sub1),
+                    selectedSubtitleTrack = sub1,
+                    isSeekable = true,
+                )
+            )
+        }
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Movie(
+                            title = "Movie With Tracks",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-audio-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-audio-dialog", useUnmergedTree = true).assertIsDisplayed()
+
+        // Close audio dialog
+        composeRule.onNodeWithTag("player-dialog-close", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        // Open subtitles dialog
+        composeRule.onNodeWithTag("player-subtitles-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-subtitles-dialog", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullscreenPlayerRecoveringShowsReconnectingAndNotFailureErrorPanel() {
+        val fakePlayer = FakePlayerManager()
+        val recoveringState = WatchioPlayerState.Recovering("Stream reconnecting...", fakePlayer.snapshot())
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = recoveringState,
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "Live Channel",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-recovering", useUnmergedTree = true).assertIsDisplayed()
+        assertTrue("player-error should not be displayed when recovering", composeRule.onAllNodesWithTag("player-error").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun fullscreenPlayerFailedShowsRetryAndBackButtons() {
+        val fakePlayer = FakePlayerManager()
+        val failedState = WatchioPlayerState.Failed("Stream unreachable", fakePlayer.snapshot())
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = failedState,
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "Live Channel",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-error", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-retry", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-error-back", useUnmergedTree = true).assertIsDisplayed()
+    }
+
     private class FakePlayerManager : WatchioPlayerManager {
-        private val mutableState = MutableStateFlow<WatchioPlayerState>(WatchioPlayerState.Idle())
+        private var metadata = WatchioPlayerMetadata()
+        private val mutableState = MutableStateFlow<WatchioPlayerState>(WatchioPlayerState.Idle(metadata))
         override val state: StateFlow<WatchioPlayerState> = mutableState
-        override suspend fun load(media: PlaybackMedia) = Unit
-        override fun play() = Unit
-        override fun pause() = Unit
-        override fun stop() = Unit
+
+        fun setMetadata(newMetadata: WatchioPlayerMetadata) {
+            metadata = newMetadata
+            mutableState.value = WatchioPlayerState.Playing(newMetadata)
+        }
+
+        override suspend fun load(media: PlaybackMedia) {
+            metadata = metadata.copy(currentMedia = media, isSeekable = !media.isLive)
+            mutableState.value = WatchioPlayerState.Playing(metadata)
+        }
+        override fun play() {
+            mutableState.value = WatchioPlayerState.Playing(metadata)
+        }
+        override fun pause() {
+            mutableState.value = WatchioPlayerState.Paused(metadata)
+        }
+        override fun stop() {
+            metadata = metadata.copy(currentMedia = null)
+            mutableState.value = WatchioPlayerState.Idle(metadata)
+        }
         override fun retry() = Unit
-        override fun seekTo(positionMs: Long) = Unit
-        override fun snapshot(): WatchioPlayerMetadata = WatchioPlayerMetadata()
+        override fun seekTo(positionMs: Long) {
+            metadata = metadata.copy(positionMs = positionMs)
+        }
+        override fun seekBy(deltaMs: Long) {
+            metadata = metadata.copy(positionMs = (metadata.positionMs + deltaMs).coerceAtLeast(0L))
+        }
+        override fun selectAudioTrack(track: com.watchioiptv.nativeapp.core.player.WatchioAudioTrack) {
+            metadata = metadata.copy(selectedAudioTrack = track)
+        }
+        override fun selectSubtitleTrack(track: com.watchioiptv.nativeapp.core.player.WatchioSubtitleTrack?) {
+            metadata = metadata.copy(selectedSubtitleTrack = track)
+        }
+        override fun setVideoScalingMode(mode: com.watchioiptv.nativeapp.domain.repository.VideoScalingMode) {
+            metadata = metadata.copy(videoScalingMode = mode)
+        }
+        override fun setPlaybackSpeed(speed: Float) {
+            metadata = metadata.copy(playbackSpeed = speed)
+        }
+        override fun setMuted(muted: Boolean) {
+            metadata = metadata.copy(isMuted = muted)
+        }
+        override fun restart() {
+            seekTo(0L)
+            play()
+        }
+        override fun snapshot(): WatchioPlayerMetadata = metadata
         override fun attachSurface(container: ViewGroup) = Unit
         override fun detachSurface(container: ViewGroup) = Unit
         override fun release() = Unit

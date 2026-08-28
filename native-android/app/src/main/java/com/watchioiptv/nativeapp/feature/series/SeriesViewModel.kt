@@ -226,6 +226,50 @@ class SeriesViewModel(
         playerManager.pause()
     }
 
+    val currentEpisode: WatchioEpisodeItem?
+        get() = selectedEpisode ?: seriesRepository.currentActiveEpisode()
+
+    private fun currentSeasonEpisodes(): List<WatchioEpisodeItem> {
+        val details = mutableDetails.value.details ?: return emptyList()
+        val seasonNum = mutableDetails.value.selectedSeasonNumber
+        val seasonEpisodes = if (seasonNum != null) {
+            details.episodes.filter { it.seasonNumber == seasonNum }
+        } else details.episodes
+        return seasonEpisodes.ifEmpty { details.episodes }
+    }
+
+    fun hasPreviousEpisode(): Boolean {
+        val episodes = currentSeasonEpisodes()
+        val current = currentEpisode ?: return false
+        val idx = episodes.indexOfFirst { it.episodeId == current.episodeId }
+        return idx > 0
+    }
+
+    fun hasNextEpisode(): Boolean {
+        val episodes = currentSeasonEpisodes()
+        val current = currentEpisode ?: return false
+        val idx = episodes.indexOfFirst { it.episodeId == current.episodeId }
+        return idx >= 0 && idx < episodes.size - 1
+    }
+
+    fun playPreviousEpisode() {
+        val episodes = currentSeasonEpisodes()
+        val current = currentEpisode ?: return
+        val idx = episodes.indexOfFirst { it.episodeId == current.episodeId }
+        if (idx > 0) {
+            playEpisode(episodes[idx - 1], resume = false)
+        }
+    }
+
+    fun playNextEpisode() {
+        val episodes = currentSeasonEpisodes()
+        val current = currentEpisode ?: return
+        val idx = episodes.indexOfFirst { it.episodeId == current.episodeId }
+        if (idx >= 0 && idx < episodes.size - 1) {
+            playEpisode(episodes[idx + 1], resume = false)
+        }
+    }
+
     fun stopPlayback() {
         saveProgress()
         progressJob?.cancel()

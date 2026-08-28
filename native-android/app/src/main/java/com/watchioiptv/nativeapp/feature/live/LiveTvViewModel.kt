@@ -216,6 +216,32 @@ class LiveTvViewModel(
         }
     }
 
+    fun hasPreviousChannel(): Boolean = mutableUi.value.channels.size > 1
+
+    fun hasNextChannel(): Boolean = mutableUi.value.channels.size > 1
+
+    fun selectPreviousChannel() {
+        val currentChannels = mutableUi.value.channels
+        val currentSelected = mutableUi.value.selectedChannel ?: return
+        val currentIndex = currentChannels.indexOfFirst { it.id == currentSelected.id }
+        if (currentIndex > 0) {
+            selectChannel(currentChannels[currentIndex - 1])
+        } else if (currentChannels.isNotEmpty()) {
+            selectChannel(currentChannels.last())
+        }
+    }
+
+    fun selectNextChannel() {
+        val currentChannels = mutableUi.value.channels
+        val currentSelected = mutableUi.value.selectedChannel ?: return
+        val currentIndex = currentChannels.indexOfFirst { it.id == currentSelected.id }
+        if (currentIndex >= 0 && currentIndex < currentChannels.size - 1) {
+            selectChannel(currentChannels[currentIndex + 1])
+        } else if (currentChannels.isNotEmpty()) {
+            selectChannel(currentChannels.first())
+        }
+    }
+
     fun leaveLiveTv() {
         playbackJob?.cancel()
         epgJob?.cancel()
