@@ -31,4 +31,8 @@ jobs:
       versionName: ${{ inputs.versionName }}
       versionCode: ${{ inputs.versionCode }}
       releaseNotes: ${{ inputs.releaseNotes }}
-    secrets: inherit
+    secrets:
+      WATCHIO_DEV_KEYSTORE_BASE64: ${{ secrets.WATCHIO_DEV_KEYSTORE_BASE64 }}
+      WATCHIO_DEV_KEYSTORE_PASSWORD: ${{ secrets.WATCHIO_DEV_KEYSTORE_PASSWORD }}
+      WATCHIO_DEV_KEY_ALIAS: ${{ secrets.WATCHIO_DEV_KEY_ALIAS }}
+      WATCHIO_DEV_KEY_PASSWORD: ${{ secrets.WATCHIO_DEV_KEY_PASSWORD }}
