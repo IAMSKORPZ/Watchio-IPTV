@@ -17,6 +17,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +49,19 @@ fun UpdatesScreen(
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
     val type = LocalWatchioTypography.current
+    val autoInstallAttempted = remember(state.verifiedFile?.filePath) { mutableStateOf(false) }
+
+    LaunchedEffect(state.status, state.verifiedFile?.filePath) {
+        val path = state.verifiedFile?.filePath
+        if (state.status == UpdateStatus.ReadyToInstall && path != null && !autoInstallAttempted.value) {
+            autoInstallAttempted.value = true
+            if (context.canInstallUnknownApps()) {
+                context.openPackageInstaller(path)
+            } else {
+                onPermissionRequired()
+            }
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
