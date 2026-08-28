@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0-dev.2
+
+- Adds the in-app GitHub update system in Settings.
+- Supports update checks, APK download, SHA-256 verification, and secure Android installer handoff.
+- Handles Android install-from-unknown-source permission flow for development updates.
+
 ## 0.1.0-dev.1
 
 - Development pre-release for GitHub Releases update infrastructure.
