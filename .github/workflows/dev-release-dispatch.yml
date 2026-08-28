@@ -26,7 +26,7 @@ concurrency:
 jobs:
   release-from-dev:
     name: Run dev release workflow
-    uses: IAMSKORPZ/Watchio-IPTV/.github/workflows/dev-release.yml@dev
+    uses: IAMSKORPZ/Watchio-IPTV/.github/workflows/dev-release.yml@main
     with:
       versionName: ${{ inputs.versionName }}
       versionCode: ${{ inputs.versionCode }}
@@ -36,3 +36,4 @@ jobs:
       WATCHIO_DEV_KEYSTORE_PASSWORD: ${{ secrets.WATCHIO_DEV_KEYSTORE_PASSWORD }}
       WATCHIO_DEV_KEY_ALIAS: ${{ secrets.WATCHIO_DEV_KEY_ALIAS }}
       WATCHIO_DEV_KEY_PASSWORD: ${{ secrets.WATCHIO_DEV_KEY_PASSWORD }}
+

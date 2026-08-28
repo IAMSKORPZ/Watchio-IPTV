@@ -1,0 +1,233 @@
+name: Development Release
+
+on:
+  workflow_call:
+    inputs:
+      versionName:
+        description: "Base version name, for example 0.1.0-dev.3"
+        required: true
+        type: string
+      versionCode:
+        description: "Android versionCode greater than the published dev manifest"
+        required: true
+        type: string
+      releaseNotes:
+        description: "Plain-text release notes, one line per item"
+        required: true
+        type: string
+    secrets:
+      WATCHIO_DEV_KEYSTORE_BASE64:
+        required: true
+      WATCHIO_DEV_KEYSTORE_PASSWORD:
+        required: true
+      WATCHIO_DEV_KEY_ALIAS:
+        required: true
+      WATCHIO_DEV_KEY_PASSWORD:
+        required: true
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: "Base version name, for example 0.1.0-dev.3"
+        required: true
+        type: string
+      versionCode:
+        description: "Android versionCode greater than the published dev manifest"
+        required: true
+        type: string
+      releaseNotes:
+        description: "Plain-text release notes, one line per item"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: watchio-dev-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish dev prerelease
+    runs-on: ubuntu-latest
+
+    env:
+      EXPECTED_CERT_SHA256: ${{ vars.WATCHIO_DEV_CERT_SHA256 }}
+      WATCHIO_DEV_KEYSTORE_BASE64: ${{ secrets.WATCHIO_DEV_KEYSTORE_BASE64 }}
+      WATCHIO_DEV_KEYSTORE_PASSWORD: ${{ secrets.WATCHIO_DEV_KEYSTORE_PASSWORD }}
+      WATCHIO_DEV_KEY_ALIAS: ${{ secrets.WATCHIO_DEV_KEY_ALIAS }}
+      WATCHIO_DEV_KEY_PASSWORD: ${{ secrets.WATCHIO_DEV_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Validate release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME='${{ inputs.versionName }}'
+          VERSION_CODE='${{ inputs.versionCode }}'
+          if [[ ! "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+-dev\.[0-9]+$ ]]; then
+            echo "versionName must look like 0.1.0-dev.3" >&2
+            exit 1
+          fi
+          if [[ ! "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
+            echo "versionCode must be a positive integer" >&2
+            exit 1
+          fi
+          CURRENT_CODE="$(python3 - <<'PY'
+          import json
+          with open('native-android/update/update.json', encoding='utf-8') as fh:
+              print(json.load(fh)['versionCode'])
+          PY
+          )"
+          if (( VERSION_CODE <= CURRENT_CODE )); then
+            echo "versionCode must be greater than current manifest versionCode ${CURRENT_CODE}" >&2
+            exit 1
+          fi
+          TAG="v${VERSION_NAME}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists" >&2
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists" >&2
+            exit 1
+          fi
+          {
+            echo "WATCHIO_VERSION_NAME=$VERSION_NAME"
+            echo "WATCHIO_VERSION_CODE=$VERSION_CODE"
+            echo "WATCHIO_TAG=$TAG"
+            echo "WATCHIO_DEBUG_VERSION_NAME=${VERSION_NAME}-debug"
+            echo "WATCHIO_APK_NAME=watchio-dev-${VERSION_NAME}-debug.apk"
+          } >> "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Validate signing configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$EXPECTED_CERT_SHA256" || { echo "Missing repo variable WATCHIO_DEV_CERT_SHA256" >&2; exit 1; }
+          test -n "$WATCHIO_DEV_KEYSTORE_BASE64" || { echo "Missing secret WATCHIO_DEV_KEYSTORE_BASE64" >&2; exit 1; }
+          test -n "$WATCHIO_DEV_KEYSTORE_PASSWORD" || { echo "Missing secret WATCHIO_DEV_KEYSTORE_PASSWORD" >&2; exit 1; }
+          test -n "$WATCHIO_DEV_KEY_ALIAS" || { echo "Missing secret WATCHIO_DEV_KEY_ALIAS" >&2; exit 1; }
+          test -n "$WATCHIO_DEV_KEY_PASSWORD" || { echo "Missing secret WATCHIO_DEV_KEY_PASSWORD" >&2; exit 1; }
+          echo "$WATCHIO_DEV_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/watchio-dev.keystore"
+          echo "WATCHIO_DEV_KEYSTORE_PATH=$RUNNER_TEMP/watchio-dev.keystore" >> "$GITHUB_ENV"
+
+      - name: Apply requested app version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path('native-android/app/build.gradle.kts')
+          text = path.read_text(encoding='utf-8')
+          text = __import__('re').sub(r'versionCode = \d+', f"versionCode = {os.environ['WATCHIO_VERSION_CODE']}", text)
+          text = __import__('re').sub(r'versionName = "[^"]+"', f"versionName = \"{os.environ['WATCHIO_VERSION_NAME']}\"", text, count=1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate native Android app
+        working-directory: native-android
+        run: ./gradlew test lintDebug assembleDebug assembleUitest
+
+      - name: Verify package and signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="native-android/app/build/outputs/apk/debug/app-debug.apk"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | grep "package: name='com.watchioiptv.nativeapp.debug' versionCode='$WATCHIO_VERSION_CODE' versionName='$WATCHIO_DEBUG_VERSION_NAME'"
+          CERT="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | awk -F': ' '/certificate SHA-256 digest/ {print tolower($2); exit}')"
+          EXPECTED="$(echo "$EXPECTED_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [[ "$CERT" != "$EXPECTED" ]]; then
+            echo "Signing certificate mismatch. Got $CERT expected $EXPECTED" >&2
+            exit 1
+          fi
+
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p native-android/build/dev-release
+          cp native-android/app/build/outputs/apk/debug/app-debug.apk "native-android/build/dev-release/$WATCHIO_APK_NAME"
+          (cd native-android/build/dev-release && sha256sum "$WATCHIO_APK_NAME" > SHA256SUMS.txt)
+          SHA="$(cut -d' ' -f1 native-android/build/dev-release/SHA256SUMS.txt)"
+          echo "WATCHIO_APK_SHA=$SHA" >> "$GITHUB_ENV"
+
+      - name: Create prerelease and upload APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          NOTES_FILE="$RUNNER_TEMP/release-notes.txt"
+          printf '%s\n' "$WATCHIO_RELEASE_NOTES" > "$NOTES_FILE"
+          gh release create "$WATCHIO_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target dev \
+            --title "$WATCHIO_TAG" \
+            --notes-file "$NOTES_FILE" \
+            --prerelease \
+            "native-android/build/dev-release/$WATCHIO_APK_NAME" \
+            "native-android/build/dev-release/SHA256SUMS.txt"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCHIO_RELEASE_NOTES: ${{ inputs.releaseNotes }}
+
+      - name: Generate and upload update manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          notes = [line.strip() for line in os.environ['WATCHIO_RELEASE_NOTES'].splitlines() if line.strip()]
+          tag = os.environ['WATCHIO_TAG']
+          file_name = os.environ['WATCHIO_APK_NAME']
+          repo = os.environ['GITHUB_REPOSITORY']
+          manifest = {
+              "schemaVersion": 1,
+              "channel": "dev",
+              "versionCode": int(os.environ['WATCHIO_VERSION_CODE']),
+              "versionName": os.environ['WATCHIO_DEBUG_VERSION_NAME'],
+              "minimumSupportedVersionCode": 1,
+              "mandatory": False,
+              "publishedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+              "releaseNotes": notes,
+              "githubRelease": f"https://github.com/{repo}/releases/tag/{tag}",
+              "apk": {
+                  "fileName": file_name,
+                  "downloadUrl": f"https://github.com/{repo}/releases/download/{tag}/{file_name}",
+                  "sha256": os.environ['WATCHIO_APK_SHA'],
+              },
+          }
+          Path('native-android/update/update.json').write_text(json.dumps(manifest, indent=2) + "\n", encoding='utf-8')
+          PY
+          cp native-android/build/dev-release/SHA256SUMS.txt native-android/update/SHA256SUMS.txt
+          gh release upload "$WATCHIO_TAG" native-android/update/update.json --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WATCHIO_RELEASE_NOTES: ${{ inputs.releaseNotes }}
+
+      - name: Publish dev manifest to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add native-android/app/build.gradle.kts native-android/update/update.json native-android/update/SHA256SUMS.txt
+          git commit -m "chore: publish dev ${WATCHIO_VERSION_NAME} update manifest"
+          git push origin HEAD:dev
