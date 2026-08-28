@@ -1,6 +1,29 @@
 name: Development Release
 
 on:
+  workflow_call:
+    inputs:
+      versionName:
+        description: "Base version name, for example 0.1.0-dev.3"
+        required: true
+        type: string
+      versionCode:
+        description: "Android versionCode greater than the published dev manifest"
+        required: true
+        type: string
+      releaseNotes:
+        description: "Plain-text release notes, one line per item"
+        required: true
+        type: string
+    secrets:
+      WATCHIO_DEV_KEYSTORE_BASE64:
+        required: true
+      WATCHIO_DEV_KEYSTORE_PASSWORD:
+        required: true
+      WATCHIO_DEV_KEY_ALIAS:
+        required: true
+      WATCHIO_DEV_KEY_PASSWORD:
+        required: true
   workflow_dispatch:
     inputs:
       versionName:
@@ -27,7 +50,7 @@ jobs:
   release:
     name: Build and publish dev prerelease
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/dev'
+    if: github.event_name == 'workflow_call' || github.ref == 'refs/heads/dev'
 
     env:
       EXPECTED_CERT_SHA256: ${{ vars.WATCHIO_DEV_CERT_SHA256 }}
