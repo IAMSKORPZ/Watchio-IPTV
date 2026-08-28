@@ -121,6 +121,8 @@ import com.watchioiptv.nativeapp.feature.settings.AccountInformationUiState
 import com.watchioiptv.nativeapp.feature.settings.AccountInformationViewModel
 import com.watchioiptv.nativeapp.feature.settings.SettingsUiState
 import com.watchioiptv.nativeapp.feature.settings.SettingsViewModel
+import com.watchioiptv.nativeapp.feature.settings.UpdatesScreen
+import com.watchioiptv.nativeapp.feature.settings.UpdatesViewModel
 import com.watchioiptv.nativeapp.feature.tvguide.TvGuideScreen
 import com.watchioiptv.nativeapp.feature.tvguide.TvGuideViewModel
 import com.watchioiptv.nativeapp.core.util.SystemWatchioClock
@@ -708,7 +710,16 @@ fun WatchioNativeApp(
                 SettingsPlaceholderScreen("Backup & Restore", "Backup and restore is not configured yet.", onBack = { navController.popBackStack() })
             }
             composable("settings/updates") {
-                SettingsPlaceholderScreen("Check for Updates", "Update system not configured yet.", onBack = { navController.popBackStack() })
+                val updatesViewModel: UpdatesViewModel = viewModel(factory = updatesFactory(container))
+                val state by updatesViewModel.state.collectAsStateWithLifecycle()
+                SettingsDetailScreen("Check for Updates", onBack = { navController.popBackStack() }) {
+                    UpdatesScreen(
+                        state = state,
+                        onCheck = updatesViewModel::checkForUpdates,
+                        onDownload = updatesViewModel::downloadUpdate,
+                        onPermissionRequired = updatesViewModel::installPermissionRequired,
+                    )
+                }
             }
             composable("settings/appearance") {
                 val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory(container))
@@ -1879,6 +1890,14 @@ private fun accountInformationFactory(container: AppContainer): ViewModelProvide
                 settingsRepository = container.settingsRepository,
                 credentialStore = container.providerCredentialStore,
             ) as T
+        }
+    }
+
+private fun updatesFactory(container: AppContainer): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            return UpdatesViewModel(container.updateRepository) as T
         }
     }
 

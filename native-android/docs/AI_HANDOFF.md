@@ -13,6 +13,8 @@ This file is the current quick handoff for future AI work.
 
 Native Watchio is a Kotlin/Compose Android app in `native-android`. Room is schema v6. DataStore owns settings and bootstrap state. SecretStore owns provider credentials. Media3 is the only player engine.
 
+Updates are implemented under Settings -> Check for Updates. `UpdateRepository` fetches the public dev manifest from `https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/dev/native-android/update/update.json`, compares Android `versionCode`, downloads APKs to `cacheDir/updates`, verifies SHA-256, then opens Android's package installer through a scoped FileProvider. No silent install, no GitHub auth, no broad storage permission.
+
 Startup flow is:
 
 - Loading
