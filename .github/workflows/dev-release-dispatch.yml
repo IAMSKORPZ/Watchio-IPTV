@@ -1,0 +1,34 @@
+name: Watchio Dev Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: "Base development version, for example 0.1.0-dev.3"
+        required: true
+        type: string
+      versionCode:
+        description: "Android versionCode greater than the current dev manifest"
+        required: true
+        type: string
+      releaseNotes:
+        description: "Plain-text development release notes, one line per item"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: watchio-dev-release
+  cancel-in-progress: false
+
+jobs:
+  release-from-dev:
+    name: Run dev release workflow
+    uses: IAMSKORPZ/Watchio-IPTV/.github/workflows/dev-release.yml@dev
+    with:
+      versionName: ${{ inputs.versionName }}
+      versionCode: ${{ inputs.versionCode }}
+      releaseNotes: ${{ inputs.releaseNotes }}
+    secrets: inherit
