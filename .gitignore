@@ -17,6 +17,10 @@ local.properties
 **/*keys.*
 **/*credentials.*
 **/google-services.json
+*.keystore
+*.jks
+*.p12
+*.pem
 
 # Java / Kotlin / Gradle
 *.class
