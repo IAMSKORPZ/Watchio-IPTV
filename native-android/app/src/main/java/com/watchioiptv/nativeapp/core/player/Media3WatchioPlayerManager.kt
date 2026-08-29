@@ -368,10 +368,12 @@ class Media3WatchioPlayerManager(
     }
 
     override fun attachSurface(container: ViewGroup) {
+        val exoPlayer = ensurePlayer()
         val view = playerView ?: PlayerView(context).also {
             it.useController = false
+            it.setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
             it.resizeMode = currentVideoScalingMode.toResizeMode()
-            it.player = ensurePlayer()
+            it.player = exoPlayer
             playerView = it
         }
         if (view.parent !== container) {
@@ -383,12 +385,20 @@ class Media3WatchioPlayerManager(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                 ),
             )
+            // Essential on Android TV: reparenting SurfaceView requires resetting player on PlayerView
+            // so ExoPlayer reattaches to the newly created SurfaceHolder.
+            view.player = null
+            view.player = exoPlayer
+        } else if (view.player !== exoPlayer) {
+            view.player = exoPlayer
         }
     }
 
     override fun detachSurface(container: ViewGroup) {
         val view = playerView ?: return
-        if (view.parent === container) container.removeView(view)
+        if (view.parent === container) {
+            container.removeView(view)
+        }
     }
 
     override fun release() {
