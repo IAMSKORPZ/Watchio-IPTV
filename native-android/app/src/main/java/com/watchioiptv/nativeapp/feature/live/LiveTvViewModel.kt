@@ -2,6 +2,7 @@ package com.watchioiptv.nativeapp.feature.live
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.watchioiptv.nativeapp.core.model.ProviderId
 import com.watchioiptv.nativeapp.core.player.PlaybackMedia
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerManager
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerState
@@ -17,6 +18,7 @@ import com.watchioiptv.nativeapp.domain.repository.FavoriteItem
 import com.watchioiptv.nativeapp.domain.repository.FavoritesRepository
 import com.watchioiptv.nativeapp.domain.repository.HistoryItem
 import com.watchioiptv.nativeapp.domain.repository.HistoryRepository
+import com.watchioiptv.nativeapp.domain.repository.LiveTvBrowsingState
 import com.watchioiptv.nativeapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -36,6 +38,7 @@ data class LiveTvUiState(
     val selectedCategory: LiveTvCategory? = null,
     val channels: List<LiveTvChannel> = emptyList(),
     val selectedChannel: LiveTvChannel? = null,
+    val initialScrollIndex: Int = 0,
     val nowNext: LiveTvNowNext = LiveTvNowNext(null, null, 0f),
     val categorySearchQuery: String = "",
     val liveSearchQuery: String = "",
@@ -75,18 +78,62 @@ class LiveTvViewModel(
                 return@launch
             }
             val categories = liveTvRepository.categories(providerId)
-            val first = categories.firstOrNull()
-            val channels = first?.let { liveTvRepository.channels(providerId, it) }.orEmpty()
+            if (categories.isEmpty()) {
+                mutableUi.value = LiveTvUiState(loading = false, categories = emptyList())
+                return@launch
+            }
+            val settings = settingsRepository.playerSettings.first()
+            val savedState = if (settings.rememberLastLiveChannel) {
+                settingsRepository.observeLiveBrowsingState(providerId).first()
+            } else {
+                LiveTvBrowsingState()
+            }
+
+            // Category restoration priority:
+            // 1. Stable ID match
+            // 2. Name match (case-insensitive)
+            // 3. Default first category (All Channels)
+            val targetCategory = savedState.categoryId?.let { id ->
+                categories.firstOrNull { it.id == id || it.sourceCategoryId == id }
+            } ?: savedState.categoryName?.let { name ->
+                categories.firstOrNull { it.name.equals(name, ignoreCase = true) }
+            } ?: categories.first()
+
+            val channels = liveTvRepository.channels(providerId, targetCategory)
+
+            // Channel restoration priority:
+            // 1. Stable ID match
+            // 2. Name match (case-insensitive)
+            // 3. Saved list index fallback
+            // 4. Default first channel in category
+            val targetChannel = savedState.channelId?.let { id ->
+                channels.firstOrNull { it.id == id }
+            } ?: savedState.channelName?.let { name ->
+                channels.firstOrNull { it.name.equals(name, ignoreCase = true) }
+            } ?: savedState.channelIndex?.let { index ->
+                if (index in channels.indices) channels[index] else null
+            } ?: channels.firstOrNull()
+
+            val targetIndex = if (targetChannel != null) {
+                channels.indexOfFirst { it.id == targetChannel.id }.coerceAtLeast(0)
+            } else {
+                savedState.scrollIndex ?: 0
+            }
+
             mutableUi.value = LiveTvUiState(
                 loading = false,
                 categories = categories,
-                selectedCategory = first,
+                selectedCategory = targetCategory,
                 channels = channels,
+                selectedChannel = targetChannel,
+                initialScrollIndex = targetIndex,
             )
-            val settings = settingsRepository.playerSettings.first()
-            if (settings.autoPlayLiveChannel) {
-                val rememberedId = settingsRepository.observeLastLiveChannelId(providerId).first()
-                channels.firstOrNull { it.id == rememberedId }?.let { selectChannel(it) }
+
+            if (targetChannel != null) {
+                updateNowNext(targetChannel)
+                if (settings.autoPlayLiveChannel) {
+                    selectChannel(targetChannel)
+                }
             }
         }
     }
@@ -95,13 +142,28 @@ class LiveTvViewModel(
         viewModelScope.launch {
             val providerId = liveTvRepository.selectedProviderId() ?: return@launch
             val channels = liveTvRepository.channels(providerId, category)
+            val currentSelected = mutableUi.value.selectedChannel
+            val newSelected = currentSelected?.takeIf { sel -> channels.any { it.id == sel.id } }
+                ?: channels.firstOrNull()
+            val newIndex = if (newSelected != null) {
+                channels.indexOfFirst { it.id == newSelected.id }.coerceAtLeast(0)
+            } else 0
+
             mutableUi.value = mutableUi.value.copy(
                 selectedCategory = category,
                 channels = channels,
-                selectedChannel = mutableUi.value.selectedChannel?.takeIf { selected -> channels.any { it.id == selected.id } },
+                selectedChannel = newSelected,
+                initialScrollIndex = newIndex,
                 nowNext = LiveTvNowNext(null, null, 0f),
             )
-            mutableUi.value.selectedChannel?.let { updateNowNext(it) }
+            newSelected?.let { updateNowNext(it) }
+
+            persistBrowsingState(
+                providerId = providerId,
+                category = category,
+                channel = newSelected,
+                channelIndex = newIndex,
+            )
         }
     }
 
@@ -143,7 +205,13 @@ class LiveTvViewModel(
     fun selectChannel(channel: LiveTvChannel) {
         playbackJob?.cancel()
         playbackJob = viewModelScope.launch {
-            mutableUi.value = mutableUi.value.copy(selectedChannel = channel, errorMessage = null)
+            val currentChannels = mutableUi.value.channels
+            val index = currentChannels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
+            mutableUi.value = mutableUi.value.copy(
+                selectedChannel = channel,
+                initialScrollIndex = index,
+                errorMessage = null,
+            )
             updateNowNext(channel)
             val playback = liveTvRepository.playback(channel)
             playerManager.load(
@@ -166,11 +234,36 @@ class LiveTvViewModel(
                     lastWatchedAtEpochMs = clock.nowEpochMs(),
                 ),
             )
-            if (settingsRepository.playerSettings.first().rememberLastLiveChannel) {
-                settingsRepository.setLastLiveChannelId(channel.providerId, channel.id)
+            mutableUi.value.selectedCategory?.let { category ->
+                persistBrowsingState(
+                    providerId = channel.providerId,
+                    category = category,
+                    channel = channel,
+                    channelIndex = index,
+                )
             }
             startEpgTicker(channel)
         }
+    }
+
+    private suspend fun persistBrowsingState(
+        providerId: ProviderId,
+        category: LiveTvCategory,
+        channel: LiveTvChannel?,
+        channelIndex: Int,
+    ) {
+        if (!settingsRepository.playerSettings.first().rememberLastLiveChannel) return
+        settingsRepository.saveLiveBrowsingState(
+            providerId = providerId,
+            state = LiveTvBrowsingState(
+                categoryId = category.id,
+                categoryName = category.name,
+                channelId = channel?.id,
+                channelName = channel?.name,
+                channelIndex = channelIndex,
+                scrollIndex = channelIndex,
+            ),
+        )
     }
 
     fun toggleFavorite(channel: LiveTvChannel? = mutableUi.value.selectedChannel) {

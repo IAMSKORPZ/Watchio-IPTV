@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
@@ -210,6 +211,7 @@ fun LiveTvScreen(
                     ChannelListPanel(
                         channels = uiState.channels,
                         selectedChannel = uiState.selectedChannel,
+                        initialScrollIndex = uiState.initialScrollIndex,
                         onChannel = { channel ->
                             if (channel.id == uiState.selectedChannel?.id) onFullscreen() else onChannel(channel)
                         },
@@ -447,6 +449,13 @@ private fun CategoryPanel(
     val visible = remember(state.categories, state.categorySearchQuery) {
         state.categories.filter { it.name.contains(state.categorySearchQuery, ignoreCase = true) }
     }
+    val listState = rememberLazyListState()
+    LaunchedEffect(state.selectedCategory?.id) {
+        val index = visible.indexOfFirst { it.id == state.selectedCategory?.id }
+        if (index > 0) {
+            listState.scrollToItem((index - 1).coerceAtLeast(0))
+        }
+    }
     WatchioCard(modifier = modifier.testTag("live-category-panel"), accent = colors.liveTvAccent, minWidth = 0.dp, minHeight = 0.dp) {
         Column(Modifier.fillMaxSize().padding(10.dp)) {
             OutlinedTextField(
@@ -457,16 +466,18 @@ private fun CategoryPanel(
                 modifier = Modifier.fillMaxWidth().testTag("live-category-search"),
             )
             Spacer(Modifier.height(10.dp))
-            LazyColumn(Modifier.fillMaxSize().testTag("live-categories")) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("live-categories")) {
                 itemsIndexed(visible, key = { _, item -> item.id }) { index, category ->
+                    val isSelected = category.id == state.selectedCategory?.id
+                    val isDefaultFocus = if (state.selectedCategory != null) isSelected else index == 0
                     CategoryRow(
                         category = category,
-                        selected = category.id == state.selectedCategory?.id,
+                        selected = isSelected,
                         onClick = { onCategory(category) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp)
-                            .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                            .then(if (isDefaultFocus) Modifier.focusRequester(firstFocus) else Modifier)
                             .testTag(categoryTag(category)),
                     )
                 }
@@ -502,13 +513,32 @@ private fun CategoryRow(category: LiveTvCategory, selected: Boolean, onClick: ()
 private fun ChannelListPanel(
     channels: List<LiveTvChannel>,
     selectedChannel: LiveTvChannel?,
+    initialScrollIndex: Int,
     onChannel: (LiveTvChannel) -> Unit,
     onChannelOptions: (LiveTvChannel) -> Unit,
     modifier: Modifier,
 ) {
     val colors = LocalWatchioColors.current
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = (initialScrollIndex - 1).coerceAtLeast(0),
+    )
+
+    LaunchedEffect(selectedChannel?.id) {
+        val targetIndex = channels.indexOfFirst { it.id == selectedChannel?.id }
+        if (targetIndex >= 0) {
+            val visibleStart = listState.firstVisibleItemIndex
+            val visibleCount = listState.layoutInfo.visibleItemsInfo.size.coerceAtLeast(1)
+            if (targetIndex < visibleStart || targetIndex >= visibleStart + visibleCount) {
+                listState.scrollToItem((targetIndex - 1).coerceAtLeast(0))
+            }
+        }
+    }
+
     WatchioCard(modifier = modifier.testTag("live-channel-list"), accent = colors.seriesAccent, minWidth = 0.dp, minHeight = 0.dp) {
-        LazyColumn(Modifier.fillMaxSize().padding(10.dp).testTag("live-channels")) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().padding(10.dp).testTag("live-channels"),
+        ) {
             items(channels, key = { it.id }) { channel ->
                 ChannelRow(channel, channel.id == selectedChannel?.id, onChannel, onChannelOptions)
             }
