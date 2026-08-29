@@ -110,12 +110,16 @@ class MoviesRepository(
             )
             ProviderType.M3uUrl, ProviderType.M3uFile -> movie.directUrl ?: throw IllegalStateException("Movie URL unavailable.")
         }
-        val start = if (resume && shouldResume(movie.resumePositionMs, movie.resumeDurationMs)) movie.resumePositionMs ?: 0L else 0L
+        val start = if (resume && shouldResume(movie.resumePositionMs, movie.resumeDurationMs)) clampedResumePosition(movie.resumePositionMs, movie.resumeDurationMs) else 0L
         return MoviePlaybackRequest(movie, url, movie.headers, start)
     }
 
     fun shouldResume(positionMs: Long?, durationMs: Long?): Boolean {
         return shouldResumePosition(positionMs, durationMs)
+    }
+
+    fun isCompleted(positionMs: Long?, durationMs: Long?): Boolean {
+        return isCompletedPosition(positionMs, durationMs)
     }
 
     private suspend fun loadXtreamDetail(movie: WatchioMovieItem): MovieDetailEntity? {
@@ -251,15 +255,45 @@ class MoviesRepository(
 
     companion object {
         private const val SEARCH_LIMIT = 500
-        private const val RESUME_MIN_MS = 60_000L
-        private const val COMPLETE_THRESHOLD_MS = 5 * 60_000L
+        const val RESUME_MIN_MS = 30_000L
+        const val RESUME_REMAINING_MIN_MS = 60_000L
+        const val COMPLETE_REMAINING_MS = 120_000L
+        const val COMPLETE_FRACTION = 0.90f
         private const val DETAIL_CACHE_MS = 24 * 60 * 60 * 1000L
         private const val TRAILER_CACHE_MS = 30L * 24L * 60L * 60L * 1000L
         private const val TMDB_BASE = "https://api.themoviedb.org/3/"
+
+        fun isCompletedPosition(positionMs: Long?, durationMs: Long?): Boolean {
+            val position = positionMs ?: return false
+            val duration = durationMs ?: return false
+            if (duration <= 0L || position < 0L) return false
+            if (position >= duration) return true
+            val fraction = position.toFloat() / duration.toFloat()
+            val remaining = duration - position
+            return fraction >= COMPLETE_FRACTION || remaining <= COMPLETE_REMAINING_MS
+        }
+
         fun shouldResumePosition(positionMs: Long?, durationMs: Long?): Boolean {
             val position = positionMs ?: return false
-            val duration = durationMs ?: return position > RESUME_MIN_MS
-            return position > RESUME_MIN_MS && position < duration - COMPLETE_THRESHOLD_MS
+            if (position < RESUME_MIN_MS) return false
+            val duration = durationMs
+            if (duration == null || duration <= 0L) return true
+            if (position >= duration) return false
+            if (isCompletedPosition(position, duration)) return false
+            val remaining = duration - position
+            return remaining > RESUME_REMAINING_MIN_MS
+        }
+
+        fun clampedResumePosition(positionMs: Long?, durationMs: Long?): Long {
+            val position = positionMs ?: return 0L
+            if (position < RESUME_MIN_MS) return 0L
+            val duration = durationMs
+            if (duration != null && duration > 0L) {
+                if (position >= duration || isCompletedPosition(position, duration)) return 0L
+                if (duration - position <= RESUME_REMAINING_MIN_MS) return 0L
+                return position.coerceIn(0L, duration)
+            }
+            return position.coerceAtLeast(0L)
         }
     }
 }

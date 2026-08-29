@@ -66,6 +66,8 @@ import com.watchioiptv.nativeapp.data.series.SeriesDetails
 import com.watchioiptv.nativeapp.data.series.WatchioEpisodeItem
 import com.watchioiptv.nativeapp.data.series.WatchioSeriesItem
 import com.watchioiptv.nativeapp.feature.movies.formatRating
+import com.watchioiptv.nativeapp.ui.components.ResumePlaybackDialog
+import com.watchioiptv.nativeapp.ui.components.ResumePlaybackRequest
 import com.watchioiptv.nativeapp.ui.components.WatchioCard
 import com.watchioiptv.nativeapp.ui.components.WatchioFocusableCard
 import com.watchioiptv.nativeapp.ui.components.WatchioPageHeader
@@ -563,73 +565,132 @@ fun SeriesDetailsScreen(
     val details = state.details ?: return
     val resumeEpisode = state.resumeEpisode
     val firstFocus = remember { FocusRequester() }
+    var resumeDialogRequest by remember { mutableStateOf<ResumePlaybackRequest?>(null) }
     LaunchedEffect(details.series.id) { firstFocus.requestFocus() }
-    LazyColumn(Modifier.fillMaxSize().background(Color.Black).padding(24.dp).testTag("series-details")) {
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                Poster(details.posterUrl, Modifier.width(150.dp).height(225.dp))
-                Column(Modifier.weight(1f)) {
-                    WatchioFocusableCard("Back", accent = colors.focusGlow, onClick = onBack)
-                    Spacer(Modifier.height(10.dp))
-                    Text(details.title, color = colors.textPrimary, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(metaLine(details), color = colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        WatchioFocusableCard(
-                            if (resumeEpisode != null && state.autoResumeEnabled) "Resume" else "Play",
-                            accent = colors.seriesAccent,
-                            onClick = { onPlay(state.autoResumeEnabled) },
-                            modifier = Modifier.focusRequester(firstFocus),
-                        )
-                        if (resumeEpisode != null && !state.autoResumeEnabled) {
-                            WatchioFocusableCard("Resume", accent = colors.seriesAccent, onClick = { onPlay(true) })
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize().background(Color.Black).padding(24.dp).testTag("series-details")) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Poster(details.posterUrl, Modifier.width(150.dp).height(225.dp))
+                    Column(Modifier.weight(1f)) {
+                        WatchioFocusableCard("Back", accent = colors.focusGlow, onClick = onBack)
+                        Spacer(Modifier.height(10.dp))
+                        Text(details.title, color = colors.textPrimary, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(metaLine(details), color = colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            WatchioFocusableCard(
+                                title = if (resumeEpisode != null) "Resume" else "Play",
+                                accent = colors.seriesAccent,
+                                onClick = {
+                                    if (resumeEpisode != null) {
+                                        resumeDialogRequest = ResumePlaybackRequest(
+                                            title = details.title,
+                                            subtitle = "S${resumeEpisode.seasonNumber} • E${resumeEpisode.episodeNumber} - ${resumeEpisode.title}",
+                                            resumePositionMs = resumeEpisode.resumePositionMs ?: 0L,
+                                            durationMs = resumeEpisode.resumeDurationMs,
+                                            onResume = {
+                                                resumeDialogRequest = null
+                                                onPlay(true)
+                                            },
+                                            onRestart = {
+                                                resumeDialogRequest = null
+                                                onPlay(false)
+                                            },
+                                            onDismiss = {
+                                                resumeDialogRequest = null
+                                            },
+                                        )
+                                    } else {
+                                        onPlay(false)
+                                    }
+                                },
+                                modifier = Modifier.focusRequester(firstFocus).testTag("series-play-button"),
+                            )
+                            if (resumeEpisode != null) {
+                                WatchioFocusableCard(
+                                    title = "Start Over",
+                                    accent = colors.moviesAccent,
+                                    onClick = { onPlay(false) },
+                                    modifier = Modifier.testTag("series-start-over-button"),
+                                )
+                            }
+                            details.trailerKey?.takeIf { it.isNotBlank() }?.let { key ->
+                                WatchioFocusableCard("Trailer", accent = colors.liveTvAccent, onClick = { onTrailer(key) })
+                            }
+                            WatchioFocusableCard(if (details.series.isFavorite) "Unfavorite" else "Favorite", accent = colors.focusGlow, onClick = onFavorite)
                         }
-                        if (resumeEpisode != null) {
-                            WatchioFocusableCard("Start Over", accent = colors.moviesAccent, onClick = { onPlay(false) })
-                        }
-                        details.trailerKey?.takeIf { it.isNotBlank() }?.let { key ->
-                            WatchioFocusableCard("Trailer", accent = colors.liveTvAccent, onClick = { onTrailer(key) })
-                        }
-                        WatchioFocusableCard(if (details.series.isFavorite) "Unfavorite" else "Favorite", accent = colors.focusGlow, onClick = onFavorite)
+                        Spacer(Modifier.height(12.dp))
+                        detailRow("Director", details.director)
+                        detailRow("Release Date", details.releaseDate)
+                        detailRow("Genre", details.genre)
+                        Text(details.plot ?: "No description available", color = colors.textSecondary, maxLines = 4, overflow = TextOverflow.Ellipsis)
                     }
-                    Spacer(Modifier.height(12.dp))
-                    detailRow("Director", details.director)
-                    detailRow("Release Date", details.releaseDate)
-                    detailRow("Genre", details.genre)
-                    Text(details.plot ?: "No description available", color = colors.textSecondary, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
-            }
-            Spacer(Modifier.height(18.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                WatchioFocusableCard("Episodes(${details.episodes.size})", accent = if (state.activeTab == "episodes") colors.seriesAccent else colors.focusGlow, onClick = { onTab("episodes") })
-                WatchioFocusableCard("Cast", accent = if (state.activeTab == "cast") colors.seriesAccent else colors.focusGlow, onClick = { onTab("cast") })
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-        if (state.activeTab == "cast") {
-            item {
-                Text(details.cast?.takeIf { it.isNotBlank() } ?: "No cast information available", color = colors.textSecondary)
-            }
-        } else {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    details.seasons.forEach { season ->
-                        WatchioFocusableCard(
-                            title = season.name,
-                            accent = if (season.seasonNumber == state.selectedSeasonNumber) colors.seriesAccent else colors.focusGlow,
-                            onClick = { onSeason(season.seasonNumber) },
-                        )
-                    }
+                Spacer(Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    WatchioFocusableCard("Episodes(${details.episodes.size})", accent = if (state.activeTab == "episodes") colors.seriesAccent else colors.focusGlow, onClick = { onTab("episodes") })
+                    WatchioFocusableCard("Cast", accent = if (state.activeTab == "cast") colors.seriesAccent else colors.focusGlow, onClick = { onTab("cast") })
                 }
                 Spacer(Modifier.height(12.dp))
             }
-            if (state.selectedEpisodes.isEmpty()) {
-                item { Text("No episodes available", color = colors.textMuted, modifier = Modifier.padding(32.dp)) }
+            if (state.activeTab == "cast") {
+                item {
+                    Text(details.cast?.takeIf { it.isNotBlank() } ?: "No cast information available", color = colors.textSecondary)
+                }
             } else {
-                items(state.selectedEpisodes, key = { it.episodeId }) { episode ->
-                    EpisodeRow(episode, onEpisode)
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        details.seasons.forEach { season ->
+                            WatchioFocusableCard(
+                                title = season.name,
+                                accent = if (season.seasonNumber == state.selectedSeasonNumber) colors.seriesAccent else colors.focusGlow,
+                                onClick = { onSeason(season.seasonNumber) },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+                if (state.selectedEpisodes.isEmpty()) {
+                    item { Text("No episodes available", color = colors.textMuted, modifier = Modifier.padding(32.dp)) }
+                } else {
+                    items(state.selectedEpisodes, key = { it.episodeId }) { episode ->
+                        EpisodeRow(
+                            episode = episode,
+                            onEpisode = { ep ->
+                                val epResumable = com.watchioiptv.nativeapp.data.series.SeriesRepository.shouldResumePosition(
+                                    ep.resumePositionMs,
+                                    ep.resumeDurationMs,
+                                )
+                                if (epResumable) {
+                                    resumeDialogRequest = ResumePlaybackRequest(
+                                        title = details.title,
+                                        subtitle = "S${ep.seasonNumber} • E${ep.episodeNumber} - ${ep.title}",
+                                        resumePositionMs = ep.resumePositionMs ?: 0L,
+                                        durationMs = ep.resumeDurationMs,
+                                        onResume = {
+                                            resumeDialogRequest = null
+                                            onEpisode(ep)
+                                        },
+                                        onRestart = {
+                                            resumeDialogRequest = null
+                                            onEpisode(ep.copy(resumePositionMs = 0L))
+                                        },
+                                        onDismiss = {
+                                            resumeDialogRequest = null
+                                        },
+                                    )
+                                } else {
+                                    onEpisode(ep)
+                                }
+                            },
+                        )
+                    }
                 }
             }
+        }
+        resumeDialogRequest?.let { request ->
+            ResumePlaybackDialog(request = request)
         }
     }
 }

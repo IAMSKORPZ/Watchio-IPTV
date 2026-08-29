@@ -138,11 +138,12 @@ class SeriesRepository(
             )
             ProviderType.M3uUrl, ProviderType.M3uFile -> episode.directUrl ?: throw IllegalStateException("Episode URL unavailable.")
         }
-        val start = if (resume && MoviesRepository.shouldResumePosition(episode.resumePositionMs, episode.resumeDurationMs)) episode.resumePositionMs ?: 0L else 0L
+        val start = if (resume && shouldResume(episode.resumePositionMs, episode.resumeDurationMs)) MoviesRepository.clampedResumePosition(episode.resumePositionMs, episode.resumeDurationMs) else 0L
         return EpisodePlaybackRequest(episode, url, episode.headers, start)
     }
 
     fun shouldResume(positionMs: Long?, durationMs: Long?): Boolean = shouldResumePosition(positionMs, durationMs)
+    fun isCompleted(positionMs: Long?, durationMs: Long?): Boolean = isCompletedPosition(positionMs, durationMs)
 
     private suspend fun loadXtreamDetails(series: WatchioSeriesItem) {
         val provider = database.providerDao().findById(series.providerId.value) ?: return
@@ -429,6 +430,8 @@ class SeriesRepository(
         private const val TRAILER_CACHE_MS = 30L * 24L * 60L * 60L * 1000L
         private const val TMDB_BASE = "https://api.themoviedb.org/3/"
         fun shouldResumePosition(positionMs: Long?, durationMs: Long?): Boolean = MoviesRepository.shouldResumePosition(positionMs, durationMs)
+        fun isCompletedPosition(positionMs: Long?, durationMs: Long?): Boolean = MoviesRepository.isCompletedPosition(positionMs, durationMs)
+        fun clampedResumePosition(positionMs: Long?, durationMs: Long?): Long = MoviesRepository.clampedResumePosition(positionMs, durationMs)
         private fun clean(value: String?): String? = value?.trim()?.takeIf { it.isNotBlank() && it != "null" && it != "[]" && it != "{}" }
     }
 }

@@ -71,6 +71,9 @@ interface VodDao {
     @Query("SELECT * FROM vod_streams WHERE providerId = :providerId AND normalizedName LIKE '%' || :query || '%' ORDER BY serverOrder ASC, name ASC LIMIT :limit")
     suspend fun search(providerId: String, query: String, limit: Int): List<VodStreamEntity>
 
+    @Query("SELECT * FROM vod_streams WHERE providerId = :providerId AND streamId = :streamId LIMIT 1")
+    suspend fun find(providerId: String, streamId: String): VodStreamEntity?
+
     @Query("SELECT COUNT(*) FROM vod_streams WHERE providerId = :providerId")
     suspend fun countByProvider(providerId: String): Int
 
@@ -197,6 +200,9 @@ interface EpisodeDao {
 
     @Query("SELECT * FROM episodes WHERE providerId = :providerId AND seriesId = :seriesId AND seasonNumber = :seasonNumber ORDER BY episodeNumber ASC")
     suspend fun getBySeason(providerId: String, seriesId: String, seasonNumber: Int): List<EpisodeEntity>
+
+    @Query("SELECT * FROM episodes WHERE providerId = :providerId AND seriesId = :seriesId AND episodeId = :episodeId LIMIT 1")
+    suspend fun find(providerId: String, seriesId: String, episodeId: String): EpisodeEntity?
 }
 
 @Dao

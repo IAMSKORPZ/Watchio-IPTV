@@ -59,6 +59,8 @@ class SeriesViewModel(
     private val mutableDetails = MutableStateFlow(SeriesDetailsUiState())
     private var selectedEpisode: WatchioEpisodeItem? = null
     private var progressJob: Job? = null
+    private var initialResumePending = false
+    private var initialResumeStartMs = 0L
 
     val seriesState: StateFlow<SeriesUiState> = mutableSeries.asStateFlow()
     val detailsState: StateFlow<SeriesDetailsUiState> = mutableDetails.asStateFlow()
@@ -69,6 +71,27 @@ class SeriesViewModel(
         viewModelScope.launch {
             settingsRepository.playerSettings.collect { settings ->
                 mutableDetails.value = mutableDetails.value.copy(autoResumeEnabled = settings.autoResume)
+            }
+        }
+        viewModelScope.launch {
+            playerManager.state.collect { state ->
+                when (state) {
+                    is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Ended -> {
+                        val snapshot = playerManager.snapshot()
+                        val episode = selectedEpisode ?: seriesRepository.currentActiveEpisode()
+                        val finalDur = snapshot.durationMs ?: episode?.resumeDurationMs ?: snapshot.positionMs
+                        saveProgress(forcedPosition = finalDur, forcedDuration = finalDur)
+                        progressJob?.cancel()
+                    }
+                    is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Playing -> {
+                        if (progressJob?.isActive != true) {
+                            (selectedEpisode ?: seriesRepository.currentActiveEpisode())?.let { startProgressSave(it) }
+                        }
+                    }
+                    else -> {
+                        progressJob?.cancel()
+                    }
+                }
             }
         }
     }
@@ -107,6 +130,23 @@ class SeriesViewModel(
             val allCategory = mutableSeries.value.categories.firstOrNull { it.id == "all" } ?: mutableSeries.value.selectedCategory ?: return@launch
             val category = if (query.isBlank()) mutableSeries.value.selectedCategory ?: allCategory else allCategory
             mutableSeries.value = mutableSeries.value.copy(searchQuery = query, series = seriesRepository.series(providerId, category, query))
+        }
+    }
+
+    fun loadDetails(series: WatchioSeriesItem) {
+        viewModelScope.launch {
+            val currentAutoResume = mutableDetails.value.autoResumeEnabled
+            mutableDetails.value = SeriesDetailsUiState(loading = true, autoResumeEnabled = currentAutoResume)
+            val details = seriesRepository.details(series)
+            val selected = details.seasons.firstOrNull { it.seasonNumber == 1 }?.seasonNumber
+                ?: details.seasons.firstOrNull { it.seasonNumber > 0 }?.seasonNumber
+                ?: details.seasons.firstOrNull()?.seasonNumber
+            mutableDetails.value = SeriesDetailsUiState(
+                loading = false,
+                details = details,
+                selectedSeasonNumber = selected,
+                autoResumeEnabled = currentAutoResume,
+            )
         }
     }
 
@@ -185,6 +225,13 @@ class SeriesViewModel(
         seriesRepository.markActiveEpisode(episode)
         viewModelScope.launch {
             val request = seriesRepository.playback(episode, resume)
+            if (request.startPositionMs > 0L) {
+                initialResumeStartMs = request.startPositionMs
+                initialResumePending = true
+            } else {
+                initialResumeStartMs = 0L
+                initialResumePending = false
+            }
             playerManager.load(PlaybackMedia(request.url, episode.title, request.headers, request.startPositionMs, isLive = false))
             startProgressSave(episode)
         }
@@ -201,9 +248,18 @@ class SeriesViewModel(
         playEpisode(target, resume)
     }
 
+    fun restartPlayback() {
+        initialResumePending = false
+        initialResumeStartMs = 0L
+        playerManager.restart()
+        saveProgress(forcedPosition = 0L)
+    }
+
     fun seekBy(deltaMs: Long) {
         val snapshot = playerManager.snapshot()
-        playerManager.seekTo(PlayerReliability.clampedSeekTarget(snapshot.positionMs, deltaMs, snapshot.durationMs, snapshot.currentMedia?.isLive == true))
+        val target = PlayerReliability.clampedSeekTarget(snapshot.positionMs, deltaMs, snapshot.durationMs, snapshot.currentMedia?.isLive == true)
+        playerManager.seekTo(target)
+        saveProgress(forcedPosition = target)
     }
 
     fun playPause() {
@@ -283,14 +339,27 @@ class SeriesViewModel(
         progressJob = viewModelScope.launch {
             while (true) {
                 delay(15_000L)
-                saveProgress()
+                if (playerManager.state.value is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Playing) {
+                    saveProgress()
+                }
             }
         }
     }
 
-    private fun saveProgress() {
+    private fun saveProgress(forcedPosition: Long? = null, forcedDuration: Long? = null) {
         val episode = selectedEpisode ?: seriesRepository.currentActiveEpisode() ?: return
         val snapshot = playerManager.snapshot()
+        val rawPosition = forcedPosition ?: snapshot.positionMs
+        val rawDuration = forcedDuration ?: snapshot.durationMs ?: episode.resumeDurationMs
+
+        if (initialResumePending && forcedPosition == null) {
+            if (rawPosition < 5_000L && initialResumeStartMs > 5_000L) {
+                return
+            } else {
+                initialResumePending = false
+            }
+        }
+
         viewModelScope.launch {
             historyRepository.upsert(
                 HistoryItem(
@@ -300,8 +369,8 @@ class SeriesViewModel(
                     subContentId = episode.episodeId,
                     title = episode.title,
                     imageUrl = episode.imageUrl,
-                    positionMs = snapshot.positionMs,
-                    durationMs = snapshot.durationMs,
+                    positionMs = rawPosition,
+                    durationMs = rawDuration,
                     lastWatchedAtEpochMs = clock.nowEpochMs(),
                 ),
             )

@@ -78,6 +78,8 @@ import com.watchioiptv.nativeapp.data.movies.MovieDetails
 import com.watchioiptv.nativeapp.data.movies.WatchioMovieItem
 import com.watchioiptv.nativeapp.domain.repository.ControlAutoHideDelay
 import com.watchioiptv.nativeapp.domain.repository.PlayerSettings
+import com.watchioiptv.nativeapp.ui.components.ResumePlaybackDialog
+import com.watchioiptv.nativeapp.ui.components.ResumePlaybackRequest
 import com.watchioiptv.nativeapp.ui.components.WatchioCard
 import com.watchioiptv.nativeapp.ui.components.WatchioFocusableCard
 import com.watchioiptv.nativeapp.ui.components.WatchioPageHeader
@@ -505,6 +507,14 @@ fun MovieDetailsScreen(
     }
     val details = state.details ?: return
     val firstFocus = remember { FocusRequester() }
+    var resumeDialogRequest by remember { mutableStateOf<ResumePlaybackRequest?>(null) }
+    val resumable = remember(details.movie.resumePositionMs, details.movie.resumeDurationMs) {
+        com.watchioiptv.nativeapp.data.movies.MoviesRepository.shouldResumePosition(
+            details.movie.resumePositionMs,
+            details.movie.resumeDurationMs,
+        )
+    }
+
     LaunchedEffect(details.movie.id) { firstFocus.requestFocus() }
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("movie-details")) {
         details.backdropUrl?.let {
@@ -521,17 +531,42 @@ fun MovieDetailsScreen(
                     Text(metaLine(details), color = colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val hasResume = (details.movie.resumePositionMs ?: 0L) > 60_000L
                         WatchioFocusableCard(
-                            title = if (hasResume && state.autoResumeEnabled) "Resume" else "Play",
+                            title = if (resumable) "Resume" else "Play",
                             accent = colors.moviesAccent,
-                            onClick = { onPlay(state.autoResumeEnabled) },
-                            modifier = Modifier.focusRequester(firstFocus),
+                            onClick = {
+                                if (resumable) {
+                                    resumeDialogRequest = ResumePlaybackRequest(
+                                        title = details.title,
+                                        subtitle = "Movie",
+                                        resumePositionMs = details.movie.resumePositionMs ?: 0L,
+                                        durationMs = details.movie.resumeDurationMs,
+                                        onResume = {
+                                            resumeDialogRequest = null
+                                            onPlay(true)
+                                        },
+                                        onRestart = {
+                                            resumeDialogRequest = null
+                                            onPlay(false)
+                                        },
+                                        onDismiss = {
+                                            resumeDialogRequest = null
+                                        },
+                                    )
+                                } else {
+                                    onPlay(false)
+                                }
+                            },
+                            modifier = Modifier.focusRequester(firstFocus).testTag("movie-play-button"),
                         )
-                        if (hasResume && !state.autoResumeEnabled) {
-                            WatchioFocusableCard("Resume", accent = colors.moviesAccent, onClick = { onPlay(true) })
+                        if (resumable) {
+                            WatchioFocusableCard(
+                                title = "Start Over",
+                                accent = colors.seriesAccent,
+                                onClick = { onPlay(false) },
+                                modifier = Modifier.testTag("movie-start-over-button"),
+                            )
                         }
-                        WatchioFocusableCard("Start Over", accent = colors.seriesAccent, onClick = { onPlay(false) })
                         details.trailerKey?.takeIf { it.isNotBlank() }?.let { key ->
                             WatchioFocusableCard("Trailer", accent = colors.liveTvAccent, onClick = { onTrailer(key) })
                         }
@@ -546,6 +581,9 @@ fun MovieDetailsScreen(
                     Text(details.plot ?: "No description available", color = colors.textSecondary, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
             }
+        }
+        resumeDialogRequest?.let { request ->
+            ResumePlaybackDialog(request = request)
         }
     }
 }

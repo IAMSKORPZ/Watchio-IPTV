@@ -76,6 +76,7 @@ class SearchAndMyListRepositoryTest {
     @Test
     fun myListUsesSharedFavoritesAndHistoryWithoutLiveContinue() = runBlocking {
         seedProvider("provider-a")
+        database.vodDao().upsertAll(listOf(movie("provider-a", "m1", "Movie One")))
         database.seriesDao().upsertAll(listOf(series("provider-a", "s1", "Series One")))
         database.episodeDao().upsertAll(listOf(episode("provider-a", "s1", "e1")))
         favorites.toggle(FavoriteItem(ProviderId("provider-a"), ContentType.Live, "l1", title = "Live One", createdAtEpochMs = 1))

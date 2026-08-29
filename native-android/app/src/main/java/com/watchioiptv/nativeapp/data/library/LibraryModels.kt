@@ -32,6 +32,9 @@ data class ContinueWatchingItem(
     val imageUrl: String?,
     val positionMs: Long?,
     val durationMs: Long?,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+    val episodeTitle: String? = null,
 )
 
 data class LibraryFavoriteItem(

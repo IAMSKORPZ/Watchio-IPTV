@@ -27,14 +27,23 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -322,3 +331,126 @@ fun WatchioProgressBar(progress: Float?, modifier: Modifier = Modifier) {
         LinearProgressIndicator(progress = { progress.coerceIn(0f, 1f) }, color = colors.liveTvAccent, modifier = modifier)
     }
 }
+
+fun formatPlaybackTime(ms: Long): String {
+    val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0) {
+        String.format(java.util.Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(java.util.Locale.US, "%d:%02d", minutes, seconds)
+    }
+}
+
+data class ResumePlaybackRequest(
+    val title: String,
+    val subtitle: String? = null,
+    val resumePositionMs: Long,
+    val durationMs: Long? = null,
+    val onResume: () -> Unit,
+    val onRestart: () -> Unit,
+    val onDismiss: () -> Unit,
+)
+
+@Composable
+fun ResumePlaybackDialog(
+    request: ResumePlaybackRequest,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalWatchioColors.current
+    val spacing = LocalWatchioSpacing.current
+    val typography = LocalWatchioTypography.current
+    val radii = LocalWatchioRadii.current
+    val resumeFocus = remember { FocusRequester() }
+
+    BackHandler(onBack = request.onDismiss)
+
+    LaunchedEffect(Unit) {
+        resumeFocus.requestFocus()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.75f))
+            .testTag("resume-dialog-backdrop"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = modifier
+                .widthIn(min = 360.dp, max = 500.dp)
+                .padding(24.dp)
+                .testTag("resume-playback-dialog"),
+            shape = RoundedCornerShape(radii.lg),
+            color = colors.surfaceCard,
+            border = BorderStroke(1.5.dp, colors.moviesAccent.copy(alpha = 0.6f)),
+            shadowElevation = 16.dp,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = "Resume Playback",
+                    style = typography.screenTitle,
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.testTag("resume-dialog-title"),
+                )
+                Spacer(Modifier.height(spacing.sm))
+                Text(
+                    text = request.title,
+                    style = typography.cardTitle,
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("resume-dialog-content-title"),
+                )
+                if (!request.subtitle.isNullOrBlank()) {
+                    Spacer(Modifier.height(spacing.xs))
+                    Text(
+                        text = request.subtitle,
+                        style = typography.body,
+                        color = colors.textSecondary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("resume-dialog-subtitle"),
+                    )
+                }
+                Spacer(Modifier.height(spacing.lg))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    WatchioFocusableCard(
+                        title = "Resume\n${formatPlaybackTime(request.resumePositionMs)}",
+                        accent = colors.moviesAccent,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(64.dp)
+                            .focusRequester(resumeFocus)
+                            .testTag("resume-dialog-resume-button"),
+                        onClick = request.onResume,
+                    )
+                    WatchioFocusableCard(
+                        title = "Restart\nFrom Beginning",
+                        accent = colors.focusGlow,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(64.dp)
+                            .testTag("resume-dialog-restart-button"),
+                        onClick = request.onRestart,
+                    )
+                }
+            }
+        }
+    }
+}
+

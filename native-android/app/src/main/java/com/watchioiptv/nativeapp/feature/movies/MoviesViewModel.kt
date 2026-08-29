@@ -52,6 +52,8 @@ class MoviesViewModel(
     private val mutableDetails = MutableStateFlow(MovieDetailsUiState())
     private var selectedMovie: WatchioMovieItem? = null
     private var progressJob: Job? = null
+    private var initialResumePending = false
+    private var initialResumeStartMs = 0L
 
     val moviesState: StateFlow<MoviesUiState> = mutableMovies.asStateFlow()
     val detailsState: StateFlow<MovieDetailsUiState> = mutableDetails.asStateFlow()
@@ -62,6 +64,26 @@ class MoviesViewModel(
         viewModelScope.launch {
             settingsRepository.playerSettings.collect { settings ->
                 mutableDetails.value = mutableDetails.value.copy(autoResumeEnabled = settings.autoResume)
+            }
+        }
+        viewModelScope.launch {
+            playerManager.state.collect { state ->
+                when (state) {
+                    is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Ended -> {
+                        val snapshot = playerManager.snapshot()
+                        val finalDur = snapshot.durationMs ?: selectedMovie?.resumeDurationMs ?: snapshot.positionMs
+                        saveProgress(forcedPosition = finalDur, forcedDuration = finalDur)
+                        progressJob?.cancel()
+                    }
+                    is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Playing -> {
+                        if (progressJob?.isActive != true) {
+                            selectedMovie?.let { startProgressSave(it) }
+                        }
+                    }
+                    else -> {
+                        progressJob?.cancel()
+                    }
+                }
             }
         }
     }
@@ -148,16 +170,33 @@ class MoviesViewModel(
 
     fun play(resume: Boolean = true) {
         val movie = mutableDetails.value.details?.movie ?: selectedMovie ?: return
+        selectedMovie = movie
         viewModelScope.launch {
             val playback = moviesRepository.playback(movie, resume)
+            if (playback.startPositionMs > 0L) {
+                initialResumeStartMs = playback.startPositionMs
+                initialResumePending = true
+            } else {
+                initialResumeStartMs = 0L
+                initialResumePending = false
+            }
             playerManager.load(PlaybackMedia(playback.url, movie.name, playback.headers, playback.startPositionMs, isLive = false))
             startProgressSave(movie)
         }
     }
 
+    fun restartPlayback() {
+        initialResumePending = false
+        initialResumeStartMs = 0L
+        playerManager.restart()
+        saveProgress(forcedPosition = 0L)
+    }
+
     fun seekBy(deltaMs: Long) {
         val snapshot = playerManager.snapshot()
-        playerManager.seekTo(PlayerReliability.clampedSeekTarget(snapshot.positionMs, deltaMs, snapshot.durationMs, snapshot.currentMedia?.isLive == true))
+        val target = PlayerReliability.clampedSeekTarget(snapshot.positionMs, deltaMs, snapshot.durationMs, snapshot.currentMedia?.isLive == true)
+        playerManager.seekTo(target)
+        saveProgress(forcedPosition = target)
     }
 
     fun playPause() {
@@ -192,14 +231,27 @@ class MoviesViewModel(
         progressJob = viewModelScope.launch {
             while (true) {
                 delay(15_000L)
-                saveProgress()
+                if (playerManager.state.value is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Playing) {
+                    saveProgress()
+                }
             }
         }
     }
 
-    private fun saveProgress() {
+    private fun saveProgress(forcedPosition: Long? = null, forcedDuration: Long? = null) {
         val movie = selectedMovie ?: return
         val snapshot = playerManager.snapshot()
+        val rawPosition = forcedPosition ?: snapshot.positionMs
+        val rawDuration = forcedDuration ?: snapshot.durationMs ?: movie.resumeDurationMs
+
+        if (initialResumePending && forcedPosition == null) {
+            if (rawPosition < 5_000L && initialResumeStartMs > 5_000L) {
+                return
+            } else {
+                initialResumePending = false
+            }
+        }
+
         viewModelScope.launch {
             historyRepository.upsert(
                 HistoryItem(
@@ -208,8 +260,8 @@ class MoviesViewModel(
                     contentId = movie.id,
                     title = movie.name,
                     imageUrl = movie.posterUrl,
-                    positionMs = snapshot.positionMs,
-                    durationMs = snapshot.durationMs,
+                    positionMs = rawPosition,
+                    durationMs = rawDuration,
                     lastWatchedAtEpochMs = clock.nowEpochMs(),
                 ),
             )

@@ -25,7 +25,63 @@ class MyListRepository(
         val history = historyRepository.recent(providerId)
         val continueWatching = history
             .filter { (it.contentType == ContentType.Movie || it.contentType == ContentType.Episode) && MoviesRepository.shouldResumePosition(it.positionMs, it.durationMs) }
-            .map { ContinueWatchingItem(it.providerId, it.contentType, it.contentId, it.subContentId, it.title, subtitleFor(it.contentType, it.contentId, it.subContentId), it.imageUrl, it.positionMs, it.durationMs) }
+            .mapNotNull { item ->
+                when (item.contentType) {
+                    ContentType.Movie -> {
+                        val vodMovie = database.vodDao().find(providerId.value, item.contentId)
+                        val m3uMovie = if (vodMovie == null) database.m3uItemDao().find(providerId.value, item.contentId) else null
+                        if (vodMovie == null && m3uMovie == null) {
+                            null
+                        } else {
+                            val title = vodMovie?.name ?: m3uMovie?.name ?: item.title
+                            val image = vodMovie?.posterUrl ?: m3uMovie?.tvgLogo ?: item.imageUrl
+                            ContinueWatchingItem(
+                                providerId = item.providerId,
+                                contentType = ContentType.Movie,
+                                contentId = item.contentId,
+                                subContentId = null,
+                                title = title,
+                                subtitle = "Movie",
+                                imageUrl = image,
+                                positionMs = item.positionMs,
+                                durationMs = item.durationMs,
+                            )
+                        }
+                    }
+                    ContentType.Episode -> {
+                        val episodeId = item.subContentId
+                        val seriesId = item.contentId
+                        val episodeEntity = if (episodeId != null) database.episodeDao().find(providerId.value, seriesId, episodeId) else null
+                        val seriesEntity = database.seriesDao().find(providerId.value, seriesId)
+                        val m3uSeries = if (seriesEntity == null && episodeEntity == null) database.m3uItemDao().find(providerId.value, seriesId) else null
+                        if (episodeEntity == null && seriesEntity == null && m3uSeries == null) {
+                            null
+                        } else {
+                            val seriesTitle = seriesEntity?.name ?: m3uSeries?.name ?: item.title
+                            val epTitle = episodeEntity?.title ?: "Episode"
+                            val seasonNum = episodeEntity?.seasonNumber
+                            val epNum = episodeEntity?.episodeNumber
+                            val sub = if (seasonNum != null && epNum != null) "S$seasonNum • E$epNum" else epTitle
+                            val image = episodeEntity?.imageUrl ?: seriesEntity?.backdropUrl ?: seriesEntity?.coverUrl ?: m3uSeries?.tvgLogo ?: item.imageUrl
+                            ContinueWatchingItem(
+                                providerId = item.providerId,
+                                contentType = ContentType.Episode,
+                                contentId = seriesId,
+                                subContentId = episodeId,
+                                title = seriesTitle,
+                                subtitle = sub,
+                                imageUrl = image,
+                                positionMs = item.positionMs,
+                                durationMs = item.durationMs,
+                                seasonNumber = seasonNum,
+                                episodeNumber = epNum,
+                                episodeTitle = epTitle,
+                            )
+                        }
+                    }
+                    else -> null
+                }
+            }
         val libraryHistory = history.map {
             LibraryHistoryItem(it.providerId, it.contentType, it.contentId, it.subContentId, it.title, subtitleFor(it.contentType, it.contentId, it.subContentId), it.imageUrl, it.positionMs, it.durationMs, it.lastWatchedAtEpochMs)
         }

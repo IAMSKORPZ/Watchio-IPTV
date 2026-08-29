@@ -21,6 +21,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+import com.watchioiptv.nativeapp.data.library.ContinueWatchingItem
+import com.watchioiptv.nativeapp.data.library.MyListRepository
+
 data class HomeUiState(
     val providersLoaded: Boolean = false,
     val providerId: ProviderId? = null,
@@ -30,6 +33,7 @@ data class HomeUiState(
     val liveCount: Int = 0,
     val movieCount: Int = 0,
     val seriesCount: Int = 0,
+    val continueWatching: List<ContinueWatchingItem> = emptyList(),
     val lastCatalogRefreshAtEpochMs: Long? = null,
     val liveRefreshAtEpochMs: Long? = null,
     val moviesRefreshAtEpochMs: Long? = null,
@@ -49,6 +53,7 @@ class HomeViewModel(
     settingsRepository: SettingsRepository,
     private val xtreamRepository: XtreamRepository,
     private val m3uRepository: M3uRepository,
+    private val myListRepository: MyListRepository? = null,
 ) : ViewModel() {
     private val refreshStatus = MutableStateFlow(HomeRefreshStatus())
     private val refreshJobs = mutableMapOf<ContentType, Job>()
@@ -67,6 +72,14 @@ class HomeViewModel(
         } else {
             null
         }
+        val repo = myListRepository
+        val cwItems = if (repo != null && selected != null) {
+            val raw = runCatching { repo.load().continueWatching }.getOrDefault(emptyList())
+            raw.filter { it.providerId == selected.id }
+                .distinctBy { if (it.contentType == ContentType.Episode) "series_${it.contentId}" else "movie_${it.contentId}" }
+        } else {
+            emptyList()
+        }
         HomeUiState(
             providersLoaded = true,
             providerId = selected?.id,
@@ -76,6 +89,7 @@ class HomeViewModel(
             liveCount = xtreamCounts?.liveCount ?: m3uCounts?.liveCount ?: 0,
             movieCount = xtreamCounts?.movieCount ?: m3uCounts?.movieCount ?: 0,
             seriesCount = xtreamCounts?.seriesCount ?: m3uCounts?.seriesCount ?: 0,
+            continueWatching = cwItems,
             lastCatalogRefreshAtEpochMs = selected?.lastRefreshAtEpochMs,
             liveRefreshing = refresh.isRefreshing(selected?.id, ContentType.Live),
             moviesRefreshing = refresh.isRefreshing(selected?.id, ContentType.Movie),
