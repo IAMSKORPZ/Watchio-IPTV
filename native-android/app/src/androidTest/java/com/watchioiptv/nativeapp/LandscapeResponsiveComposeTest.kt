@@ -62,6 +62,7 @@ import com.watchioiptv.nativeapp.feature.tvguide.WatchioGuideChannel
 import com.watchioiptv.nativeapp.ui.theme.WatchioTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -2693,6 +2694,71 @@ class LandscapeResponsiveComposeTest {
         composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
         composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionDown) }
         composeRule.waitForIdle()
+    }
+
+    @Test
+    fun fullscreenLiveRepeatedSurfingKeepsDeckHiddenAndOkOpensDeck() {
+        val fakePlayer = FakePlayerManager()
+        var prevCount = 0
+        var nextCount = 0
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "Sky Sports Main Event HD",
+                            programmeTitle = "Premier League Live",
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                            onPreviousChannel = { prevCount++ },
+                            onNextChannel = { nextCount++ },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        // Tap to hide initial controls
+        composeRule.onNodeWithTag("fullscreen-player").performClick()
+        composeRule.waitForIdle()
+
+        // Rapid surfing: UP, UP, DOWN
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.waitForIdle()
+
+        assertEquals("prevCount should be 2 after 2 UP presses", 2, prevCount)
+        assertEquals("nextCount should be 1 after 1 DOWN press", 1, nextCount)
+
+        // Transient Channel HUD is displayed
+        composeRule.onNodeWithTag("player-channel-hud", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-channel-hud-name", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-channel-hud-prog", useUnmergedTree = true).assertIsDisplayed()
+
+        // Full player deck remains hidden during surfing
+        composeRule.onAllNodesWithTag("player-bottom-deck", useUnmergedTree = true)[0].assertDoesNotExist()
+
+        // Press Enter / OK while HUD is visible -> opens full player controls
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionCenter) }
+        composeRule.waitForIdle()
+
+        // Now full bottom deck is displayed
+        composeRule.onNodeWithTag("player-bottom-deck", useUnmergedTree = true).assertIsDisplayed()
+        // And channel HUD is hidden
+        composeRule.onAllNodesWithTag("player-channel-hud", useUnmergedTree = true)[0].assertDoesNotExist()
     }
 
     private class FakePlayerManager : WatchioPlayerManager {

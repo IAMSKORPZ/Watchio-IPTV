@@ -1,4 +1,4 @@
-package com.watchioiptv.nativeapp.feature.player
+﻿package com.watchioiptv.nativeapp.feature.player
 
 import android.app.UiModeManager
 import android.content.Context
@@ -405,6 +405,66 @@ fun PlayerControlItem(
     }
 }
 
+@Composable
+private fun LiveChannelSwitchHud(
+    contentContext: PlayerContentContext.Live,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalWatchioColors.current
+    Box(
+        modifier = modifier
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        Color.Black.copy(alpha = 0.85f),
+                        Color.Black.copy(alpha = 0.72f),
+                        Color.Black.copy(alpha = 0.45f),
+                        Color.Transparent,
+                    ),
+                ),
+                shape = RoundedCornerShape(12.dp),
+            )
+            .border(1.dp, colors.liveTvAccent.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 18.dp, vertical = 12.dp)
+            .testTag("player-channel-hud"),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            contentContext.channelLogoUrl?.takeIf { it.isNotBlank() }?.let { logoUrl ->
+                AsyncImage(
+                    model = logoUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(36.dp),
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = contentContext.channelName,
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("player-channel-hud-name"),
+                )
+                contentContext.programmeTitle?.let { prog ->
+                    Text(
+                        text = prog,
+                        color = colors.textSecondary,
+                        fontSize = 13.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("player-channel-hud-prog"),
+                    )
+                }
+            }
+        }
+    }
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun WatchioFullscreenPlayerScreen(
@@ -427,6 +487,8 @@ fun WatchioFullscreenPlayerScreen(
     }
 
     var controlsVisible by remember { mutableStateOf(true) }
+    var channelHudVisible by remember { mutableStateOf(false) }
+    var channelHudJob by remember { mutableStateOf<Job?>(null) }
     var activeDialog by remember { mutableStateOf<PlayerDialogType?>(null) }
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
     var seekFeedbackJob by remember { mutableStateOf<Job?>(null) }
@@ -474,6 +536,24 @@ fun WatchioFullscreenPlayerScreen(
         }
     }
 
+    fun triggerChannelSwitch(previous: Boolean) {
+        lastInteractionEpochMs = System.currentTimeMillis()
+        if (contentContext !is PlayerContentContext.Live) return
+        if (previous) {
+            contentContext.onPreviousChannel()
+        } else {
+            contentContext.onNextChannel()
+        }
+        // Rapid channel surfing: keep full controls hidden, show lightweight transient HUD
+        controlsVisible = false
+        channelHudVisible = true
+        channelHudJob?.cancel()
+        channelHudJob = coroutineScope.launch {
+            delay(2500L)
+            channelHudVisible = false
+        }
+    }
+
     fun triggerSeek(deltaMs: Long) {
         lastInteractionEpochMs = System.currentTimeMillis()
         onSeek(deltaMs)
@@ -491,6 +571,9 @@ fun WatchioFullscreenPlayerScreen(
             activeDialog = null
         } else if (controlsVisible) {
             controlsVisible = false
+        } else if (channelHudVisible) {
+            channelHudJob?.cancel()
+            channelHudVisible = false
         } else {
             onClose()
         }
@@ -509,15 +592,13 @@ fun WatchioFullscreenPlayerScreen(
                 when (event.key) {
                     Key.DirectionUp -> {
                         if (!controlsVisible && contentContext is PlayerContentContext.Live) {
-                            contentContext.onPreviousChannel()
-                            controlsVisible = true
+                            triggerChannelSwitch(previous = true)
                             true
                         } else false
                     }
                     Key.DirectionDown -> {
                         if (!controlsVisible && contentContext is PlayerContentContext.Live) {
-                            contentContext.onNextChannel()
-                            controlsVisible = true
+                            triggerChannelSwitch(previous = false)
                             true
                         } else false
                     }
@@ -539,6 +620,8 @@ fun WatchioFullscreenPlayerScreen(
                     }
                     Key.DirectionCenter, Key.Enter -> {
                         if (!controlsVisible) {
+                            channelHudJob?.cancel()
+                            channelHudVisible = false
                             controlsVisible = true
                             firstFocus.requestFocus()
                             true
@@ -551,6 +634,10 @@ fun WatchioFullscreenPlayerScreen(
                         } else if (controlsVisible) {
                             controlsVisible = false
                             true
+                        } else if (channelHudVisible) {
+                            channelHudJob?.cancel()
+                            channelHudVisible = false
+                            true
                         } else {
                             onClose()
                             true
@@ -561,7 +648,13 @@ fun WatchioFullscreenPlayerScreen(
             }
             .clickable {
                 lastInteractionEpochMs = System.currentTimeMillis()
-                controlsVisible = !controlsVisible
+                if (!controlsVisible) {
+                    channelHudJob?.cancel()
+                    channelHudVisible = false
+                    controlsVisible = true
+                } else {
+                    controlsVisible = false
+                }
             },
     ) {
         AndroidView(
@@ -570,6 +663,16 @@ fun WatchioFullscreenPlayerScreen(
             update = { playerManager.attachSurface(it) },
             onRelease = { playerManager.detachSurface(it) },
         )
+
+        // Top-left Lightweight Transient Channel Switch HUD (Surfing mode)
+        if (channelHudVisible && !controlsVisible && contentContext is PlayerContentContext.Live) {
+            LiveChannelSwitchHud(
+                contentContext = contentContext,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 28.dp, top = 28.dp),
+            )
+        }
 
         // Center HUD: Seek feedback badge
         seekFeedbackText?.let { feedback ->
