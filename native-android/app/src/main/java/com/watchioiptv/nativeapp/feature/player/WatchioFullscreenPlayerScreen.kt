@@ -1,5 +1,9 @@
 ﻿package com.watchioiptv.nativeapp.feature.player
 
+import android.app.UiModeManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -31,7 +35,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
@@ -49,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -63,6 +67,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -171,7 +176,6 @@ fun PlayerIcon(
                 drawLine(color, Offset(w * 0.78f, h * 0.22f), Offset(w * 0.22f, h * 0.78f), strokeWidth = stroke, cap = StrokeCap.Round)
             }
             PlayerIconKind.Channels -> {
-                // 3 horizontal lines with dots
                 val y1 = h * 0.28f
                 val y2 = h * 0.50f
                 val y3 = h * 0.72f
@@ -313,7 +317,6 @@ fun PlayerIcon(
             }
             PlayerIconKind.Settings -> {
                 drawCircle(color, radius = w * 0.18f, center = Offset(w * 0.50f, h * 0.50f), style = Stroke(width = stroke))
-                // 6 gear cogs
                 for (i in 0 until 6) {
                     val angle = (i * 60.0) * Math.PI / 180.0
                     val cx = w * 0.50f + (w * 0.32f * cos(angle)).toFloat()
@@ -346,10 +349,10 @@ fun PlayerControlItem(
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
 
-    val iconCircleSize: Dp = if (isPrimary) 52.dp else 44.dp
+    val iconCircleSize: Dp = if (isPrimary) 54.dp else 44.dp
     val iconSize: Dp = if (isPrimary) 26.dp else 20.dp
-    val fontSize = if (isPrimary) 12.sp else 11.sp
-    val fontWeight = if (focused || isPrimary) FontWeight.Bold else FontWeight.Medium
+    val fontSize = if (isPrimary) 13.5.sp else 12.5.sp
+    val fontWeight = if (focused || isPrimary) FontWeight.Bold else FontWeight.Normal
 
     Column(
         modifier = modifier
@@ -371,12 +374,16 @@ fun PlayerControlItem(
             modifier = Modifier
                 .size(iconCircleSize)
                 .background(
-                    color = if (focused) accent.copy(alpha = if (isPrimary) 0.38f else 0.28f) else Color.White.copy(alpha = if (isPrimary) 0.12f else 0.05f),
+                    color = if (focused) {
+                        accent.copy(alpha = if (isPrimary) 0.40f else 0.30f)
+                    } else {
+                        Color.White.copy(alpha = if (isPrimary) 0.08f else 0.035f)
+                    },
                     shape = CircleShape,
                 )
                 .border(
-                    width = if (focused) 2.5.dp else if (isPrimary) 1.dp else 0.dp,
-                    color = if (focused) colors.focusBorder else if (isPrimary) Color.White.copy(alpha = 0.25f) else Color.Transparent,
+                    width = if (focused) 2.5.dp else 0.dp,
+                    color = if (focused) colors.focusBorder else Color.Transparent,
                     shape = CircleShape,
                 ),
             contentAlignment = Alignment.Center,
@@ -411,7 +418,14 @@ fun WatchioFullscreenPlayerScreen(
     onRetry: () -> Unit,
     onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
     val colors = LocalWatchioColors.current
+    val isTvDevice = remember(context) {
+        val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+        uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
+            context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    }
+
     var controlsVisible by remember { mutableStateOf(true) }
     var activeDialog by remember { mutableStateOf<PlayerDialogType?>(null) }
     var seekFeedbackText by remember { mutableStateOf<String?>(null) }
@@ -635,44 +649,45 @@ fun WatchioFullscreenPlayerScreen(
             }
         }
 
-        // Controls overlay: Subtle top close + bottom control deck with gradient
+        // Controls overlay: Subtle top close + bottom control deck with soft progressive gradient
         if (controlsVisible) {
-            // Subtle top close button
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(20.dp),
-            ) {
+            // Subtle top close button for touch/mobile devices
+            if (!isTvDevice) {
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .background(Color.Black.copy(alpha = 0.50f), CircleShape)
-                        .clickable(onClick = onClose)
-                        .testTag("player-close-button"),
-                    contentAlignment = Alignment.Center,
+                        .align(Alignment.TopEnd)
+                        .padding(20.dp),
                 ) {
-                    PlayerIcon(kind = PlayerIconKind.Close, color = Color.White, modifier = Modifier.size(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Color.Black.copy(alpha = 0.50f), CircleShape)
+                            .clickable(onClick = onClose)
+                            .testTag("player-close-button"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        PlayerIcon(kind = PlayerIconKind.Close, color = Color.White, modifier = Modifier.size(16.dp))
+                    }
                 }
             }
 
-            // Bottom Control Deck with clean dark translucent gradient
+            // Bottom Control Deck with soft, translucent progressive gradient and raised bottom breathing room
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
-                            listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.45f),
-                                Color.Black.copy(alpha = 0.88f),
-                            ),
+                            0.0f to Color.Transparent,
+                            0.30f to Color.Black.copy(alpha = 0.20f),
+                            0.65f to Color.Black.copy(alpha = 0.55f),
+                            1.0f to Color.Black.copy(alpha = 0.78f),
                         ),
                     )
-                    .padding(horizontal = 24.dp, vertical = 18.dp)
+                    .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 32.dp)
                     .testTag("player-bottom-deck"),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 // Subtle Content Information Header (above timeline)
                 when (contentContext) {
@@ -703,7 +718,7 @@ fun WatchioFullscreenPlayerScreen(
                             )
                             contentContext.programmeTitle?.let { prog ->
                                 Text(
-                                    text = " â€¢  $prog",
+                                    text = " \u2022  $prog",
                                     color = colors.textSecondary,
                                     fontSize = 14.sp,
                                     maxLines = 1,
@@ -734,7 +749,7 @@ fun WatchioFullscreenPlayerScreen(
                                 .filter { it.isNotBlank() }
                             if (metaList.isNotEmpty()) {
                                 Text(
-                                    text = " â€¢  ${metaList.joinToString("  â€¢  ")}",
+                                    text = " \u2022  ${metaList.joinToString("  \u2022  ")}",
                                     color = colors.textSecondary,
                                     fontSize = 13.sp,
                                     maxLines = 1,
@@ -761,7 +776,7 @@ fun WatchioFullscreenPlayerScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.testTag("player-header-title"),
                             )
-                            val epSubtitle = " â€¢  S${contentContext.seasonNumber} â€¢ E${contentContext.episodeNumber}  ${contentContext.episodeTitle}"
+                            val epSubtitle = " \u2022  S${contentContext.seasonNumber} \u2022 E${contentContext.episodeNumber}  ${contentContext.episodeTitle}"
                             Text(
                                 text = epSubtitle,
                                 color = colors.textSecondary,
@@ -774,7 +789,10 @@ fun WatchioFullscreenPlayerScreen(
                     }
                 }
 
-                // Thin elegant timeline
+                // Breathing room between metadata and timeline
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Thin elegant timeline with current-position thumb indicator
                 when (contentContext) {
                     is PlayerContentContext.Live -> {
                         if (metadata.isSeekable && metadata.durationMs != null && metadata.durationMs > 0L) {
@@ -1209,6 +1227,60 @@ fun WatchioFullscreenPlayerScreen(
 }
 
 @Composable
+private fun WatchioProgressBar(
+    progress: Float,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    showThumb: Boolean = true,
+) {
+    val clampedProgress = progress.coerceIn(0f, 1f)
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(14.dp),
+    ) {
+        val trackHeight = 3.5.dp.toPx()
+        val centerY = size.height / 2f
+        val trackRadius = trackHeight / 2f
+
+        // Background track
+        drawRoundRect(
+            color = Color.White.copy(alpha = 0.20f),
+            topLeft = Offset(0f, centerY - trackRadius),
+            size = Size(size.width, trackHeight),
+            cornerRadius = CornerRadius(trackRadius, trackRadius),
+        )
+
+        // Active progress bar
+        val progressWidth = size.width * clampedProgress
+        if (progressWidth > 0f) {
+            drawRoundRect(
+                color = accentColor,
+                topLeft = Offset(0f, centerY - trackRadius),
+                size = Size(progressWidth, trackHeight),
+                cornerRadius = CornerRadius(trackRadius, trackRadius),
+            )
+        }
+
+        // Current-position subtle thumb indicator
+        if (showThumb) {
+            val thumbRadius = 4.5.dp.toPx()
+            val thumbX = progressWidth.coerceIn(thumbRadius, (size.width - thumbRadius).coerceAtLeast(thumbRadius))
+            drawCircle(
+                color = accentColor,
+                radius = thumbRadius,
+                center = Offset(thumbX, centerY),
+            )
+            drawCircle(
+                color = Color.White,
+                radius = thumbRadius * 0.55f,
+                center = Offset(thumbX, centerY),
+            )
+        }
+    }
+}
+
+@Composable
 private fun VodTimeline(
     currentPositionMs: Long,
     durationMs: Long,
@@ -1229,13 +1301,12 @@ private fun VodTimeline(
             fontSize = 12.sp,
             modifier = Modifier.testTag("player-position"),
         )
-        LinearProgressIndicator(
-            progress = { progress },
-            color = accentColor,
-            trackColor = Color.White.copy(alpha = 0.2f),
+        WatchioProgressBar(
+            progress = progress,
+            accentColor = accentColor,
+            showThumb = true,
             modifier = Modifier
                 .weight(1f)
-                .height(4.dp)
                 .testTag("player-progress-bar"),
         )
         Text(
@@ -1266,13 +1337,11 @@ private fun LiveEpgTimeline(
         if (!startTime.isNullOrBlank()) {
             Text(text = startTime, color = colors.textSecondary, fontSize = 12.sp)
         }
-        LinearProgressIndicator(
-            progress = { progress.coerceIn(0f, 1f) },
-            color = accentColor,
-            trackColor = Color.White.copy(alpha = 0.2f),
-            modifier = Modifier
-                .weight(1f)
-                .height(4.dp),
+        WatchioProgressBar(
+            progress = progress,
+            accentColor = accentColor,
+            showThumb = true,
+            modifier = Modifier.weight(1f),
         )
         if (!endTime.isNullOrBlank()) {
             Text(text = endTime, color = colors.textSecondary, fontSize = 12.sp)
