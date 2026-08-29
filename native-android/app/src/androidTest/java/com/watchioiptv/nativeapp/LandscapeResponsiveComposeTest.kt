@@ -19,6 +19,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +62,7 @@ import com.watchioiptv.nativeapp.feature.tvguide.WatchioGuideChannel
 import com.watchioiptv.nativeapp.ui.theme.WatchioTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -2531,6 +2535,164 @@ class LandscapeResponsiveComposeTest {
         composeRule.onNodeWithTag("player-settings-button", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("player-settings-dialog", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullscreenLiveOverlayHiddenDpadUpSwitchesToPreviousChannel() {
+        val fakePlayer = FakePlayerManager()
+        var prevClicked = false
+        var nextClicked = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                            onPreviousChannel = { prevClicked = true },
+                            onNextChannel = { nextClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        // Tap screen to hide overlay
+        composeRule.onNodeWithTag("fullscreen-player").performClick()
+        composeRule.waitForIdle()
+
+        // Press UP when overlay is hidden
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.waitForIdle()
+        assertTrue("prevClicked should be true on DPAD UP when overlay is hidden", prevClicked)
+        assertFalse("nextClicked should remain false", nextClicked)
+    }
+
+    @Test
+    fun fullscreenLiveOverlayHiddenDpadDownSwitchesToNextChannel() {
+        val fakePlayer = FakePlayerManager()
+        var prevClicked = false
+        var nextClicked = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                            onPreviousChannel = { prevClicked = true },
+                            onNextChannel = { nextClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        // Tap screen to hide overlay
+        composeRule.onNodeWithTag("fullscreen-player").performClick()
+        composeRule.waitForIdle()
+
+        // Press DOWN when overlay is hidden
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.waitForIdle()
+        assertTrue("nextClicked should be true on DPAD DOWN when overlay is hidden", nextClicked)
+        assertFalse("prevClicked should remain false", prevClicked)
+    }
+
+    @Test
+    fun fullscreenLiveOverlayVisibleDpadUpDownDoesNotSwitchChannel() {
+        val fakePlayer = FakePlayerManager()
+        var prevClicked = false
+        var nextClicked = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                            onPreviousChannel = { prevClicked = true },
+                            onNextChannel = { nextClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        // Overlay is visible by default
+        composeRule.onNodeWithTag("player-bottom-deck", useUnmergedTree = true).assertIsDisplayed()
+
+        // Press UP / DOWN when overlay is visible
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.waitForIdle()
+        assertFalse("prevClicked should be false when overlay is visible", prevClicked)
+        assertFalse("nextClicked should be false when overlay is visible", nextClicked)
+    }
+
+    @Test
+    fun fullscreenMovieDpadUpDownDoesNotSwitchLiveChannels() {
+        val fakePlayer = FakePlayerManager()
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Movie(
+                            title = "Sample Movie",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("fullscreen-player").performClick()
+        composeRule.waitForIdle()
+        // Pressing UP / DOWN in Movie mode should not throw
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.waitForIdle()
     }
 
     private class FakePlayerManager : WatchioPlayerManager {

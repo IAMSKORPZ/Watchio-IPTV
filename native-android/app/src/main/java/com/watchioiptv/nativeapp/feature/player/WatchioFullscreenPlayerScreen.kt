@@ -1,4 +1,4 @@
-﻿package com.watchioiptv.nativeapp.feature.player
+package com.watchioiptv.nativeapp.feature.player
 
 import android.app.UiModeManager
 import android.content.Context
@@ -507,6 +507,20 @@ fun WatchioFullscreenPlayerScreen(
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 lastInteractionEpochMs = System.currentTimeMillis()
                 when (event.key) {
+                    Key.DirectionUp -> {
+                        if (!controlsVisible && contentContext is PlayerContentContext.Live) {
+                            contentContext.onPreviousChannel()
+                            controlsVisible = true
+                            true
+                        } else false
+                    }
+                    Key.DirectionDown -> {
+                        if (!controlsVisible && contentContext is PlayerContentContext.Live) {
+                            contentContext.onNextChannel()
+                            controlsVisible = true
+                            true
+                        } else false
+                    }
                     Key.DirectionLeft -> {
                         if (!controlsVisible && (metadata.isSeekable || contentContext !is PlayerContentContext.Live)) {
                             triggerSeek(-10_000L)

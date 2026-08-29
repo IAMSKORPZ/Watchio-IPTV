@@ -104,7 +104,8 @@ fun LiveTvScreen(
     val firstCategoryFocus = remember { FocusRequester() }
     var liveSearchVisible by remember { mutableStateOf(false) }
     var optionsChannel by remember { mutableStateOf<LiveTvChannel?>(null) }
-    BackHandler {
+    var isLongBackConsumed by remember { mutableStateOf(false) }
+    BackHandler(enabled = !isLongBackConsumed) {
         if (liveSearchVisible) {
             liveSearchVisible = false
             onLiveSearch("")
@@ -126,7 +127,33 @@ fun LiveTvScreen(
             .fillMaxSize()
             .background(Brush.linearGradient(listOf(colors.surfaceBase, Color(0xFF12071F), Color(0xFF041B22))))
             .padding(horizontal = 18.dp, vertical = 14.dp)
-            .testTag("live-tv-screen"),
+            .testTag("live-tv-screen")
+            .focusable()
+            .onPreviewKeyEvent { event ->
+                if (event.key == Key.Back || event.key == Key.Escape) {
+                    val nativeEvent = event.nativeKeyEvent
+                    if (event.type == KeyEventType.KeyDown) {
+                        val hasActivePreview = uiState.selectedChannel != null &&
+                            (playerState is WatchioPlayerState.Playing ||
+                             playerState is WatchioPlayerState.Buffering ||
+                             playerState is WatchioPlayerState.Connecting ||
+                             playerState is WatchioPlayerState.Recovering)
+                        if (hasActivePreview && (nativeEvent.isLongPress || nativeEvent.repeatCount >= 1)) {
+                            if (!isLongBackConsumed) {
+                                isLongBackConsumed = true
+                                onFullscreen()
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+                    } else if (event.type == KeyEventType.KeyUp) {
+                        if (isLongBackConsumed) {
+                            isLongBackConsumed = false
+                            return@onPreviewKeyEvent true
+                        }
+                    }
+                }
+                false
+            },
     ) {
         Column(Modifier.fillMaxSize()) {
             LiveHeader(
