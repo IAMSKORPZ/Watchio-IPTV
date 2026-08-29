@@ -592,6 +592,7 @@ fun WatchioNativeApp(
                     programmeProgress = nowNext.progress,
                     hasPreviousChannel = liveViewModel.hasPreviousChannel(),
                     hasNextChannel = liveViewModel.hasNextChannel(),
+                    onChannelsClick = { navController.popBackStack() },
                     onPreviousChannel = liveViewModel::selectPreviousChannel,
                     onNextChannel = liveViewModel::selectNextChannel,
                 )

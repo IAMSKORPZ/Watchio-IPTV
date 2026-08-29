@@ -1,4 +1,4 @@
-package com.watchioiptv.nativeapp.feature.player
+﻿package com.watchioiptv.nativeapp.feature.player
 
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -49,7 +49,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -88,6 +87,8 @@ import com.watchioiptv.nativeapp.ui.theme.LocalWatchioColors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.cos
+import kotlin.math.sin
 
 sealed interface PlayerContentContext {
     data class Live(
@@ -99,6 +100,7 @@ sealed interface PlayerContentContext {
         val programmeProgress: Float? = null,
         val hasPreviousChannel: Boolean = false,
         val hasNextChannel: Boolean = false,
+        val onChannelsClick: () -> Unit = {},
         val onPreviousChannel: () -> Unit = {},
         val onNextChannel: () -> Unit = {},
     ) : PlayerContentContext
@@ -131,10 +133,12 @@ enum class PlayerDialogType {
     Subtitles,
     AspectRatio,
     PlaybackSpeed,
+    Settings,
 }
 
 enum class PlayerIconKind {
     Close,
+    Channels,
     Play,
     Pause,
     Rewind10,
@@ -146,8 +150,7 @@ enum class PlayerIconKind {
     Subtitles,
     AspectRatio,
     Speed,
-    VolumeMute,
-    VolumeUp,
+    Settings,
     Back,
     Retry,
 }
@@ -156,7 +159,7 @@ enum class PlayerIconKind {
 fun PlayerIcon(
     kind: PlayerIconKind,
     color: Color = Color.White,
-    modifier: Modifier = Modifier.size(18.dp),
+    modifier: Modifier = Modifier.size(20.dp),
 ) {
     Canvas(modifier = modifier) {
         val w = size.width
@@ -166,6 +169,19 @@ fun PlayerIcon(
             PlayerIconKind.Close -> {
                 drawLine(color, Offset(w * 0.22f, h * 0.22f), Offset(w * 0.78f, h * 0.78f), strokeWidth = stroke, cap = StrokeCap.Round)
                 drawLine(color, Offset(w * 0.78f, h * 0.22f), Offset(w * 0.22f, h * 0.78f), strokeWidth = stroke, cap = StrokeCap.Round)
+            }
+            PlayerIconKind.Channels -> {
+                // 3 horizontal lines with dots
+                val y1 = h * 0.28f
+                val y2 = h * 0.50f
+                val y3 = h * 0.72f
+                val dotR = w * 0.07f
+                drawCircle(color, dotR, Offset(w * 0.20f, y1))
+                drawCircle(color, dotR, Offset(w * 0.20f, y2))
+                drawCircle(color, dotR, Offset(w * 0.20f, y3))
+                drawLine(color, Offset(w * 0.38f, y1), Offset(w * 0.82f, y1), strokeWidth = stroke, cap = StrokeCap.Round)
+                drawLine(color, Offset(w * 0.38f, y2), Offset(w * 0.82f, y2), strokeWidth = stroke, cap = StrokeCap.Round)
+                drawLine(color, Offset(w * 0.38f, y3), Offset(w * 0.82f, y3), strokeWidth = stroke, cap = StrokeCap.Round)
             }
             PlayerIconKind.Play -> {
                 val path = Path().apply {
@@ -233,7 +249,7 @@ fun PlayerIcon(
                 drawPath(arrow, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
             }
             PlayerIconKind.SkipPrevious -> {
-                val barW = w * 0.15f
+                val barW = w * 0.14f
                 drawRoundRect(color, topLeft = Offset(w * 0.18f, h * 0.20f), size = Size(barW, h * 0.60f))
                 val path = Path().apply {
                     moveTo(w * 0.82f, h * 0.20f)
@@ -244,7 +260,7 @@ fun PlayerIcon(
                 drawPath(path, color, style = Fill)
             }
             PlayerIconKind.SkipNext -> {
-                val barW = w * 0.15f
+                val barW = w * 0.14f
                 val path = Path().apply {
                     moveTo(w * 0.18f, h * 0.20f)
                     lineTo(w * 0.62f, h * 0.50f)
@@ -252,11 +268,11 @@ fun PlayerIcon(
                     close()
                 }
                 drawPath(path, color, style = Fill)
-                drawRoundRect(color, topLeft = Offset(w * 0.67f, h * 0.20f), size = Size(barW, h * 0.60f))
+                drawRoundRect(color, topLeft = Offset(w * 0.68f, h * 0.20f), size = Size(barW, h * 0.60f))
             }
             PlayerIconKind.Audio -> {
-                drawCircle(color, radius = w * 0.18f, center = Offset(w * 0.32f, h * 0.70f))
-                drawCircle(color, radius = w * 0.18f, center = Offset(w * 0.72f, h * 0.60f))
+                drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.32f, h * 0.70f))
+                drawCircle(color, radius = w * 0.16f, center = Offset(w * 0.72f, h * 0.60f))
                 drawLine(color, Offset(w * 0.44f, h * 0.70f), Offset(w * 0.44f, h * 0.25f), strokeWidth = stroke)
                 drawLine(color, Offset(w * 0.84f, h * 0.60f), Offset(w * 0.84f, h * 0.15f), strokeWidth = stroke)
                 drawLine(color, Offset(w * 0.44f, h * 0.25f), Offset(w * 0.84f, h * 0.15f), strokeWidth = stroke * 1.5f)
@@ -295,49 +311,15 @@ fun PlayerIcon(
                 drawLine(color, Offset(w * 0.50f, h * 0.54f), Offset(w * 0.72f, h * 0.32f), strokeWidth = stroke * 1.3f, cap = StrokeCap.Round)
                 drawCircle(color, radius = w * 0.08f, center = Offset(w * 0.50f, h * 0.54f))
             }
-            PlayerIconKind.VolumeMute -> {
-                val spk = Path().apply {
-                    moveTo(w * 0.12f, h * 0.38f)
-                    lineTo(w * 0.30f, h * 0.38f)
-                    lineTo(w * 0.50f, h * 0.20f)
-                    lineTo(w * 0.50f, h * 0.80f)
-                    lineTo(w * 0.30f, h * 0.62f)
-                    lineTo(w * 0.12f, h * 0.62f)
-                    close()
+            PlayerIconKind.Settings -> {
+                drawCircle(color, radius = w * 0.18f, center = Offset(w * 0.50f, h * 0.50f), style = Stroke(width = stroke))
+                // 6 gear cogs
+                for (i in 0 until 6) {
+                    val angle = (i * 60.0) * Math.PI / 180.0
+                    val cx = w * 0.50f + (w * 0.32f * cos(angle)).toFloat()
+                    val cy = h * 0.50f + (h * 0.32f * sin(angle)).toFloat()
+                    drawCircle(color, radius = w * 0.07f, center = Offset(cx, cy))
                 }
-                drawPath(spk, color, style = Fill)
-                drawLine(color, Offset(w * 0.62f, h * 0.38f), Offset(w * 0.86f, h * 0.62f), strokeWidth = stroke, cap = StrokeCap.Round)
-                drawLine(color, Offset(w * 0.86f, h * 0.38f), Offset(w * 0.62f, h * 0.62f), strokeWidth = stroke, cap = StrokeCap.Round)
-            }
-            PlayerIconKind.VolumeUp -> {
-                val spk = Path().apply {
-                    moveTo(w * 0.12f, h * 0.38f)
-                    lineTo(w * 0.30f, h * 0.38f)
-                    lineTo(w * 0.50f, h * 0.20f)
-                    lineTo(w * 0.50f, h * 0.80f)
-                    lineTo(w * 0.30f, h * 0.62f)
-                    lineTo(w * 0.12f, h * 0.62f)
-                    close()
-                }
-                drawPath(spk, color, style = Fill)
-                drawArc(
-                    color = color,
-                    startAngle = -45f,
-                    sweepAngle = 90f,
-                    useCenter = false,
-                    topLeft = Offset(w * 0.40f, h * 0.30f),
-                    size = Size(w * 0.38f, h * 0.40f),
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                )
-                drawArc(
-                    color = color,
-                    startAngle = -50f,
-                    sweepAngle = 100f,
-                    useCenter = false,
-                    topLeft = Offset(w * 0.50f, h * 0.20f),
-                    size = Size(w * 0.45f, h * 0.60f),
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                )
             }
             PlayerIconKind.Back -> {
                 drawLine(color, Offset(w * 0.22f, h * 0.50f), Offset(w * 0.78f, h * 0.50f), strokeWidth = stroke, cap = StrokeCap.Round)
@@ -349,7 +331,7 @@ fun PlayerIcon(
 }
 
 @Composable
-fun PlayerControlButton(
+fun PlayerControlItem(
     title: String,
     icon: PlayerIconKind,
     modifier: Modifier = Modifier,
@@ -357,26 +339,22 @@ fun PlayerControlButton(
     isPrimary: Boolean = false,
     enabled: Boolean = true,
     contentDescription: String = title,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
 
-    val height: Dp = if (isPrimary) 52.dp else 42.dp
-    val hPadding: Dp = if (isPrimary) 20.dp else 14.dp
-    val iconSize: Dp = if (isPrimary) 22.dp else 16.dp
-    val fontSize = if (isPrimary) 16.sp else 13.sp
-    val fontWeight = if (isPrimary) FontWeight.Bold else FontWeight.Medium
+    val iconCircleSize: Dp = if (isPrimary) 52.dp else 44.dp
+    val iconSize: Dp = if (isPrimary) 26.dp else 20.dp
+    val fontSize = if (isPrimary) 12.sp else 11.sp
+    val fontWeight = if (focused || isPrimary) FontWeight.Bold else FontWeight.Medium
 
-    Surface(
+    Column(
         modifier = modifier
-            .height(height)
-            .border(
-                width = if (focused) 2.5.dp else 1.dp,
-                color = if (focused) colors.focusBorder else if (enabled) colors.surfaceElevated else Color.Transparent,
-                shape = RoundedCornerShape(8.dp),
-            )
+            .semantics { this.contentDescription = contentDescription }
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -385,29 +363,38 @@ fun PlayerControlButton(
                 onClick = onClick,
             )
             .focusable(interactionSource = interactionSource, enabled = enabled)
-            .semantics { this.contentDescription = contentDescription },
-        color = if (focused) accent.copy(alpha = if (isPrimary) 0.35f else 0.22f) else if (isPrimary) accent.copy(alpha = 0.18f) else Color.White.copy(alpha = if (enabled) 0.08f else 0.03f),
-        shape = RoundedCornerShape(8.dp),
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = hPadding, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Box(
+            modifier = Modifier
+                .size(iconCircleSize)
+                .background(
+                    color = if (focused) accent.copy(alpha = if (isPrimary) 0.38f else 0.28f) else Color.White.copy(alpha = if (isPrimary) 0.12f else 0.05f),
+                    shape = CircleShape,
+                )
+                .border(
+                    width = if (focused) 2.5.dp else if (isPrimary) 1.dp else 0.dp,
+                    color = if (focused) colors.focusBorder else if (isPrimary) Color.White.copy(alpha = 0.25f) else Color.Transparent,
+                    shape = CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
         ) {
             PlayerIcon(
                 kind = icon,
-                color = if (enabled) (if (focused) colors.textPrimary else colors.textPrimary.copy(alpha = 0.90f)) else colors.textMuted,
+                color = if (enabled) (if (focused) Color.White else Color.White.copy(alpha = 0.90f)) else colors.textMuted,
                 modifier = Modifier.size(iconSize),
             )
-            Text(
-                text = title,
-                color = if (enabled) (if (focused) colors.textPrimary else colors.textPrimary.copy(alpha = 0.90f)) else colors.textMuted,
-                fontSize = fontSize,
-                fontWeight = fontWeight,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
+        Text(
+            text = title,
+            color = if (enabled) (if (focused) colors.textPrimary else colors.textSecondary) else colors.textMuted,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -447,7 +434,7 @@ fun WatchioFullscreenPlayerScreen(
         }
     }
 
-    // Lightweight position timer (only updates positionMs, does not re-extract tracks)
+    // Lightweight position timer (only updates positionMs)
     LaunchedEffect(controlsVisible, playerState) {
         if (controlsVisible) {
             while (true) {
@@ -611,7 +598,7 @@ fun WatchioFullscreenPlayerScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(color = colors.liveTvAccent, modifier = Modifier.size(24.dp))
-                    Text(text = "Reconnectingâ€¦", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(text = "Reconnecting...", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -628,15 +615,15 @@ fun WatchioFullscreenPlayerScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(text = playerState.message, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PlayerControlButton(
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        PlayerControlItem(
                             title = "Retry",
                             icon = PlayerIconKind.Retry,
                             accent = colors.liveTvAccent,
                             onClick = onRetry,
                             modifier = Modifier.testTag("player-retry"),
                         )
-                        PlayerControlButton(
+                        PlayerControlItem(
                             title = "Back",
                             icon = PlayerIconKind.Back,
                             accent = colors.focusGlow,
@@ -648,103 +635,75 @@ fun WatchioFullscreenPlayerScreen(
             }
         }
 
-        // Overlays: Top Header and Bottom Control Deck
+        // Controls overlay: Subtle top close + bottom control deck with gradient
         if (controlsVisible) {
-            // Top Header
+            // Subtle top close button
             Box(
                 modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(20.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color.Black.copy(alpha = 0.50f), CircleShape)
+                        .clickable(onClick = onClose)
+                        .testTag("player-close-button"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PlayerIcon(kind = PlayerIconKind.Close, color = Color.White, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            // Bottom Control Deck with clean dark translucent gradient
+            Column(
+                modifier = Modifier
                     .fillMaxWidth()
-                    .align(Alignment.TopCenter)
+                    .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent),
+                            listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.45f),
+                                Color.Black.copy(alpha = 0.88f),
+                            ),
                         ),
                     )
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
-                    .testTag("player-top-bar"),
+                    .padding(horizontal = 24.dp, vertical = 18.dp)
+                    .testTag("player-bottom-deck"),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    when (contentContext) {
-                        is PlayerContentContext.Live -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                contentContext.channelLogoUrl?.takeIf { it.isNotBlank() }?.let { logoUrl ->
-                                    AsyncImage(
-                                        model = logoUrl,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Fit,
-                                        modifier = Modifier.size(36.dp),
-                                    )
-                                }
-                                Column {
-                                    Text(
-                                        text = contentContext.channelName,
-                                        color = colors.textPrimary,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 18.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.testTag("player-header-title"),
-                                    )
-                                    contentContext.programmeTitle?.let { prog ->
-                                        Text(
-                                            text = prog,
-                                            color = colors.textSecondary,
-                                            fontSize = 14.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.testTag("player-header-subtitle"),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        is PlayerContentContext.Movie -> {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = contentContext.title,
-                                    color = colors.textPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.testTag("player-header-title"),
+                // Subtle Content Information Header (above timeline)
+                when (contentContext) {
+                    is PlayerContentContext.Live -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            contentContext.channelLogoUrl?.takeIf { it.isNotBlank() }?.let { logoUrl ->
+                                AsyncImage(
+                                    model = logoUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.size(32.dp),
                                 )
-                                val metaList = listOfNotNull(contentContext.year, contentContext.rating, contentContext.runtime, contentContext.genre)
-                                    .filter { it.isNotBlank() }
-                                if (metaList.isNotEmpty()) {
-                                    Text(
-                                        text = metaList.joinToString("  â€¢  "),
-                                        color = colors.textSecondary,
-                                        fontSize = 13.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.testTag("player-header-meta"),
-                                    )
-                                }
                             }
-                        }
-                        is PlayerContentContext.Episode -> {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = contentContext.channelName,
+                                color = colors.textPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("player-header-title"),
+                            )
+                            contentContext.programmeTitle?.let { prog ->
                                 Text(
-                                    text = contentContext.seriesTitle,
-                                    color = colors.textPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.testTag("player-header-title"),
-                                )
-                                val epSubtitle = "S${contentContext.seasonNumber} â€¢ E${contentContext.episodeNumber}  ${contentContext.episodeTitle}"
-                                Text(
-                                    text = epSubtitle,
+                                    text = " â€¢  $prog",
                                     color = colors.textSecondary,
                                     fontSize = 14.sp,
                                     maxLines = 1,
@@ -754,34 +713,68 @@ fun WatchioFullscreenPlayerScreen(
                             }
                         }
                     }
-
-                    PlayerControlButton(
-                        title = "Close",
-                        icon = PlayerIconKind.Close,
-                        accent = colors.focusGlow,
-                        contentDescription = "Close player",
-                        onClick = onClose,
-                        modifier = Modifier.testTag("player-close-button"),
-                    )
+                    is PlayerContentContext.Movie -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                text = contentContext.title,
+                                color = colors.textPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("player-header-title"),
+                            )
+                            val metaList = listOfNotNull(contentContext.year, contentContext.rating, contentContext.runtime, contentContext.genre)
+                                .filter { it.isNotBlank() }
+                            if (metaList.isNotEmpty()) {
+                                Text(
+                                    text = " â€¢  ${metaList.joinToString("  â€¢  ")}",
+                                    color = colors.textSecondary,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.testTag("player-header-meta"),
+                                )
+                            }
+                        }
+                    }
+                    is PlayerContentContext.Episode -> {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                text = contentContext.seriesTitle,
+                                color = colors.textPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("player-header-title"),
+                            )
+                            val epSubtitle = " â€¢  S${contentContext.seasonNumber} â€¢ E${contentContext.episodeNumber}  ${contentContext.episodeTitle}"
+                            Text(
+                                text = epSubtitle,
+                                color = colors.textSecondary,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("player-header-subtitle"),
+                            )
+                        }
+                    }
                 }
-            }
 
-            // Bottom Control Deck
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.94f)),
-                        ),
-                    )
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
-                    .testTag("player-bottom-deck"),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                // Timeline
+                // Thin elegant timeline
                 when (contentContext) {
                     is PlayerContentContext.Live -> {
                         if (metadata.isSeekable && metadata.durationMs != null && metadata.durationMs > 0L) {
@@ -815,21 +808,34 @@ fun WatchioFullscreenPlayerScreen(
                     }
                 }
 
-                // Primary Controls Row (Responsive wrapping / adaptive spacing)
+                // Modern IPTV Icon Control Strip (Single horizontal strip with horizontal scroll protection)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         when (contentContext) {
                             is PlayerContentContext.Live -> {
+                                PlayerControlItem(
+                                    title = "Channels",
+                                    icon = PlayerIconKind.Channels,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Channels",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        contentContext.onChannelsClick()
+                                    },
+                                    modifier = Modifier.testTag("player-channels-button"),
+                                )
                                 if (contentContext.hasPreviousChannel) {
-                                    PlayerControlButton(
-                                        title = "Prev Channel",
+                                    PlayerControlItem(
+                                        title = "Previous",
                                         icon = PlayerIconKind.SkipPrevious,
                                         accent = colors.focusGlow,
                                         contentDescription = "Previous channel",
@@ -841,8 +847,8 @@ fun WatchioFullscreenPlayerScreen(
                                     )
                                 }
                                 if (metadata.isSeekable) {
-                                    PlayerControlButton(
-                                        title = "10s",
+                                    PlayerControlItem(
+                                        title = "Rewind",
                                         icon = PlayerIconKind.Rewind10,
                                         accent = colors.focusGlow,
                                         contentDescription = "Rewind 10 seconds",
@@ -850,23 +856,22 @@ fun WatchioFullscreenPlayerScreen(
                                         modifier = Modifier.testTag("player-rewind"),
                                     )
                                 }
-                                PlayerControlButton(
+                                PlayerControlItem(
                                     title = if (playerState is WatchioPlayerState.Playing) "Pause" else "Play",
                                     icon = if (playerState is WatchioPlayerState.Playing) PlayerIconKind.Pause else PlayerIconKind.Play,
                                     accent = colors.liveTvAccent,
                                     isPrimary = true,
+                                    focusRequester = firstFocus,
                                     contentDescription = if (playerState is WatchioPlayerState.Playing) "Pause" else "Play",
                                     onClick = {
                                         lastInteractionEpochMs = System.currentTimeMillis()
                                         onPlayPause()
                                     },
-                                    modifier = Modifier
-                                        .focusRequester(firstFocus)
-                                        .testTag("player-play-pause"),
+                                    modifier = Modifier.testTag("player-play-pause"),
                                 )
                                 if (metadata.isSeekable) {
-                                    PlayerControlButton(
-                                        title = "10s",
+                                    PlayerControlItem(
+                                        title = "Forward",
                                         icon = PlayerIconKind.Forward10,
                                         accent = colors.focusGlow,
                                         contentDescription = "Fast forward 10 seconds",
@@ -875,8 +880,8 @@ fun WatchioFullscreenPlayerScreen(
                                     )
                                 }
                                 if (contentContext.hasNextChannel) {
-                                    PlayerControlButton(
-                                        title = "Next Channel",
+                                    PlayerControlItem(
+                                        title = "Next",
                                         icon = PlayerIconKind.SkipNext,
                                         accent = colors.focusGlow,
                                         contentDescription = "Next channel",
@@ -887,12 +892,56 @@ fun WatchioFullscreenPlayerScreen(
                                         modifier = Modifier.testTag("player-next-channel"),
                                     )
                                 }
+                                PlayerControlItem(
+                                    title = "Audio",
+                                    icon = PlayerIconKind.Audio,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Audio tracks",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.Audio
+                                    },
+                                    modifier = Modifier.testTag("player-audio-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Subtitles",
+                                    icon = PlayerIconKind.Subtitles,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Subtitles",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.Subtitles
+                                    },
+                                    modifier = Modifier.testTag("player-subtitles-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Aspect",
+                                    icon = PlayerIconKind.AspectRatio,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Aspect ratio",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.AspectRatio
+                                    },
+                                    modifier = Modifier.testTag("player-aspect-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Settings",
+                                    icon = PlayerIconKind.Settings,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Player settings",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.Settings
+                                    },
+                                    modifier = Modifier.testTag("player-settings-button"),
+                                )
                             }
                             is PlayerContentContext.Movie -> {
-                                PlayerControlButton(
+                                PlayerControlItem(
                                     title = "Restart",
                                     icon = PlayerIconKind.Restart,
-                                    accent = colors.seriesAccent,
+                                    accent = colors.moviesAccent,
                                     contentDescription = "Restart",
                                     onClick = {
                                         lastInteractionEpochMs = System.currentTimeMillis()
@@ -900,41 +949,95 @@ fun WatchioFullscreenPlayerScreen(
                                     },
                                     modifier = Modifier.testTag("player-restart"),
                                 )
-                                PlayerControlButton(
-                                    title = "10s",
+                                PlayerControlItem(
+                                    title = "Rewind",
                                     icon = PlayerIconKind.Rewind10,
                                     accent = colors.focusGlow,
                                     contentDescription = "Rewind 10 seconds",
                                     onClick = { triggerSeek(-10_000L) },
                                     modifier = Modifier.testTag("player-rewind"),
                                 )
-                                PlayerControlButton(
+                                PlayerControlItem(
                                     title = if (playerState is WatchioPlayerState.Playing) "Pause" else "Play",
                                     icon = if (playerState is WatchioPlayerState.Playing) PlayerIconKind.Pause else PlayerIconKind.Play,
                                     accent = colors.moviesAccent,
                                     isPrimary = true,
+                                    focusRequester = firstFocus,
                                     contentDescription = if (playerState is WatchioPlayerState.Playing) "Pause" else "Play",
                                     onClick = {
                                         lastInteractionEpochMs = System.currentTimeMillis()
                                         onPlayPause()
                                     },
-                                    modifier = Modifier
-                                        .focusRequester(firstFocus)
-                                        .testTag("player-play-pause"),
+                                    modifier = Modifier.testTag("player-play-pause"),
                                 )
-                                PlayerControlButton(
-                                    title = "10s",
+                                PlayerControlItem(
+                                    title = "Forward",
                                     icon = PlayerIconKind.Forward10,
                                     accent = colors.focusGlow,
                                     contentDescription = "Fast forward 10 seconds",
                                     onClick = { triggerSeek(10_000L) },
                                     modifier = Modifier.testTag("player-forward"),
                                 )
+                                PlayerControlItem(
+                                    title = "Audio",
+                                    icon = PlayerIconKind.Audio,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Audio tracks",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.Audio
+                                    },
+                                    modifier = Modifier.testTag("player-audio-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Subtitles",
+                                    icon = PlayerIconKind.Subtitles,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Subtitles",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.Subtitles
+                                    },
+                                    modifier = Modifier.testTag("player-subtitles-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Aspect",
+                                    icon = PlayerIconKind.AspectRatio,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Aspect ratio",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.AspectRatio
+                                    },
+                                    modifier = Modifier.testTag("player-aspect-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Speed",
+                                    icon = PlayerIconKind.Speed,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Playback speed",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.PlaybackSpeed
+                                    },
+                                    modifier = Modifier.testTag("player-speed-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Settings",
+                                    icon = PlayerIconKind.Settings,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Player settings",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.Settings
+                                    },
+                                    modifier = Modifier.testTag("player-settings-button"),
+                                )
                             }
                             is PlayerContentContext.Episode -> {
                                 if (contentContext.hasPreviousEpisode) {
-                                    PlayerControlButton(
-                                        title = "Prev Ep",
+                                    PlayerControlItem(
+                                        title = "Previous",
                                         icon = PlayerIconKind.SkipPrevious,
                                         accent = colors.focusGlow,
                                         contentDescription = "Previous episode",
@@ -945,30 +1048,29 @@ fun WatchioFullscreenPlayerScreen(
                                         modifier = Modifier.testTag("player-prev-episode"),
                                     )
                                 }
-                                PlayerControlButton(
-                                    title = "10s",
+                                PlayerControlItem(
+                                    title = "Rewind",
                                     icon = PlayerIconKind.Rewind10,
                                     accent = colors.focusGlow,
                                     contentDescription = "Rewind 10 seconds",
                                     onClick = { triggerSeek(-10_000L) },
                                     modifier = Modifier.testTag("player-rewind"),
                                 )
-                                PlayerControlButton(
+                                PlayerControlItem(
                                     title = if (playerState is WatchioPlayerState.Playing) "Pause" else "Play",
                                     icon = if (playerState is WatchioPlayerState.Playing) PlayerIconKind.Pause else PlayerIconKind.Play,
                                     accent = colors.seriesAccent,
                                     isPrimary = true,
+                                    focusRequester = firstFocus,
                                     contentDescription = if (playerState is WatchioPlayerState.Playing) "Pause" else "Play",
                                     onClick = {
                                         lastInteractionEpochMs = System.currentTimeMillis()
                                         onPlayPause()
                                     },
-                                    modifier = Modifier
-                                        .focusRequester(firstFocus)
-                                        .testTag("player-play-pause"),
+                                    modifier = Modifier.testTag("player-play-pause"),
                                 )
-                                PlayerControlButton(
-                                    title = "10s",
+                                PlayerControlItem(
+                                    title = "Forward",
                                     icon = PlayerIconKind.Forward10,
                                     accent = colors.focusGlow,
                                     contentDescription = "Fast forward 10 seconds",
@@ -976,8 +1078,8 @@ fun WatchioFullscreenPlayerScreen(
                                     modifier = Modifier.testTag("player-forward"),
                                 )
                                 if (contentContext.hasNextEpisode) {
-                                    PlayerControlButton(
-                                        title = "Next Ep",
+                                    PlayerControlItem(
+                                        title = "Next",
                                         icon = PlayerIconKind.SkipNext,
                                         accent = colors.focusGlow,
                                         contentDescription = "Next episode",
@@ -988,96 +1090,63 @@ fun WatchioFullscreenPlayerScreen(
                                         modifier = Modifier.testTag("player-next-episode"),
                                     )
                                 }
+                                PlayerControlItem(
+                                    title = "Audio",
+                                    icon = PlayerIconKind.Audio,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Audio tracks",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.Audio
+                                    },
+                                    modifier = Modifier.testTag("player-audio-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Subtitles",
+                                    icon = PlayerIconKind.Subtitles,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Subtitles",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.Subtitles
+                                    },
+                                    modifier = Modifier.testTag("player-subtitles-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Aspect",
+                                    icon = PlayerIconKind.AspectRatio,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Aspect ratio",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.AspectRatio
+                                    },
+                                    modifier = Modifier.testTag("player-aspect-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Speed",
+                                    icon = PlayerIconKind.Speed,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Playback speed",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.PlaybackSpeed
+                                    },
+                                    modifier = Modifier.testTag("player-speed-button"),
+                                )
+                                PlayerControlItem(
+                                    title = "Settings",
+                                    icon = PlayerIconKind.Settings,
+                                    accent = colors.focusGlow,
+                                    contentDescription = "Player settings",
+                                    onClick = {
+                                        lastInteractionEpochMs = System.currentTimeMillis()
+                                        activeDialog = PlayerDialogType.Settings
+                                    },
+                                    modifier = Modifier.testTag("player-settings-button"),
+                                )
                             }
                         }
-                    }
-                }
-
-                // Secondary Controls Row (Horizontal scroll / wrapping protection)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        val audioLabel = if (metadata.audioTracks.isEmpty()) "Audio unavailable" else (metadata.selectedAudioTrack?.label ?: "Audio")
-                        PlayerControlButton(
-                            title = audioLabel,
-                            icon = PlayerIconKind.Audio,
-                            accent = colors.focusGlow,
-                            enabled = metadata.audioTracks.isNotEmpty(),
-                            contentDescription = "Audio tracks",
-                            onClick = {
-                                lastInteractionEpochMs = System.currentTimeMillis()
-                                activeDialog = PlayerDialogType.Audio
-                            },
-                            modifier = Modifier.testTag("player-audio-button"),
-                        )
-
-                        val subLabel = if (metadata.subtitleTracks.isEmpty()) "No subtitles" else (metadata.selectedSubtitleTrack?.label ?: "Subtitles: Off")
-                        PlayerControlButton(
-                            title = subLabel,
-                            icon = PlayerIconKind.Subtitles,
-                            accent = colors.focusGlow,
-                            contentDescription = "Subtitles",
-                            onClick = {
-                                lastInteractionEpochMs = System.currentTimeMillis()
-                                activeDialog = PlayerDialogType.Subtitles
-                            },
-                            modifier = Modifier.testTag("player-subtitles-button"),
-                        )
-
-                        PlayerControlButton(
-                            title = "Aspect: ${metadata.videoScalingMode.label}",
-                            icon = PlayerIconKind.AspectRatio,
-                            accent = colors.focusGlow,
-                            contentDescription = "Aspect ratio",
-                            onClick = {
-                                lastInteractionEpochMs = System.currentTimeMillis()
-                                activeDialog = PlayerDialogType.AspectRatio
-                            },
-                            modifier = Modifier.testTag("player-aspect-button"),
-                        )
-
-                        if (contentContext !is PlayerContentContext.Live) {
-                            PlayerControlButton(
-                                title = "Speed: ${metadata.playbackSpeed}x",
-                                icon = PlayerIconKind.Speed,
-                                accent = colors.focusGlow,
-                                contentDescription = "Playback speed",
-                                onClick = {
-                                    lastInteractionEpochMs = System.currentTimeMillis()
-                                    activeDialog = PlayerDialogType.PlaybackSpeed
-                                },
-                                modifier = Modifier.testTag("player-speed-button"),
-                            )
-                        }
-
-                        PlayerControlButton(
-                            title = if (metadata.isMuted) "Unmute" else "Mute",
-                            icon = if (metadata.isMuted) PlayerIconKind.VolumeMute else PlayerIconKind.VolumeUp,
-                            accent = colors.focusGlow,
-                            contentDescription = if (metadata.isMuted) "Unmute" else "Mute",
-                            onClick = {
-                                lastInteractionEpochMs = System.currentTimeMillis()
-                                playerManager.setMuted(!metadata.isMuted)
-                            },
-                            modifier = Modifier.testTag("player-mute-button"),
-                        )
-
-                        PlayerControlButton(
-                            title = "Back",
-                            icon = PlayerIconKind.Back,
-                            accent = colors.focusGlow,
-                            contentDescription = "Back",
-                            onClick = onClose,
-                            modifier = Modifier.testTag("player-back-button"),
-                        )
                     }
                 }
             }
@@ -1127,6 +1196,13 @@ fun WatchioFullscreenPlayerScreen(
                     onDismiss = { activeDialog = null },
                 )
             }
+            PlayerDialogType.Settings -> {
+                PlayerSettingsQuickDialog(
+                    videoScalingMode = metadata.videoScalingMode,
+                    onSelectAspect = { mode -> playerManager.setVideoScalingMode(mode) },
+                    onDismiss = { activeDialog = null },
+                )
+            }
             null -> Unit
         }
     }
@@ -1150,7 +1226,7 @@ private fun VodTimeline(
         Text(
             text = formatPlaybackTime(currentPositionMs),
             color = colors.textSecondary,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             modifier = Modifier.testTag("player-position"),
         )
         LinearProgressIndicator(
@@ -1159,13 +1235,13 @@ private fun VodTimeline(
             trackColor = Color.White.copy(alpha = 0.2f),
             modifier = Modifier
                 .weight(1f)
-                .height(6.dp)
+                .height(4.dp)
                 .testTag("player-progress-bar"),
         )
         Text(
             text = formatPlaybackTime(durationMs),
             color = colors.textSecondary,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             modifier = Modifier.testTag("player-duration"),
         )
     }
@@ -1188,7 +1264,7 @@ private fun LiveEpgTimeline(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (!startTime.isNullOrBlank()) {
-            Text(text = startTime, color = colors.textSecondary, fontSize = 13.sp)
+            Text(text = startTime, color = colors.textSecondary, fontSize = 12.sp)
         }
         LinearProgressIndicator(
             progress = { progress.coerceIn(0f, 1f) },
@@ -1196,10 +1272,10 @@ private fun LiveEpgTimeline(
             trackColor = Color.White.copy(alpha = 0.2f),
             modifier = Modifier
                 .weight(1f)
-                .height(6.dp),
+                .height(4.dp),
         )
         if (!endTime.isNullOrBlank()) {
-            Text(text = endTime, color = colors.textSecondary, fontSize = 13.sp)
+            Text(text = endTime, color = colors.textSecondary, fontSize = 12.sp)
         }
     }
 }
@@ -1427,6 +1503,53 @@ private fun PlaybackSpeedDialog(
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.testTag("player-dialog-close")) { Text("Close") } },
         modifier = Modifier.testTag("player-speed-dialog"),
+    )
+}
+
+@Composable
+private fun PlayerSettingsQuickDialog(
+    videoScalingMode: VideoScalingMode,
+    onSelectAspect: (VideoScalingMode) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { firstFocus.requestFocus() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Player Settings") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Aspect Ratio", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                VideoScalingMode.entries.forEach { mode ->
+                    val isSelected = videoScalingMode == mode
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val focused by interactionSource.collectIsFocusedAsState()
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (isSelected) Modifier.focusRequester(firstFocus) else Modifier)
+                            .clickable(interactionSource = interactionSource, indication = null) { onSelectAspect(mode) }
+                            .focusable(interactionSource = interactionSource)
+                            .background(if (focused) LocalWatchioColors.current.focusGlow.copy(alpha = 0.18f) else Color.Transparent, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { onSelectAspect(mode) },
+                            colors = RadioButtonDefaults.colors(selectedColor = LocalWatchioColors.current.focusGlow),
+                        )
+                        Text(text = mode.label, color = Color.White, fontSize = 14.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.testTag("player-dialog-close")) { Text("Close") } },
+        modifier = Modifier.testTag("player-settings-dialog"),
     )
 }
 

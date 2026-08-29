@@ -2495,6 +2495,44 @@ class LandscapeResponsiveComposeTest {
         composeRule.onNodeWithTag("player-error-back", useUnmergedTree = true).assertIsDisplayed()
     }
 
+    @Test
+    fun fullscreenPlayerLiveChannelsAndSettingsOpen() {
+        val fakePlayer = FakePlayerManager()
+        var channelsClicked = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            onChannelsClick = { channelsClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-channels-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-channels-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("channelsClicked should be true", channelsClicked)
+
+        // Open settings dialog
+        composeRule.onNodeWithTag("player-settings-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-settings-dialog", useUnmergedTree = true).assertIsDisplayed()
+    }
+
     private class FakePlayerManager : WatchioPlayerManager {
         private var metadata = WatchioPlayerMetadata()
         private val mutableState = MutableStateFlow<WatchioPlayerState>(WatchioPlayerState.Idle(metadata))
