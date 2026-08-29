@@ -104,15 +104,8 @@ fun LiveTvScreen(
     val firstCategoryFocus = remember { FocusRequester() }
     var liveSearchVisible by remember { mutableStateOf(false) }
     var optionsChannel by remember { mutableStateOf<LiveTvChannel?>(null) }
-    var isLongBackConsumed by remember { mutableStateOf(false) }
-    BackHandler(enabled = !isLongBackConsumed) {
-        if (liveSearchVisible) {
-            liveSearchVisible = false
-            onLiveSearch("")
-        } else {
-            onBack()
-        }
-    }
+    var isLongBackHandled by remember { mutableStateOf(false) }
+
     if (uiState.loading) {
         Box(Modifier.fillMaxSize().background(colors.surfaceBase), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = colors.liveTvAccent)
@@ -139,17 +132,24 @@ fun LiveTvScreen(
                              playerState is WatchioPlayerState.Connecting ||
                              playerState is WatchioPlayerState.Recovering)
                         if (hasActivePreview && (nativeEvent.isLongPress || nativeEvent.repeatCount >= 1)) {
-                            if (!isLongBackConsumed) {
-                                isLongBackConsumed = true
+                            if (!isLongBackHandled) {
+                                isLongBackHandled = true
                                 onFullscreen()
                             }
                             return@onPreviewKeyEvent true
                         }
                     } else if (event.type == KeyEventType.KeyUp) {
-                        if (isLongBackConsumed) {
-                            isLongBackConsumed = false
+                        if (isLongBackHandled) {
+                            isLongBackHandled = false
                             return@onPreviewKeyEvent true
                         }
+                        if (liveSearchVisible) {
+                            liveSearchVisible = false
+                            onLiveSearch("")
+                        } else {
+                            onBack()
+                        }
+                        return@onPreviewKeyEvent true
                     }
                 }
                 false

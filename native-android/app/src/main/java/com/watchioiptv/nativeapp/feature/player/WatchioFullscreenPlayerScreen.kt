@@ -1,4 +1,4 @@
-﻿package com.watchioiptv.nativeapp.feature.player
+package com.watchioiptv.nativeapp.feature.player
 
 import android.app.UiModeManager
 import android.content.Context
@@ -565,7 +565,13 @@ fun WatchioFullscreenPlayerScreen(
         }
     }
 
+    val screenMountEpochMs = remember { System.currentTimeMillis() }
+
     BackHandler(enabled = true) {
+        if (System.currentTimeMillis() - screenMountEpochMs < 500L) {
+            // Guard against back-release from long-press transition that opened fullscreen
+            return@BackHandler
+        }
         lastInteractionEpochMs = System.currentTimeMillis()
         if (activeDialog != null) {
             activeDialog = null
@@ -628,6 +634,15 @@ fun WatchioFullscreenPlayerScreen(
                         } else false
                     }
                     Key.Escape, Key.Back -> {
+                        val nativeEvent = event.nativeKeyEvent
+                        if (nativeEvent.repeatCount > 0) {
+                            // Ignore repeated auto-fire while back key is held down
+                            return@onPreviewKeyEvent true
+                        }
+                        if (System.currentTimeMillis() - screenMountEpochMs < 500L) {
+                            // Ignore back key from long-press transition that launched fullscreen
+                            return@onPreviewKeyEvent true
+                        }
                         if (activeDialog != null) {
                             activeDialog = null
                             true
