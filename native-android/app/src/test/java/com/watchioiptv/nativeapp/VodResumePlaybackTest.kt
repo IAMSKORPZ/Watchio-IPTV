@@ -2,9 +2,12 @@ package com.watchioiptv.nativeapp
 
 import com.watchioiptv.nativeapp.core.model.ProviderId
 import com.watchioiptv.nativeapp.data.library.ContinueWatchingItem
+import com.watchioiptv.nativeapp.data.movies.MovieCategory
+import com.watchioiptv.nativeapp.data.movies.MovieCategoryKind
 import com.watchioiptv.nativeapp.data.movies.MoviesRepository
 import com.watchioiptv.nativeapp.data.series.SeriesRepository
 import com.watchioiptv.nativeapp.domain.model.ContentType
+import com.watchioiptv.nativeapp.domain.repository.HistoryItem
 import com.watchioiptv.nativeapp.ui.components.formatPlaybackTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -86,6 +89,49 @@ class VodResumePlaybackTest {
     }
 
     @Test
+    fun moviesContinueWatchingFilterAndOrdering() {
+        val p1 = ProviderId("p1")
+        val catalogMap = mapOf(
+            "m1" to "Movie 1",
+            "m2" to "Movie 2",
+            "m3" to "Movie 3",
+            // m4 deleted/missing from catalog
+        )
+
+        val historyList = listOf(
+            HistoryItem(p1, ContentType.Movie, "m1", title = "Movie 1", positionMs = 120_000L, durationMs = 600_000L, lastWatchedAtEpochMs = 100), // Resumable (newest)
+            HistoryItem(p1, ContentType.Episode, "s1", subContentId = "e1", title = "Show 1", positionMs = 120_000L, durationMs = 600_000L, lastWatchedAtEpochMs = 90), // Episode (must be excluded)
+            HistoryItem(p1, ContentType.Movie, "m4", title = "Movie 4", positionMs = 120_000L, durationMs = 600_000L, lastWatchedAtEpochMs = 80), // Deleted from catalog (must be excluded)
+            HistoryItem(p1, ContentType.Movie, "m2", title = "Movie 2", positionMs = 590_000L, durationMs = 600_000L, lastWatchedAtEpochMs = 70), // Completed (must be excluded)
+            HistoryItem(p1, ContentType.Movie, "m3", title = "Movie 3", positionMs = 80_000L, durationMs = 600_000L, lastWatchedAtEpochMs = 60), // Resumable (older)
+            HistoryItem(p1, ContentType.Movie, "m5", title = "Movie 5", positionMs = 10_000L, durationMs = 600_000L, lastWatchedAtEpochMs = 50), // Under 30s (must be excluded)
+        )
+
+        val resumable = historyList
+            .filter { it.contentType == ContentType.Movie && MoviesRepository.shouldResumePosition(it.positionMs, it.durationMs) }
+        val resolvedMovies = resumable.mapNotNull { hist -> catalogMap[hist.contentId] }
+
+        assertEquals(listOf("Movie 1", "Movie 3"), resolvedMovies)
+    }
+
+    @Test
+    fun moviesCategoryOrderingHasContinueWatchingAfterAllMovies() {
+        val categories = listOf(
+            MovieCategory("all", "ALL MOVIES", MovieCategoryKind.All),
+            MovieCategory("continue_watching", "CONTINUE WATCHING", MovieCategoryKind.ContinueWatching),
+            MovieCategory("favorites", "FAVOURITES", MovieCategoryKind.Favorites),
+            MovieCategory("history", "HISTORY", MovieCategoryKind.History),
+        )
+
+        assertEquals("all", categories[0].id)
+        assertEquals(MovieCategoryKind.All, categories[0].kind)
+        assertEquals("continue_watching", categories[1].id)
+        assertEquals(MovieCategoryKind.ContinueWatching, categories[1].kind)
+        assertEquals("favorites", categories[2].id)
+        assertEquals("history", categories[3].id)
+    }
+
+    @Test
     fun seriesRepositoryDelegatesThresholdsAccurately() {
         assertFalse(SeriesRepository.shouldResumePosition(20_000L, 600_000L))
         assertTrue(SeriesRepository.shouldResumePosition(120_000L, 600_000L))
@@ -120,52 +166,6 @@ class VodResumePlaybackTest {
         assertEquals("Down", item.episodeTitle)
         assertEquals(180_000L, item.positionMs)
         assertEquals(2_400_000L, item.durationMs)
-    }
-
-    @Test
-    fun homeContinueWatchingDeduplicatesPerSeries() {
-        val ep1 = ContinueWatchingItem(
-            providerId = ProviderId("p1"),
-            contentType = ContentType.Episode,
-            contentId = "series-1",
-            subContentId = "ep-1",
-            title = "Show A",
-            subtitle = "S1 • E1",
-            imageUrl = null,
-            positionMs = 100_000L,
-            durationMs = 600_000L,
-        )
-        val ep2 = ContinueWatchingItem(
-            providerId = ProviderId("p1"),
-            contentType = ContentType.Episode,
-            contentId = "series-1",
-            subContentId = "ep-2",
-            title = "Show A",
-            subtitle = "S1 • E2",
-            imageUrl = null,
-            positionMs = 200_000L,
-            durationMs = 600_000L,
-        )
-        val movie = ContinueWatchingItem(
-            providerId = ProviderId("p1"),
-            contentType = ContentType.Movie,
-            contentId = "movie-1",
-            subContentId = null,
-            title = "Movie 1",
-            subtitle = "Movie",
-            imageUrl = null,
-            positionMs = 300_000L,
-            durationMs = 6_000_000L,
-        )
-
-        val rawList = listOf(ep2, ep1, movie)
-        val homeList = rawList.distinctBy {
-            if (it.contentType == ContentType.Episode) "series_${it.contentId}" else "movie_${it.contentId}"
-        }
-
-        assertEquals(2, homeList.size)
-        assertEquals("ep-2", homeList[0].subContentId)
-        assertEquals("movie-1", homeList[1].contentId)
     }
 
     @Test

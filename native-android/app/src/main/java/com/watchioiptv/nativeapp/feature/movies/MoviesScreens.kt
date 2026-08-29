@@ -74,6 +74,7 @@ import coil.compose.AsyncImage
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerManager
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerState
 import com.watchioiptv.nativeapp.data.movies.MovieCategory
+import com.watchioiptv.nativeapp.data.movies.MovieCategoryKind
 import com.watchioiptv.nativeapp.data.movies.MovieDetails
 import com.watchioiptv.nativeapp.data.movies.WatchioMovieItem
 import com.watchioiptv.nativeapp.domain.repository.ControlAutoHideDelay
@@ -83,6 +84,7 @@ import com.watchioiptv.nativeapp.ui.components.ResumePlaybackRequest
 import com.watchioiptv.nativeapp.ui.components.WatchioCard
 import com.watchioiptv.nativeapp.ui.components.WatchioFocusableCard
 import com.watchioiptv.nativeapp.ui.components.WatchioPageHeader
+import com.watchioiptv.nativeapp.ui.components.WatchioProgressBar
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioColors
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioTypography
 import kotlinx.coroutines.delay
@@ -160,13 +162,15 @@ fun MoviesScreen(
                             if (state.movies.isEmpty()) {
                                 Box(Modifier.fillMaxSize().testTag("movie-empty"), contentAlignment = Alignment.Center) {
                                     Text(
-                                        if (state.selectedCategory?.id == "favorites") "No favourite movies yet."
+                                        if (state.selectedCategory?.kind == MovieCategoryKind.ContinueWatching || state.selectedCategory?.id == "continue_watching") "Nothing to continue watching"
+                                        else if (state.selectedCategory?.id == "favorites") "No favourite movies yet."
                                         else if (state.selectedCategory?.id == "history") "No movie history yet."
                                         else "No movies in this category.",
                                         color = colors.textSecondary,
                                     )
                                 }
                             } else {
+                                val isContinueWatching = state.selectedCategory?.kind == MovieCategoryKind.ContinueWatching || state.selectedCategory?.id == "continue_watching"
                                 LazyVerticalGrid(
                                     columns = GridCells.Adaptive(minSize = if (compactLandscape) 92.dp else 132.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -175,7 +179,12 @@ fun MoviesScreen(
                                     modifier = Modifier.fillMaxSize().testTag("movie-grid"),
                                 ) {
                                     items(state.movies, key = { it.id }) { movie ->
-                                        MovieCard(movie = movie, onMovie = onMovie, onMovieOptions = { optionsMovie = it })
+                                        MovieCard(
+                                            movie = movie,
+                                            showProgress = isContinueWatching,
+                                            onMovie = onMovie,
+                                            onMovieOptions = { optionsMovie = it },
+                                        )
                                     }
                                 }
                             }
@@ -685,7 +694,12 @@ fun MoviePlayerScreen(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MovieCard(movie: WatchioMovieItem, onMovie: (WatchioMovieItem) -> Unit, onMovieOptions: (WatchioMovieItem) -> Unit) {
+private fun MovieCard(
+    movie: WatchioMovieItem,
+    showProgress: Boolean = false,
+    onMovie: (WatchioMovieItem) -> Unit,
+    onMovieOptions: (WatchioMovieItem) -> Unit,
+) {
     val colors = LocalWatchioColors.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
@@ -723,6 +737,25 @@ private fun MovieCard(movie: WatchioMovieItem, onMovie: (WatchioMovieItem) -> Un
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         modifier = Modifier.testTag("movie-rating"),
+                    )
+                }
+            }
+            if (showProgress) {
+                val progress = remember(movie.resumePositionMs, movie.resumeDurationMs) {
+                    val pos = movie.resumePositionMs
+                    val dur = movie.resumeDurationMs
+                    if (pos != null && dur != null && dur > 0L) {
+                        (pos.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
+                    } else null
+                }
+                if (progress != null) {
+                    WatchioProgressBar(
+                        progress = progress,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .testTag("movie-progress-bar"),
                     )
                 }
             }

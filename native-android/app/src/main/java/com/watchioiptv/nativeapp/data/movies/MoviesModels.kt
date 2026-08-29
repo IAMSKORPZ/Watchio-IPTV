@@ -3,7 +3,7 @@ package com.watchioiptv.nativeapp.data.movies
 import com.watchioiptv.nativeapp.core.model.ProviderId
 import com.watchioiptv.nativeapp.domain.model.ProviderType
 
-enum class MovieCategoryKind { All, Favorites, History, Provider }
+enum class MovieCategoryKind { All, ContinueWatching, Favorites, History, Provider }
 
 data class MovieCategory(
     val id: String,

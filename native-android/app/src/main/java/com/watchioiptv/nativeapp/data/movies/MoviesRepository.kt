@@ -48,6 +48,7 @@ class MoviesRepository(
     suspend fun categories(providerId: ProviderId): List<MovieCategory> = withContext(Dispatchers.IO) {
         listOf(
             MovieCategory("all", "ALL MOVIES", MovieCategoryKind.All),
+            MovieCategory("continue_watching", "CONTINUE WATCHING", MovieCategoryKind.ContinueWatching),
             MovieCategory("favorites", "FAVOURITES", MovieCategoryKind.Favorites),
             MovieCategory("history", "HISTORY", MovieCategoryKind.History),
         ) + database.categoryDao().getByType(providerId.value, ContentType.Movie.persisted).map { it.toMovieCategory() }
@@ -57,7 +58,8 @@ class MoviesRepository(
         val provider = database.providerDao().findById(providerId.value) ?: return@withContext emptyList()
         val providerType = ProviderType.fromPersisted(provider.type)
         val favorites = favoritesRepository.getFavorites(providerId).filter { it.contentType == ContentType.Movie }.associateBy { it.contentId }
-        val history = historyRepository.recent(providerId).filter { it.contentType == ContentType.Movie }.associateBy { it.contentId }
+        val historyList = historyRepository.recent(providerId).filter { it.contentType == ContentType.Movie }
+        val history = historyList.associateBy { it.contentId }
         val normalizedQuery = TextNormalizer.normalizeForSearch(query)
         val all = when (providerType) {
             ProviderType.Xtream -> xtreamMovies(providerId, category, normalizedQuery)
@@ -69,8 +71,16 @@ class MoviesRepository(
             }
         }
         when (category.kind) {
+            MovieCategoryKind.ContinueWatching -> {
+                val resumable = historyList.filter { shouldResumePosition(it.positionMs, it.durationMs) }
+                val movieMap = all.associateBy { it.id }
+                resumable.mapNotNull { hist -> movieMap[hist.contentId] }
+            }
             MovieCategoryKind.Favorites -> all.filter { it.isFavorite }
-            MovieCategoryKind.History -> history.keys.mapNotNull { id -> all.firstOrNull { it.id == id } }
+            MovieCategoryKind.History -> {
+                val movieMap = all.associateBy { it.id }
+                historyList.mapNotNull { hist -> movieMap[hist.contentId] }
+            }
             else -> all
         }
     }

@@ -224,7 +224,6 @@ fun WatchioNativeApp(
                                 container.settingsRepository,
                                 container.xtreamRepository,
                                 container.m3uRepository,
-                                container.myListRepository,
                             ) as T
                         }
                     },
@@ -245,7 +244,6 @@ fun WatchioNativeApp(
                     liveCount = state.liveCount,
                     movieCount = state.movieCount,
                     seriesCount = state.seriesCount,
-                    continueWatching = state.continueWatching,
                     liveRefreshAtEpochMs = state.liveRefreshAtEpochMs,
                     moviesRefreshAtEpochMs = state.moviesRefreshAtEpochMs,
                     seriesRefreshAtEpochMs = state.seriesRefreshAtEpochMs,
@@ -263,8 +261,6 @@ fun WatchioNativeApp(
                     onTvGuide = { navController.navigate("tv-guide") },
                     onMovies = { navController.navigate("movies") },
                     onSeries = { navController.navigate("series") },
-                    onMovieClick = { movieId -> navController.navigate("movies/$movieId") },
-                    onSeriesClick = { seriesId -> navController.navigate("series/$seriesId") },
                     onSearch = { navController.navigate("search") },
                     onSports = { navController.navigate("sports-placeholder") },
                     onAnnouncements = { navController.navigate("announcements-placeholder") },
@@ -923,7 +919,6 @@ private fun HomeScreen(
     liveCount: Int,
     movieCount: Int,
     seriesCount: Int,
-    continueWatching: List<com.watchioiptv.nativeapp.data.library.ContinueWatchingItem> = emptyList(),
     liveRefreshAtEpochMs: Long?,
     moviesRefreshAtEpochMs: Long?,
     seriesRefreshAtEpochMs: Long?,
@@ -941,8 +936,6 @@ private fun HomeScreen(
     onTvGuide: () -> Unit,
     onMovies: () -> Unit,
     onSeries: () -> Unit,
-    onMovieClick: (String) -> Unit = {},
-    onSeriesClick: (String) -> Unit = {},
     onSearch: () -> Unit,
     onSports: () -> Unit,
     onAnnouncements: () -> Unit,
@@ -1053,148 +1046,9 @@ private fun HomeScreen(
                         )
                     }
                 }
-                if (continueWatching.isNotEmpty()) {
-                    Spacer(Modifier.height(spacing.sm))
-                    HomeContinueWatchingRow(
-                        items = continueWatching,
-                        onMovieClick = onMovieClick,
-                        onSeriesClick = onSeriesClick,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
             }
             Spacer(Modifier.height(spacing.sm))
             HomeFooter(providerSummary = providerSummary, providerExpiryEpochMs = providerExpiryEpochMs)
-        }
-    }
-}
-
-@Composable
-private fun HomeContinueWatchingRow(
-    items: List<com.watchioiptv.nativeapp.data.library.ContinueWatchingItem>,
-    onMovieClick: (String) -> Unit,
-    onSeriesClick: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = LocalWatchioColors.current
-    val spacing = LocalWatchioSpacing.current
-    val type = LocalWatchioTypography.current
-    Column(modifier = modifier.testTag("home-continue-watching-section")) {
-        Text(
-            text = "CONTINUE WATCHING",
-            color = colors.liveTvAccent,
-            style = type.label,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = spacing.xs),
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth().testTag("home-continue-watching-row"),
-        ) {
-            items(items, key = { "${it.contentType}_${it.contentId}_${it.subContentId.orEmpty()}" }) { item ->
-                HomeContinueWatchingCard(
-                    item = item,
-                    onClick = {
-                        if (item.contentType == com.watchioiptv.nativeapp.domain.model.ContentType.Movie) {
-                            onMovieClick(item.contentId)
-                        } else {
-                            onSeriesClick(item.contentId)
-                        }
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeContinueWatchingCard(
-    item: com.watchioiptv.nativeapp.data.library.ContinueWatchingItem,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val colors = LocalWatchioColors.current
-    val spacing = LocalWatchioSpacing.current
-    val type = LocalWatchioTypography.current
-    val radii = LocalWatchioRadii.current
-    val progress = remember(item.positionMs, item.durationMs) {
-        val pos = item.positionMs
-        val dur = item.durationMs
-        if (pos != null && dur != null && dur > 0L) {
-            (pos.toFloat() / dur.toFloat()).coerceIn(0f, 1f)
-        } else {
-            null
-        }
-    }
-
-    WatchioCard(
-        modifier = modifier
-            .width(220.dp)
-            .height(84.dp)
-            .testTag("home-continue-watching-card-${item.contentId}"),
-        accent = if (item.contentType == com.watchioiptv.nativeapp.domain.model.ContentType.Movie) colors.moviesAccent else colors.seriesAccent,
-        minWidth = 0.dp,
-        minHeight = 0.dp,
-        contentDescription = "${item.title} ${item.subtitle.orEmpty()}",
-        onClick = onClick,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(colors.surfaceCard.copy(alpha = 0.85f))
-                .padding(spacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(46.dp)
-                    .height(68.dp)
-                    .clip(RoundedCornerShape(radii.sm))
-                    .background(colors.surfaceElevated),
-            ) {
-                item.imageUrl?.let {
-                    AsyncImage(
-                        model = it,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-            }
-            Column(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column {
-                    Text(
-                        text = item.title,
-                        color = colors.textPrimary,
-                        style = type.cardTitle,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    item.subtitle?.let {
-                        Text(
-                            text = it,
-                            color = colors.textSecondary,
-                            style = type.label,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                if (progress != null) {
-                    WatchioProgressBar(
-                        progress = progress,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                    )
-                }
-            }
         }
     }
 }
