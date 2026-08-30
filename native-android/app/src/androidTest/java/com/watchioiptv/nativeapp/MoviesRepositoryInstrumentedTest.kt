@@ -190,6 +190,109 @@ class MoviesRepositoryInstrumentedTest {
         assertEquals("m-p1-1", catalog1Reloaded.movies.first().id)
     }
 
+    @Test
+    fun seriesCatalogLoadsZeroEpisodesAndResolvesContinueWatchingTargeted() = runBlocking {
+        val providerId = ProviderId("xtream-perf")
+        database.providerDao().upsert(ProviderEntity(providerId.value, "Xtream", "xtream", "http://example.invalid", 1, 1, null, true))
+        database.categoryDao().upsertAll(listOf(CategoryEntity(providerId.value, "drama", "Drama", "drama", null, "series", 1)))
+
+        val seriesEntities = (1..50).map { i ->
+            com.watchioiptv.nativeapp.core.database.SeriesEntity(
+                providerId = providerId.value,
+                seriesId = "s-$i",
+                name = "Series $i",
+                normalizedName = "series $i",
+                coverUrl = null,
+                plot = null,
+                cast = null,
+                director = null,
+                genre = "Drama",
+                releaseDate = null,
+                rating = "8.$i",
+                rating5Based = "4.0",
+                trailer = null,
+                runtime = null,
+                backdropUrl = null,
+                tmdbId = null,
+                categoryId = "drama",
+                serverOrder = i,
+                updatedAtEpochMs = 1000,
+            )
+        }
+        database.seriesDao().upsertAll(seriesEntities)
+
+        val episodes = (1..50).flatMap { sIndex ->
+            (1..5).map { epIndex ->
+                com.watchioiptv.nativeapp.core.database.EpisodeEntity(
+                    providerId = providerId.value,
+                    seriesId = "s-$sIndex",
+                    episodeId = "ep-s${sIndex}-e$epIndex",
+                    seasonNumber = 1,
+                    episodeNumber = epIndex,
+                    title = "Episode $epIndex",
+                    normalizedTitle = "episode $epIndex",
+                    imageUrl = null,
+                    plot = null,
+                    containerExtension = "mp4",
+                    duration = null,
+                    durationSecs = 1800,
+                    rating = null,
+                    releaseDate = null,
+                    tmdbId = null,
+                    directUrl = null,
+                    updatedAtEpochMs = 1000,
+                )
+            }
+        }
+        database.episodeDao().upsertAll(episodes)
+
+        val seriesRepo = com.watchioiptv.nativeapp.data.series.SeriesRepository(
+            database = database,
+            settingsRepository = FakeSettings(providerId),
+            favoritesRepository = RoomFavoritesRepository(database.favoriteDao()),
+            historyRepository = RoomHistoryRepository(database.watchHistoryDao()),
+            playbackUrlResolver = FakeResolver,
+            credentialStore = ProviderCredentialStore(FakeSecretStore()),
+            retrofitFactory = ::retrofit,
+            tmdbRetrofitFactory = ::retrofit,
+            clock = object : WatchioClock { override fun nowEpochMs(): Long = 1 },
+        )
+
+        // 1. Initial catalog load: should return fast catalog snapshot
+        val catalog = seriesRepo.getOrLoadCatalog(providerId)
+        assertEquals(50, catalog.series.size)
+
+        // 2. Load ALL SERIES category: fast render
+        val allCategory = com.watchioiptv.nativeapp.data.series.SeriesCategory("all", "ALL SERIES", com.watchioiptv.nativeapp.data.series.SeriesCategoryKind.All)
+        val allCards = seriesRepo.seriesCards(providerId, allCategory)
+        assertEquals(50, allCards.size)
+
+        // 3. Add history for only Series 5 Episode 3 (resumable)
+        database.watchHistoryDao().upsert(
+            com.watchioiptv.nativeapp.core.database.WatchHistoryEntity(
+                providerId = providerId.value,
+                contentType = com.watchioiptv.nativeapp.domain.model.ContentType.Episode.persisted,
+                contentId = "s-5",
+                subContentId = "ep-s5-e3",
+                title = "Episode 3",
+                imageUrl = null,
+                positionMs = 120_000L,
+                durationMs = 600_000L,
+                lastWatchedAtEpochMs = 2000L,
+            )
+        )
+
+        // 4. Load CONTINUE WATCHING: resolves only the targeted episode
+        val cwCategory = com.watchioiptv.nativeapp.data.series.SeriesCategory("continue_watching", "CONTINUE WATCHING", com.watchioiptv.nativeapp.data.series.SeriesCategoryKind.ContinueWatching)
+        val cwCards = seriesRepo.seriesCards(providerId, cwCategory)
+        assertEquals(1, cwCards.size)
+        val card = cwCards.first()
+        assertEquals("s-5", card.series.id)
+        assertEquals("ep-s5-e3", card.targetEpisodeId)
+        assertEquals("S01 • E03", card.episodeLabel)
+        assertEquals(0.2f, card.progress ?: 0f, 0.01f)
+    }
+
     private fun repository(providerId: ProviderId) = MoviesRepository(
         database = database,
         settingsRepository = FakeSettings(providerId),

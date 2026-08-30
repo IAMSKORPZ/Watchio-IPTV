@@ -54,8 +54,8 @@ data class SeriesCatalogCache(
     val providerId: ProviderId,
     val series: List<WatchioSeriesItem>,
     val seriesLookup: Map<String, WatchioSeriesItem>,
-    val episodeLookup: Map<String, WatchioEpisodeItem>,
     val providerCategories: Map<String, List<WatchioSeriesItem>>,
+    @Volatile var searchIndex: Map<String, String> = emptyMap(),
 )
 
 @Immutable

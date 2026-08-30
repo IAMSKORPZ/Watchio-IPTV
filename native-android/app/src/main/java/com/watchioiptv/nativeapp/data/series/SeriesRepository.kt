@@ -25,8 +25,12 @@ import com.watchioiptv.nativeapp.domain.playback.PlaybackUrlResolver
 import com.watchioiptv.nativeapp.domain.repository.FavoritesRepository
 import com.watchioiptv.nativeapp.domain.repository.HistoryRepository
 import com.watchioiptv.nativeapp.domain.repository.SettingsRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -48,12 +52,18 @@ class SeriesRepository(
     private val clock: WatchioClock,
 ) {
     private var activeEpisode: WatchioEpisodeItem? = null
+    @Volatile
     private var catalogCache: SeriesCatalogCache? = null
     private val cacheMutex = Mutex()
+    private var searchWarmupJob: Job? = null
+    private var catalogGeneration: Long = 0L
+    private val repositoryScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     fun invalidateCache(providerId: ProviderId? = null) {
         val current = catalogCache
         if (providerId == null || current?.providerId == providerId) {
+            searchWarmupJob?.cancel()
+            searchWarmupJob = null
             catalogCache = null
         }
     }
@@ -107,56 +117,29 @@ class SeriesRepository(
                     val lookup = rows.associateBy { it.id }
                     val categoryMap = rows.groupBy { it.categoryId.orEmpty() }
 
-                    val dbEpisodes = database.episodeDao().getByProvider(providerId.value).map { it.toEpisode(providerType, emptyList()) }
-                    val m3uEpisodes = if (providerType != ProviderType.Xtream) {
-                        database.m3uItemDao().getByProviderAndType(providerId.value, ContentType.Series.persisted).map { item ->
-                            val sId = m3uSeriesId(item)
-                            WatchioEpisodeItem(
-                                providerId = providerId,
-                                providerType = providerType,
-                                seriesId = sId,
-                                episodeId = item.itemId,
-                                seasonNumber = item.seasonNumber ?: 1,
-                                episodeNumber = item.episodeNumber ?: item.playlistOrder,
-                                title = item.name,
-                                plot = null,
-                                imageUrl = item.tvgLogo,
-                                duration = null,
-                                durationSeconds = null,
-                                rating = null,
-                                releaseDate = null,
-                                containerExtension = item.directUrl.substringAfterLast('.', "").substringBefore('?').takeIf { it.isNotBlank() },
-                                tmdbId = null,
-                                directUrl = item.directUrl,
-                                headers = buildMap {
-                                    item.userAgent?.takeIf { it.isNotBlank() }?.let { put("User-Agent", it) }
-                                    item.referrer?.takeIf { it.isNotBlank() }?.let { put("Referer", it) }
-                                },
-                                resumePositionMs = null,
-                                resumeDurationMs = null,
-                            )
-                        }
-                    } else emptyList()
-
-                    val epLookup = buildMap<String, WatchioEpisodeItem> {
-                        for (ep in dbEpisodes) {
-                            put("${ep.seriesId}:${ep.episodeId}", ep)
-                            put(ep.episodeId, ep)
-                        }
-                        for (ep in m3uEpisodes) {
-                            put("${ep.seriesId}:${ep.episodeId}", ep)
-                            put(ep.episodeId, ep)
-                        }
-                    }
-
                     val newCache = SeriesCatalogCache(
                         providerId = providerId,
                         series = rows,
                         seriesLookup = lookup,
-                        episodeLookup = epLookup,
                         providerCategories = categoryMap,
+                        searchIndex = emptyMap(),
                     )
                     catalogCache = newCache
+
+                    // Launch cancellable background search index warmup
+                    val currentGeneration = ++catalogGeneration
+                    searchWarmupJob?.cancel()
+                    searchWarmupJob = repositoryScope.launch {
+                        val searchMap = buildMap(rows.size) {
+                            for (item in rows) {
+                                put(item.id, TextNormalizer.normalizeForSearch("${item.name} ${item.genre.orEmpty()}"))
+                            }
+                        }
+                        if (catalogGeneration == currentGeneration) {
+                            newCache.searchIndex = searchMap
+                        }
+                    }
+
                     newCache
                 }
             }
@@ -165,33 +148,40 @@ class SeriesRepository(
 
     suspend fun seriesCards(providerId: ProviderId, category: SeriesCategory, query: String = ""): List<SeriesCardUiModel> = withContext(Dispatchers.IO) {
         val catalog = getOrLoadCatalog(providerId)
-        val normalizedQuery = TextNormalizer.normalizeForSearch(query)
+        val normalizedQuery = if (query.isNotBlank()) TextNormalizer.normalizeForSearch(query) else ""
+
+        val searchIdx = catalog.searchIndex
+        fun matchesQuery(item: WatchioSeriesItem): Boolean {
+            if (normalizedQuery.isBlank()) return true
+            val text = searchIdx[item.id] ?: TextNormalizer.normalizeForSearch("${item.name} ${item.genre.orEmpty()}")
+            return text.contains(normalizedQuery)
+        }
 
         when (category.kind) {
             SeriesCategoryKind.All -> {
-                val list = if (normalizedQuery.isBlank()) catalog.series else catalog.series.filter { it.normalizedSearchText.contains(normalizedQuery) }
+                val list = if (normalizedQuery.isBlank()) catalog.series else catalog.series.filter { matchesQuery(it) }
                 list.map { SeriesCardUiModel(series = it) }
             }
             SeriesCategoryKind.Provider -> {
                 val catSeries = catalog.providerCategories[category.sourceCategoryId.orEmpty()].orEmpty()
-                val list = if (normalizedQuery.isBlank()) catSeries else catSeries.filter { it.normalizedSearchText.contains(normalizedQuery) }
+                val list = if (normalizedQuery.isBlank()) catSeries else catSeries.filter { matchesQuery(it) }
                 list.map { SeriesCardUiModel(series = it) }
             }
             SeriesCategoryKind.Favorites -> {
                 val favorites = favoritesRepository.getFavorites(providerId).filter { it.contentType == ContentType.Series }.associateBy { it.contentId }
                 val favList = catalog.series.filter { favorites.containsKey(it.id) }
-                val list = if (normalizedQuery.isBlank()) favList else favList.filter { it.normalizedSearchText.contains(normalizedQuery) }
+                val list = if (normalizedQuery.isBlank()) favList else favList.filter { matchesQuery(it) }
                 list.map { SeriesCardUiModel(series = it.copy(isFavorite = true)) }
             }
             SeriesCategoryKind.History -> {
                 val histories = historyRepository.recent(providerId).filter { it.contentType == ContentType.Episode }
                 val histList = histories.mapNotNull { h -> catalog.seriesLookup[h.contentId] }.distinctBy { it.id }
-                val list = if (normalizedQuery.isBlank()) histList else histList.filter { it.normalizedSearchText.contains(normalizedQuery) }
+                val list = if (normalizedQuery.isBlank()) histList else histList.filter { matchesQuery(it) }
                 list.map { SeriesCardUiModel(series = it) }
             }
             SeriesCategoryKind.ContinueWatching -> {
                 if (normalizedQuery.isNotBlank()) {
-                    val list = catalog.series.filter { it.normalizedSearchText.contains(normalizedQuery) }
+                    val list = catalog.series.filter { matchesQuery(it) }
                     list.map { SeriesCardUiModel(series = it) }
                 } else {
                     val histories = historyRepository.recent(providerId)
@@ -202,31 +192,77 @@ class SeriesRepository(
                         .filter { !isCompletedPosition(it.positionMs, it.durationMs) }
                         .sortedByDescending { it.lastWatchedAtEpochMs }
 
-                    histories.mapNotNull { h ->
-                        val series = catalog.seriesLookup[h.contentId] ?: return@mapNotNull null
-                        val ep = catalog.episodeLookup["${h.contentId}:${h.subContentId}"]
-                            ?: catalog.episodeLookup[h.subContentId.orEmpty()]
-                            ?: return@mapNotNull null
+                    val candidateHistories = histories.distinctBy { it.contentId }
+                    val episodeIds = candidateHistories.mapNotNull { it.subContentId }.distinct()
+                    if (episodeIds.isEmpty()) {
+                        emptyList()
+                    } else {
+                        val provider = database.providerDao().findById(providerId.value)
+                        val providerType = provider?.let { ProviderType.fromPersisted(it.type) } ?: ProviderType.Xtream
+                        val episodes: List<WatchioEpisodeItem> = when (providerType) {
+                            ProviderType.Xtream -> {
+                                episodeIds.chunked(400).flatMap { chunk ->
+                                    database.episodeDao().getByIds(providerId.value, chunk).map { it.toEpisode(providerType, emptyList()) }
+                                }
+                            }
+                            ProviderType.M3uUrl, ProviderType.M3uFile -> {
+                                episodeIds.chunked(400).flatMap { chunk ->
+                                    database.m3uItemDao().getByIds(providerId.value, chunk).map { item ->
+                                        val sId = m3uSeriesId(item)
+                                        WatchioEpisodeItem(
+                                            providerId = providerId,
+                                            providerType = providerType,
+                                            seriesId = sId,
+                                            episodeId = item.itemId,
+                                            seasonNumber = item.seasonNumber ?: 1,
+                                            episodeNumber = item.episodeNumber ?: item.playlistOrder,
+                                            title = item.name,
+                                            plot = null,
+                                            imageUrl = item.tvgLogo,
+                                            duration = null,
+                                            durationSeconds = null,
+                                            rating = null,
+                                            releaseDate = null,
+                                            containerExtension = item.directUrl.substringAfterLast('.', "").substringBefore('?').takeIf { it.isNotBlank() },
+                                            tmdbId = null,
+                                            directUrl = item.directUrl,
+                                            headers = buildMap {
+                                                item.userAgent?.takeIf { it.isNotBlank() }?.let { put("User-Agent", it) }
+                                                item.referrer?.takeIf { it.isNotBlank() }?.let { put("Referer", it) }
+                                            },
+                                            resumePositionMs = null,
+                                            resumeDurationMs = null,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        val epLookup = episodes.associateBy { it.episodeId }
 
-                        val seasonNum = ep.seasonNumber.takeIf { it > 0 }
-                        val epNum = ep.episodeNumber.takeIf { it > 0 }
-                        val epTitle = ep.title.ifBlank { h.title }
-                        val label = formatEpisodeLabel(seasonNum, epNum, epTitle)
-                        val progress = if (h.durationMs != null && h.durationMs > 0L && h.positionMs != null && h.positionMs > 0L) {
-                            (h.positionMs.toFloat() / h.durationMs.toFloat()).coerceIn(0f, 1f)
-                        } else null
+                        candidateHistories.mapNotNull { h ->
+                            val series = catalog.seriesLookup[h.contentId] ?: return@mapNotNull null
+                            val ep = epLookup[h.subContentId] ?: return@mapNotNull null
 
-                        SeriesCardUiModel(
-                            series = series,
-                            isContinueWatching = true,
-                            targetEpisodeId = h.subContentId,
-                            seasonNumber = seasonNum,
-                            episodeNumber = epNum,
-                            episodeTitle = epTitle,
-                            episodeLabel = label,
-                            progress = progress,
-                        )
-                    }.distinctBy { it.series.id }
+                            val seasonNum = ep.seasonNumber.takeIf { it > 0 }
+                            val epNum = ep.episodeNumber.takeIf { it > 0 }
+                            val epTitle = ep.title.ifBlank { h.title }
+                            val label = formatEpisodeLabel(seasonNum, epNum, epTitle)
+                            val progress = if (h.durationMs != null && h.durationMs > 0L && h.positionMs != null && h.positionMs > 0L) {
+                                (h.positionMs.toFloat() / h.durationMs.toFloat()).coerceIn(0f, 1f)
+                            } else null
+
+                            SeriesCardUiModel(
+                                series = series,
+                                isContinueWatching = true,
+                                targetEpisodeId = h.subContentId,
+                                seasonNumber = seasonNum,
+                                episodeNumber = epNum,
+                                episodeTitle = epTitle,
+                                episodeLabel = label,
+                                progress = progress,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -397,7 +433,7 @@ class SeriesRepository(
         serverOrder = serverOrder,
         isFavorite = false,
         lastEpisodeId = null,
-        normalizedSearchText = TextNormalizer.normalizeForSearch("${MediaTitleNormalizer.cleanTitle(name).displayTitle} ${genre.orEmpty()}"),
+        normalizedSearchText = "",
         formattedRating = com.watchioiptv.nativeapp.feature.movies.formatRating(rating),
     )
 
@@ -424,7 +460,7 @@ class SeriesRepository(
             serverOrder = playlistOrder,
             isFavorite = false,
             lastEpisodeId = null,
-            normalizedSearchText = TextNormalizer.normalizeForSearch("$cleanTitle ${groupTitle.orEmpty()}"),
+            normalizedSearchText = "",
             formattedRating = null,
         )
     }

@@ -21,8 +21,12 @@ import com.watchioiptv.nativeapp.domain.playback.PlaybackUrlResolver
 import com.watchioiptv.nativeapp.domain.repository.FavoritesRepository
 import com.watchioiptv.nativeapp.domain.repository.HistoryRepository
 import com.watchioiptv.nativeapp.domain.repository.SettingsRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -48,9 +52,15 @@ class MoviesRepository(
     private val cacheMutex = Mutex()
     @Volatile
     private var catalogCache: MovieCatalogCache? = null
+    private var searchWarmupJob: Job? = null
+    private var catalogGeneration: Long = 0L
+    private val repositoryScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     fun invalidateCache(providerId: ProviderId? = null) {
-        if (providerId == null || catalogCache?.providerId == providerId) {
+        val current = catalogCache
+        if (providerId == null || current?.providerId == providerId) {
+            searchWarmupJob?.cancel()
+            searchWarmupJob = null
             catalogCache = null
         }
     }
@@ -78,7 +88,7 @@ class MoviesRepository(
             } else {
                 val provider = database.providerDao().findById(providerId.value)
                 if (provider == null) {
-                    MovieCatalogCache(providerId, emptyList(), emptyMap(), emptyMap())
+                    MovieCatalogCache(providerId, emptyList(), emptyMap(), emptyMap(), emptyMap())
                 } else {
                     val providerType = ProviderType.fromPersisted(provider.type)
                     val rows = when (providerType) {
@@ -96,8 +106,24 @@ class MoviesRepository(
                         movies = rows,
                         movieLookup = lookup,
                         providerCategories = categoryMap,
+                        searchIndex = emptyMap(),
                     )
                     catalogCache = newCache
+
+                    // Launch cancellable background search index warmup
+                    val currentGeneration = ++catalogGeneration
+                    searchWarmupJob?.cancel()
+                    searchWarmupJob = repositoryScope.launch {
+                        val searchMap = buildMap(rows.size) {
+                            for (item in rows) {
+                                put(item.id, TextNormalizer.normalizeForSearch("${item.name} ${item.genre.orEmpty()}"))
+                            }
+                        }
+                        if (catalogGeneration == currentGeneration) {
+                            newCache.searchIndex = searchMap
+                        }
+                    }
+
                     newCache
                 }
             }
@@ -109,7 +135,14 @@ class MoviesRepository(
         val normalizedQuery = if (query.isNotBlank()) TextNormalizer.normalizeForSearch(query) else ""
 
         if (normalizedQuery.isNotBlank()) {
-            return@withContext catalog.movies.filter { it.normalizedSearchText.contains(normalizedQuery) }
+            val searchIdx = catalog.searchIndex
+            return@withContext if (searchIdx.isNotEmpty()) {
+                catalog.movies.filter { (searchIdx[it.id] ?: "").contains(normalizedQuery) }
+            } else {
+                withContext(Dispatchers.Default) {
+                    catalog.movies.filter { TextNormalizer.normalizeForSearch("${it.name} ${it.genre.orEmpty()}").contains(normalizedQuery) }
+                }
+            }
         }
 
         when (category.kind) {
@@ -247,7 +280,7 @@ class MoviesRepository(
         isFavorite = false,
         resumePositionMs = null,
         resumeDurationMs = null,
-        normalizedSearchText = TextNormalizer.normalizeForSearch("${MediaTitleNormalizer.cleanTitle(name).displayTitle} ${genre.orEmpty()}"),
+        normalizedSearchText = "",
         formattedRating = com.watchioiptv.nativeapp.feature.movies.formatRating(rating),
     )
 
@@ -271,7 +304,7 @@ class MoviesRepository(
         isFavorite = false,
         resumePositionMs = null,
         resumeDurationMs = null,
-        normalizedSearchText = TextNormalizer.normalizeForSearch("${MediaTitleNormalizer.cleanTitle(name).displayTitle}"),
+        normalizedSearchText = "",
         formattedRating = null,
     )
 

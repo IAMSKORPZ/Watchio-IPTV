@@ -41,6 +41,7 @@ data class MovieCatalogCache(
     val movies: List<WatchioMovieItem>,
     val movieLookup: Map<String, WatchioMovieItem>,
     val providerCategories: Map<String, List<WatchioMovieItem>>,
+    @Volatile var searchIndex: Map<String, String> = emptyMap(),
 )
 
 @Immutable

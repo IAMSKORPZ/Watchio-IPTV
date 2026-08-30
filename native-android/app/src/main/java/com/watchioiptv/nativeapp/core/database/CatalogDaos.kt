@@ -206,6 +206,9 @@ interface EpisodeDao {
 
     @Query("SELECT * FROM episodes WHERE providerId = :providerId")
     suspend fun getByProvider(providerId: String): List<EpisodeEntity>
+
+    @Query("SELECT * FROM episodes WHERE providerId = :providerId AND episodeId IN (:episodeIds)")
+    suspend fun getByIds(providerId: String, episodeIds: List<String>): List<EpisodeEntity>
 }
 
 @Dao
@@ -284,6 +287,9 @@ interface M3uItemDao {
 
     @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND itemId = :itemId LIMIT 1")
     suspend fun find(providerId: String, itemId: String): M3uItemEntity?
+
+    @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND itemId IN (:itemIds)")
+    suspend fun getByIds(providerId: String, itemIds: List<String>): List<M3uItemEntity>
 
     @Transaction
     suspend fun replaceFromStaging(providerId: String, sessionId: String, batchSize: Int) {
