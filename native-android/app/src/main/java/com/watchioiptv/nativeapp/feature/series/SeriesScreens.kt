@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -50,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -90,6 +92,7 @@ import com.watchioiptv.nativeapp.ui.theme.LocalWatchioBorders
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioColors
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioRadii
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioTypography
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
 fun SeriesScreen(
@@ -99,12 +102,21 @@ fun SeriesScreen(
     onSearch: (String) -> Unit,
     onSeries: (SeriesCardUiModel) -> Unit,
     onBack: () -> Unit,
+    onLoadMore: () -> Unit = {},
     initialSearchVisible: Boolean = false,
 ) {
     val colors = LocalWatchioColors.current
     val firstCategoryFocus = remember { FocusRequester() }
     var searchVisible by remember { mutableStateOf(initialSearchVisible) }
     var optionsSeries by remember { mutableStateOf<SeriesCardUiModel?>(null) }
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(gridState, state.series.size, state.hasMore) {
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
+            .distinctUntilChanged()
+            .collect { lastVisible ->
+                if (state.hasMore && lastVisible >= state.series.size - 20) onLoadMore()
+            }
+    }
     BackHandler {
         if (searchVisible) {
             searchVisible = false
@@ -178,6 +190,7 @@ fun SeriesScreen(
                                 }
                             } else {
                                 LazyVerticalGrid(
+                                    state = gridState,
                                     columns = GridCells.Adaptive(minSize = if (compactLandscape) 92.dp else 132.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp),

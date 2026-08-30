@@ -72,6 +72,66 @@ class MoviesRepositoryInstrumentedTest {
     }
 
     @Test
+    fun moviePagesAreBoundedStableAndCompleteAtBoundary() = runBlocking {
+        val providerId = ProviderId("m3u-movie-pages")
+        database.providerDao().upsert(ProviderEntity(providerId.value, "M3U", "m3u_url", "http://example.invalid/list.m3u", 1, 1, null, true))
+        database.categoryDao().upsertAll(listOf(CategoryEntity(providerId.value, "movies", "Movies", "movies", null, "movie", 1)))
+        database.m3uItemDao().upsertAll((0 until 325).map { item(providerId.value, "m-$it", it) })
+        val repository = repository(providerId)
+        val all = repository.categories(providerId).first { it.kind == MovieCategoryKind.All }
+
+        val first = repository.moviePage(providerId, all, 0, 150)
+        val second = repository.moviePage(providerId, all, 150, 150)
+        val third = repository.moviePage(providerId, all, 300, 150)
+
+        assertEquals(150, first.size)
+        assertEquals(150, second.size)
+        assertEquals(25, third.size)
+        assertEquals((0 until 325).map { "m-$it" }, (first + second + third).map { it.id })
+        assertEquals(325, (first + second + third).distinctBy { it.id }.size)
+    }
+
+    @Test
+    fun seriesPagesAreBoundedStableAndDoNotLoadEpisodes() = runBlocking {
+        val providerId = ProviderId("xtream-series-pages")
+        database.providerDao().upsert(ProviderEntity(providerId.value, "Xtream", "xtream", "http://example.invalid", 1, 1, null, true))
+        database.seriesDao().upsertAll((0 until 325).map { index ->
+            com.watchioiptv.nativeapp.core.database.SeriesEntity(
+                providerId = providerId.value,
+                seriesId = "s-$index",
+                name = "Series $index",
+                normalizedName = "series $index",
+                coverUrl = null,
+                plot = null,
+                cast = null,
+                director = null,
+                genre = null,
+                releaseDate = null,
+                rating = null,
+                trailer = null,
+                runtime = null,
+                categoryId = "drama",
+                tmdbId = null,
+                serverOrder = index,
+                updatedAtEpochMs = 1,
+            )
+        })
+        val repository = com.watchioiptv.nativeapp.data.series.SeriesRepository(
+            database, FakeSettings(providerId), RoomFavoritesRepository(database.favoriteDao()), RoomHistoryRepository(database.watchHistoryDao()),
+            FakeResolver, ProviderCredentialStore(FakeSecretStore()), ::retrofit, ::retrofit, object : WatchioClock { override fun nowEpochMs() = 1L },
+        )
+        val all = com.watchioiptv.nativeapp.data.series.SeriesCategory("all", "ALL SERIES", com.watchioiptv.nativeapp.data.series.SeriesCategoryKind.All)
+
+        val first = repository.seriesPage(providerId, all, 0, 150)
+        val second = repository.seriesPage(providerId, all, 150, 150)
+        val third = repository.seriesPage(providerId, all, 300, 150)
+
+        assertEquals(listOf(150, 150, 25), listOf(first.size, second.size, third.size))
+        assertEquals(325, (first + second + third).map { it.series.id }.distinct().size)
+        assertEquals(0, database.episodeDao().getByProvider(providerId.value).size)
+    }
+
+    @Test
     fun allMoviesAndProviderCategoryUseSameM3uMapping() = runBlocking {
         val providerId = ProviderId("m3u-all-mapping")
         database.providerDao().upsert(ProviderEntity(providerId.value, "M3U", "m3u_url", "http://example.invalid/list.m3u", 1, 1, null, true))

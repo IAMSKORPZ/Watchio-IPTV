@@ -179,9 +179,82 @@ class MoviesRepository(
         }
     }
 
+    suspend fun moviePage(
+        providerId: ProviderId,
+        category: MovieCategory,
+        offset: Int,
+        limit: Int,
+        query: String = "",
+    ): List<WatchioMovieItem> = withContext(Dispatchers.IO) {
+        val provider = database.providerDao().findById(providerId.value) ?: return@withContext emptyList()
+        val providerType = ProviderType.fromPersisted(provider.type)
+        val normalizedQuery = TextNormalizer.normalizeForSearch(query)
+        if (normalizedQuery.isNotBlank()) {
+            return@withContext when (providerType) {
+                ProviderType.Xtream -> database.vodDao().search(providerId.value, normalizedQuery, SEARCH_LIMIT).map { it.toMovie(providerType) }
+                ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao()
+                    .searchByType(providerId.value, ContentType.Movie.persisted, normalizedQuery, SEARCH_LIMIT)
+                    .map { it.toMovie(providerType) }
+            }
+        }
+
+        when (category.kind) {
+            MovieCategoryKind.All, MovieCategoryKind.Provider -> {
+                when (providerType) {
+                    ProviderType.Xtream -> {
+                        val rows = if (category.kind == MovieCategoryKind.Provider) {
+                            database.vodDao().getCategoryPage(providerId.value, category.sourceCategoryId.orEmpty(), limit, offset)
+                        } else database.vodDao().getPage(providerId.value, limit, offset)
+                        rows.map { it.toMovie(providerType) }
+                    }
+                    ProviderType.M3uUrl, ProviderType.M3uFile -> {
+                        val rows = if (category.kind == MovieCategoryKind.Provider) {
+                            database.m3uItemDao().getCategoryPageByType(providerId.value, ContentType.Movie.persisted, category.sourceCategoryId.orEmpty(), limit, offset)
+                        } else database.m3uItemDao().getPageByType(providerId.value, ContentType.Movie.persisted, limit, offset)
+                        rows.map { it.toMovie(providerType) }
+                    }
+                }
+            }
+            else -> targetedMovies(providerId, providerType, category)
+        }
+    }
+
+    private suspend fun targetedMovies(
+        providerId: ProviderId,
+        providerType: ProviderType,
+        category: MovieCategory,
+    ): List<WatchioMovieItem> {
+        val histories = historyRepository.recent(providerId).filter { it.contentType == ContentType.Movie }
+        val favoriteIds = if (category.kind == MovieCategoryKind.Favorites) {
+            favoritesRepository.getFavorites(providerId).filter { it.contentType == ContentType.Movie }.map { it.contentId }
+        } else emptyList()
+        val selectedHistory = when (category.kind) {
+            MovieCategoryKind.ContinueWatching -> histories.filter { shouldResumePosition(it.positionMs, it.durationMs) }
+            MovieCategoryKind.History -> histories
+            else -> emptyList()
+        }
+        val ids = if (category.kind == MovieCategoryKind.Favorites) favoriteIds else selectedHistory.map { it.contentId }
+        if (ids.isEmpty()) return emptyList()
+        val rows = ids.distinct().chunked(400).flatMap { chunk ->
+            when (providerType) {
+                ProviderType.Xtream -> database.vodDao().getByIds(providerId.value, chunk).map { it.toMovie(providerType) }
+                ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().getByIds(providerId.value, chunk).map { it.toMovie(providerType) }
+            }
+        }.associateBy { it.id }
+        return if (category.kind == MovieCategoryKind.Favorites) {
+            favoriteIds.mapNotNull { rows[it]?.copy(isFavorite = true) }
+        } else selectedHistory.mapNotNull { history ->
+            rows[history.contentId]?.copy(resumePositionMs = history.positionMs, resumeDurationMs = history.durationMs)
+        }
+    }
+
     suspend fun movie(providerId: ProviderId, movieId: String): WatchioMovieItem? {
-        val catalog = getOrLoadCatalog(providerId)
-        val base = catalog.movieLookup[movieId] ?: return null
+        val provider = database.providerDao().findById(providerId.value) ?: return null
+        val providerType = ProviderType.fromPersisted(provider.type)
+        val base = when (providerType) {
+            ProviderType.Xtream -> database.vodDao().find(providerId.value, movieId)?.toMovie(providerType)
+            ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().find(providerId.value, movieId)?.toMovie(providerType)
+        } ?: return null
         val fav = favoritesRepository.isFavorite(providerId, ContentType.Movie, movieId)
         val hist = historyRepository.find(providerId, ContentType.Movie, movieId)
         return base.copy(
@@ -351,6 +424,7 @@ class MoviesRepository(
     }
 
     companion object {
+        const val PAGE_SIZE = 150
         private const val SEARCH_LIMIT = 500
         const val RESUME_MIN_MS = 30_000L
         const val RESUME_REMAINING_MIN_MS = 60_000L

@@ -65,6 +65,15 @@ interface VodDao {
     @Query("SELECT * FROM vod_streams WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC")
     suspend fun getByProvider(providerId: String): List<VodStreamEntity>
 
+    @Query("SELECT * FROM vod_streams WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC, streamId ASC LIMIT :limit OFFSET :offset")
+    suspend fun getPage(providerId: String, limit: Int, offset: Int): List<VodStreamEntity>
+
+    @Query("SELECT * FROM vod_streams WHERE providerId = :providerId AND categoryId = :categoryId ORDER BY serverOrder ASC, name ASC, streamId ASC LIMIT :limit OFFSET :offset")
+    suspend fun getCategoryPage(providerId: String, categoryId: String, limit: Int, offset: Int): List<VodStreamEntity>
+
+    @Query("SELECT * FROM vod_streams WHERE providerId = :providerId AND streamId IN (:streamIds)")
+    suspend fun getByIds(providerId: String, streamIds: List<String>): List<VodStreamEntity>
+
     @Query("SELECT * FROM vod_streams WHERE providerId = :providerId AND categoryId = :categoryId ORDER BY serverOrder ASC, name ASC")
     suspend fun getByCategory(providerId: String, categoryId: String): List<VodStreamEntity>
 
@@ -112,6 +121,15 @@ interface SeriesDao {
 
     @Query("SELECT * FROM series WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC")
     suspend fun getByProvider(providerId: String): List<SeriesEntity>
+
+    @Query("SELECT * FROM series WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC, seriesId ASC LIMIT :limit OFFSET :offset")
+    suspend fun getPage(providerId: String, limit: Int, offset: Int): List<SeriesEntity>
+
+    @Query("SELECT * FROM series WHERE providerId = :providerId AND categoryId = :categoryId ORDER BY serverOrder ASC, name ASC, seriesId ASC LIMIT :limit OFFSET :offset")
+    suspend fun getCategoryPage(providerId: String, categoryId: String, limit: Int, offset: Int): List<SeriesEntity>
+
+    @Query("SELECT * FROM series WHERE providerId = :providerId AND seriesId IN (:seriesIds)")
+    suspend fun getByIds(providerId: String, seriesIds: List<String>): List<SeriesEntity>
 
     @Query("SELECT * FROM series WHERE providerId = :providerId AND seriesId = :seriesId LIMIT 1")
     suspend fun find(providerId: String, seriesId: String): SeriesEntity?
@@ -278,6 +296,18 @@ interface M3uItemDao {
 
     @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND contentType = :contentType ORDER BY playlistOrder ASC, name ASC")
     suspend fun getByProviderAndType(providerId: String, contentType: String): List<M3uItemEntity>
+
+    @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND contentType = :contentType ORDER BY playlistOrder ASC, name ASC, itemId ASC LIMIT :limit OFFSET :offset")
+    suspend fun getPageByType(providerId: String, contentType: String, limit: Int, offset: Int): List<M3uItemEntity>
+
+    @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND contentType = :contentType AND categoryId = :categoryId ORDER BY playlistOrder ASC, name ASC, itemId ASC LIMIT :limit OFFSET :offset")
+    suspend fun getCategoryPageByType(providerId: String, contentType: String, categoryId: String, limit: Int, offset: Int): List<M3uItemEntity>
+
+    @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND contentType = :contentType GROUP BY COALESCE(NULLIF(seriesName, ''), name) ORDER BY MIN(playlistOrder) ASC, COALESCE(NULLIF(seriesName, ''), name) ASC LIMIT :limit OFFSET :offset")
+    suspend fun getSeriesPage(providerId: String, contentType: String, limit: Int, offset: Int): List<M3uItemEntity>
+
+    @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND contentType = :contentType AND categoryId = :categoryId GROUP BY COALESCE(NULLIF(seriesName, ''), name) ORDER BY MIN(playlistOrder) ASC, COALESCE(NULLIF(seriesName, ''), name) ASC LIMIT :limit OFFSET :offset")
+    suspend fun getSeriesCategoryPage(providerId: String, contentType: String, categoryId: String, limit: Int, offset: Int): List<M3uItemEntity>
 
     @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND contentType = :contentType AND normalizedName LIKE '%' || :query || '%' ORDER BY playlistOrder ASC, name ASC LIMIT :limit")
     suspend fun searchByType(providerId: String, contentType: String, query: String, limit: Int): List<M3uItemEntity>

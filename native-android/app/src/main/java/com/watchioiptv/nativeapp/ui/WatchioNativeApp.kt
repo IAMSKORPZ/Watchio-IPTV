@@ -363,6 +363,7 @@ fun WatchioNativeApp(
                     state = state,
                     onCategory = seriesViewModel::selectCategory,
                     onSearch = seriesViewModel::updateSearch,
+                    onLoadMore = seriesViewModel::loadMore,
                     onSeries = { item ->
                         val targetEp = item.targetEpisodeId?.let { java.net.URLEncoder.encode(it, "UTF-8") }
                         if (targetEp != null) {
@@ -475,6 +476,7 @@ fun WatchioNativeApp(
                     onCategory = moviesViewModel::selectCategory,
                     onCategorySearch = moviesViewModel::updateCategorySearch,
                     onSearch = moviesViewModel::updateSearch,
+                    onLoadMore = moviesViewModel::loadMore,
                     onMovie = { movie -> navController.navigate("movies/${movie.id}") },
                     onBack = { navController.popBackStack() },
                 )

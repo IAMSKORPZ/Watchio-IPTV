@@ -268,12 +268,94 @@ class SeriesRepository(
         }
     }
 
+    suspend fun seriesPage(
+        providerId: ProviderId,
+        category: SeriesCategory,
+        offset: Int,
+        limit: Int,
+        query: String = "",
+    ): List<SeriesCardUiModel> = withContext(Dispatchers.IO) {
+        val provider = database.providerDao().findById(providerId.value) ?: return@withContext emptyList()
+        val providerType = ProviderType.fromPersisted(provider.type)
+        val normalizedQuery = TextNormalizer.normalizeForSearch(query)
+        if (normalizedQuery.isNotBlank()) {
+            val rows = when (providerType) {
+                ProviderType.Xtream -> database.seriesDao().search(providerId.value, normalizedQuery, SEARCH_LIMIT).map { it.toSeries(providerType) }
+                ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao()
+                    .searchByType(providerId.value, ContentType.Series.persisted, normalizedQuery, SEARCH_LIMIT)
+                    .groupBy { m3uSeriesId(it) }.values.mapNotNull { it.minByOrNull(M3uItemEntity::playlistOrder) }
+                    .map { it.toSeries(providerType) }
+            }
+            return@withContext rows.map(::SeriesCardUiModel)
+        }
+        if (category.kind != SeriesCategoryKind.All && category.kind != SeriesCategoryKind.Provider) {
+            return@withContext targetedSeriesCards(providerId, providerType, category)
+        }
+        val rows = when (providerType) {
+            ProviderType.Xtream -> {
+                val entities = if (category.kind == SeriesCategoryKind.Provider) {
+                    database.seriesDao().getCategoryPage(providerId.value, category.sourceCategoryId.orEmpty(), limit, offset)
+                } else database.seriesDao().getPage(providerId.value, limit, offset)
+                entities.map { it.toSeries(providerType) }
+            }
+            ProviderType.M3uUrl, ProviderType.M3uFile -> {
+                val entities = if (category.kind == SeriesCategoryKind.Provider) {
+                    database.m3uItemDao().getSeriesCategoryPage(providerId.value, ContentType.Series.persisted, category.sourceCategoryId.orEmpty(), limit, offset)
+                } else database.m3uItemDao().getSeriesPage(providerId.value, ContentType.Series.persisted, limit, offset)
+                entities.map { it.toSeries(providerType) }
+            }
+        }
+        rows.map(::SeriesCardUiModel)
+    }
+
+    private suspend fun targetedSeriesCards(
+        providerId: ProviderId,
+        providerType: ProviderType,
+        category: SeriesCategory,
+    ): List<SeriesCardUiModel> {
+        val histories = historyRepository.recent(providerId).filter { it.contentType == ContentType.Episode }
+        val favorites = if (category.kind == SeriesCategoryKind.Favorites) {
+            favoritesRepository.getFavorites(providerId).filter { it.contentType == ContentType.Series }
+        } else emptyList()
+        val selectedHistories = when (category.kind) {
+            SeriesCategoryKind.ContinueWatching -> histories
+                .filter { shouldResumePosition(it.positionMs, it.durationMs) && !isCompletedPosition(it.positionMs, it.durationMs) }
+                .distinctBy { it.contentId }
+            SeriesCategoryKind.History -> histories.distinctBy { it.contentId }
+            else -> emptyList()
+        }
+        val ids = if (category.kind == SeriesCategoryKind.Favorites) favorites.map { it.contentId } else selectedHistories.map { it.contentId }
+        if (ids.isEmpty()) return emptyList()
+        val series = when (providerType) {
+            ProviderType.Xtream -> ids.distinct().chunked(400).flatMap { database.seriesDao().getByIds(providerId.value, it) }.map { it.toSeries(providerType) }
+            ProviderType.M3uUrl, ProviderType.M3uFile -> getOrLoadCatalog(providerId).series.filter { it.id in ids }
+        }.associateBy { it.id }
+        if (category.kind == SeriesCategoryKind.Favorites) {
+            return favorites.mapNotNull { series[it.contentId]?.copy(isFavorite = true) }.map(::SeriesCardUiModel)
+        }
+        return selectedHistories.mapNotNull { history ->
+            val item = series[history.contentId] ?: return@mapNotNull null
+            SeriesCardUiModel(
+                series = item,
+                isContinueWatching = category.kind == SeriesCategoryKind.ContinueWatching,
+                targetEpisodeId = history.subContentId,
+                progress = if (history.durationMs != null && history.durationMs > 0L && history.positionMs != null) {
+                    (history.positionMs.toFloat() / history.durationMs.toFloat()).coerceIn(0f, 1f)
+                } else null,
+            )
+        }
+    }
+
     suspend fun series(providerId: ProviderId, category: SeriesCategory, query: String = ""): List<WatchioSeriesItem> =
         seriesCards(providerId, category, query).map { it.series }
 
     suspend fun item(providerId: ProviderId, seriesId: String): WatchioSeriesItem? {
-        val catalog = getOrLoadCatalog(providerId)
-        return catalog.seriesLookup[seriesId]
+        val provider = database.providerDao().findById(providerId.value) ?: return null
+        val providerType = ProviderType.fromPersisted(provider.type)
+        return when (providerType) {
+            ProviderType.Xtream -> database.seriesDao().find(providerId.value, seriesId)?.toSeries(providerType)
+            ProviderType.M3uUrl, ProviderType.M3uFile -> getOrLoadCatalog(providerId).seriesLookup[seriesId]
+        }
     }
 
     suspend fun details(series: WatchioSeriesItem): SeriesDetails = withContext(Dispatchers.IO) {
@@ -593,6 +675,7 @@ class SeriesRepository(
     }
 
     companion object {
+        const val PAGE_SIZE = 150
         private const val SEARCH_LIMIT = 500
         private const val DETAIL_CACHE_MS = 24L * 60L * 60L * 1000L
         private const val TRAILER_CACHE_MS = 30L * 24L * 60L * 60L * 1000L

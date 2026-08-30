@@ -37,6 +37,8 @@ data class SeriesUiState(
     val selectedCategory: SeriesCategory? = null,
     val series: List<SeriesCardUiModel> = emptyList(),
     val searchQuery: String = "",
+    val loadingMore: Boolean = false,
+    val hasMore: Boolean = false,
 )
 
 data class SeriesDetailsUiState(
@@ -97,8 +99,8 @@ class SeriesViewModel(
                         ?: mutableSeries.value.selectedCategory
                         ?: return@collectLatest
                     val category = if (query.isBlank()) mutableSeries.value.selectedCategory ?: allCategory else allCategory
-                    val items = seriesRepository.seriesCards(providerId, category, query)
-                    mutableSeries.value = mutableSeries.value.copy(searchQuery = query, series = items)
+                    val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE, query)
+                    mutableSeries.value = mutableSeries.value.copy(searchQuery = query, series = items, hasMore = query.isBlank() && items.size == SeriesRepository.PAGE_SIZE)
                 }
         }
         viewModelScope.launch {
@@ -167,12 +169,13 @@ class SeriesViewModel(
             }
             val categories = seriesRepository.categories(providerId)
             val selected = categories.firstOrNull()
-            val items = selected?.let { seriesRepository.seriesCards(providerId, it) }.orEmpty()
+            val items = selected?.let { seriesRepository.seriesPage(providerId, it, 0, SeriesRepository.PAGE_SIZE) }.orEmpty()
             mutableSeries.value = SeriesUiState(
                 loading = false,
                 categories = categories,
                 selectedCategory = selected,
                 series = items,
+                hasMore = items.size == SeriesRepository.PAGE_SIZE,
             )
         }
     }
@@ -180,11 +183,11 @@ class SeriesViewModel(
     fun selectCategory(category: SeriesCategory) {
         categoryJob?.cancel()
         val currentQuery = mutableSeries.value.searchQuery
-        mutableSeries.value = mutableSeries.value.copy(selectedCategory = category)
+        mutableSeries.value = mutableSeries.value.copy(selectedCategory = category, series = emptyList(), loadingMore = false, hasMore = false)
         categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val providerId = seriesRepository.selectedProviderId() ?: return@launch
-            val items = seriesRepository.seriesCards(providerId, category, currentQuery)
-            mutableSeries.value = mutableSeries.value.copy(series = items)
+            val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE, currentQuery)
+            mutableSeries.value = mutableSeries.value.copy(series = items, hasMore = currentQuery.isBlank() && items.size == SeriesRepository.PAGE_SIZE)
         }
     }
 
@@ -197,11 +200,33 @@ class SeriesViewModel(
                 val category = mutableSeries.value.selectedCategory
                     ?: mutableSeries.value.categories.firstOrNull { it.id == "all" }
                     ?: return@launch
-                val items = seriesRepository.seriesCards(providerId, category, "")
-                mutableSeries.value = mutableSeries.value.copy(searchQuery = "", series = items)
+                val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE)
+                mutableSeries.value = mutableSeries.value.copy(searchQuery = "", series = items, hasMore = items.size == SeriesRepository.PAGE_SIZE)
             }
         } else {
             searchQueryFlow.value = query
+        }
+    }
+
+    fun loadMore() {
+        val state = mutableSeries.value
+        if (state.loadingMore || !state.hasMore || state.searchQuery.isNotBlank()) return
+        val category = state.selectedCategory ?: return
+        mutableSeries.value = state.copy(loadingMore = true)
+        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val providerId = seriesRepository.selectedProviderId() ?: run {
+                mutableSeries.value = mutableSeries.value.copy(loadingMore = false, hasMore = false)
+                return@launch
+            }
+            val page = seriesRepository.seriesPage(providerId, category, state.series.size, SeriesRepository.PAGE_SIZE)
+            val current = mutableSeries.value
+            if (current.selectedCategory == category) {
+                mutableSeries.value = current.copy(
+                    series = (current.series + page).distinctBy { it.series.id },
+                    loadingMore = false,
+                    hasMore = page.size == SeriesRepository.PAGE_SIZE,
+                )
+            }
         }
     }
 

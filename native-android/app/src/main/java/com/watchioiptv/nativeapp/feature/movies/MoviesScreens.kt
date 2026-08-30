@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
@@ -50,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -100,6 +102,7 @@ import com.watchioiptv.nativeapp.ui.theme.LocalWatchioColors
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioRadii
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioTypography
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
 fun MoviesScreen(
@@ -109,12 +112,21 @@ fun MoviesScreen(
     onSearch: (String) -> Unit,
     onMovie: (WatchioMovieItem) -> Unit,
     onBack: () -> Unit,
+    onLoadMore: () -> Unit = {},
     initialSearchVisible: Boolean = false,
 ) {
     val colors = LocalWatchioColors.current
     val firstCategoryFocus = remember { FocusRequester() }
     var searchVisible by remember { mutableStateOf(initialSearchVisible) }
     var optionsMovie by remember { mutableStateOf<WatchioMovieItem?>(null) }
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(gridState, state.movies.size, state.hasMore) {
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
+            .distinctUntilChanged()
+            .collect { lastVisible ->
+                if (state.hasMore && lastVisible >= state.movies.size - 20) onLoadMore()
+            }
+    }
     BackHandler {
         if (searchVisible) {
             searchVisible = false
@@ -184,6 +196,7 @@ fun MoviesScreen(
                             } else {
                                 val isContinueWatching = state.selectedCategory?.kind == MovieCategoryKind.ContinueWatching || state.selectedCategory?.id == "continue_watching"
                                 LazyVerticalGrid(
+                                    state = gridState,
                                     columns = GridCells.Adaptive(minSize = if (compactLandscape) 92.dp else 132.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp),

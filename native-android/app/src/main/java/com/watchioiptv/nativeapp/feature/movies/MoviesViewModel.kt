@@ -36,6 +36,8 @@ data class MoviesUiState(
     val movies: List<WatchioMovieItem> = emptyList(),
     val searchQuery: String = "",
     val categorySearchQuery: String = "",
+    val loadingMore: Boolean = false,
+    val hasMore: Boolean = false,
 )
 
 data class MovieDetailsUiState(
@@ -116,12 +118,13 @@ class MoviesViewModel(
             }
             val categories = moviesRepository.categories(providerId)
             val selected = categories.firstOrNull()
-            val items = selected?.let { moviesRepository.movies(providerId, it) }.orEmpty()
+            val items = selected?.let { moviesRepository.moviePage(providerId, it, 0, MoviesRepository.PAGE_SIZE) }.orEmpty()
             mutableMovies.value = MoviesUiState(
                 loading = false,
                 categories = categories,
                 selectedCategory = selected,
                 movies = items,
+                hasMore = items.size == MoviesRepository.PAGE_SIZE,
             )
         }
     }
@@ -129,11 +132,11 @@ class MoviesViewModel(
     fun selectCategory(category: MovieCategory) {
         categoryJob?.cancel()
         val currentQuery = mutableMovies.value.searchQuery
-        mutableMovies.value = mutableMovies.value.copy(selectedCategory = category)
+        mutableMovies.value = mutableMovies.value.copy(selectedCategory = category, movies = emptyList(), loadingMore = false, hasMore = false)
         categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val providerId = moviesRepository.selectedProviderId() ?: return@launch
-            val items = moviesRepository.movies(providerId, category, currentQuery)
-            mutableMovies.value = mutableMovies.value.copy(movies = items)
+            val items = moviesRepository.moviePage(providerId, category, 0, MoviesRepository.PAGE_SIZE, currentQuery)
+            mutableMovies.value = mutableMovies.value.copy(movies = items, hasMore = currentQuery.isBlank() && items.size == MoviesRepository.PAGE_SIZE)
         }
     }
 
@@ -148,8 +151,8 @@ class MoviesViewModel(
                 val currentCategory = mutableMovies.value.selectedCategory
                     ?: mutableMovies.value.categories.firstOrNull()
                     ?: return@launch
-                val items = moviesRepository.movies(providerId, currentCategory, "")
-                mutableMovies.value = mutableMovies.value.copy(movies = items)
+                val items = moviesRepository.moviePage(providerId, currentCategory, 0, MoviesRepository.PAGE_SIZE)
+                mutableMovies.value = mutableMovies.value.copy(movies = items, hasMore = items.size == MoviesRepository.PAGE_SIZE)
             }
         } else {
             searchQueryFlow.value = query
@@ -162,8 +165,30 @@ class MoviesViewModel(
         val allCategory = state.categories.firstOrNull { it.kind == com.watchioiptv.nativeapp.data.movies.MovieCategoryKind.All }
             ?: state.categories.firstOrNull()
             ?: return@withContext
-        val results = moviesRepository.movies(providerId, allCategory, query)
-        mutableMovies.value = mutableMovies.value.copy(movies = results)
+        val results = moviesRepository.moviePage(providerId, allCategory, 0, MoviesRepository.PAGE_SIZE, query)
+        mutableMovies.value = mutableMovies.value.copy(movies = results, hasMore = false)
+    }
+
+    fun loadMore() {
+        val state = mutableMovies.value
+        if (state.loadingMore || !state.hasMore || state.searchQuery.isNotBlank()) return
+        val category = state.selectedCategory ?: return
+        mutableMovies.value = state.copy(loadingMore = true)
+        categoryJob = viewModelScope.launch(Dispatchers.Default) {
+            val providerId = moviesRepository.selectedProviderId() ?: run {
+                mutableMovies.value = mutableMovies.value.copy(loadingMore = false, hasMore = false)
+                return@launch
+            }
+            val page = moviesRepository.moviePage(providerId, category, state.movies.size, MoviesRepository.PAGE_SIZE)
+            val current = mutableMovies.value
+            if (current.selectedCategory == category) {
+                mutableMovies.value = current.copy(
+                    movies = (current.movies + page).distinctBy { it.id },
+                    loadingMore = false,
+                    hasMore = page.size == MoviesRepository.PAGE_SIZE,
+                )
+            }
+        }
     }
 
     fun updateCategorySearch(query: String) {
