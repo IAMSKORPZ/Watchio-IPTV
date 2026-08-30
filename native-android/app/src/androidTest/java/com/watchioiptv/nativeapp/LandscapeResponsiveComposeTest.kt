@@ -42,7 +42,9 @@ import com.watchioiptv.nativeapp.data.movies.WatchioMovieItem
 import com.watchioiptv.nativeapp.data.series.SeriesCardUiModel
 import com.watchioiptv.nativeapp.data.series.SeriesCategory
 import com.watchioiptv.nativeapp.data.series.SeriesCategoryKind
+import com.watchioiptv.nativeapp.data.series.SeriesDetails
 import com.watchioiptv.nativeapp.data.series.WatchioEpisodeItem
+import com.watchioiptv.nativeapp.data.series.WatchioSeason
 import com.watchioiptv.nativeapp.data.series.WatchioSeriesItem
 import com.watchioiptv.nativeapp.domain.model.ProviderType
 import com.watchioiptv.nativeapp.feature.live.LiveTvScreen
@@ -51,6 +53,8 @@ import com.watchioiptv.nativeapp.feature.movies.MovieDetailsScreen
 import com.watchioiptv.nativeapp.feature.movies.MovieDetailsUiState
 import com.watchioiptv.nativeapp.feature.movies.MoviesScreen
 import com.watchioiptv.nativeapp.feature.movies.MoviesUiState
+import com.watchioiptv.nativeapp.feature.series.SeriesDetailsScreen
+import com.watchioiptv.nativeapp.feature.series.SeriesDetailsUiState
 import com.watchioiptv.nativeapp.feature.series.SeriesScreen
 import com.watchioiptv.nativeapp.feature.series.SeriesUiState
 import com.watchioiptv.nativeapp.feature.tvguide.TvGuideScreen
@@ -3331,6 +3335,390 @@ class LandscapeResponsiveComposeTest {
         composeRule.waitForIdle()
         assertEquals(true, playWithResume)
     }
+
+    // --------------------------------------------------------------------------
+    // Series Details UI Refresh tests
+    // --------------------------------------------------------------------------
+
+    @Test
+    fun seriesDetailsUsesSharedHeaderAndCorrectTitle() {
+        val details = sampleSeriesDetails()
+        var backPressed = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = 1),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = { backPressed = true },
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // 1. Shared WatchioPageHeader is present
+        composeRule.onNodeWithTag("series-details-header", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-branding", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-clock", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-back-icon", useUnmergedTree = true).assertIsDisplayed()
+
+        // 2. Title matches the SERIES section title exactly
+        composeRule.onNodeWithText("SERIES").assertIsDisplayed()
+
+        // 3. Old floating Back card in content area is removed
+        assertTrue(
+            "Floating Back card text must be removed from content area",
+            composeRule.onAllNodesWithText("Back").fetchSemanticsNodes().isEmpty(),
+        )
+
+        // 4. Back button works
+        composeRule.onNodeWithTag("series-details-back-icon", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Back button in header must trigger onBack", backPressed)
+    }
+
+    @Test
+    fun seriesDetailsRendersPosterRatingTabsTitleMetaAndPlot() {
+        val details = sampleSeriesDetails()
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = 1),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Poster, Rating, and Tabs
+        composeRule.onNodeWithTag("series-poster", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-rating", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("★ 8.8").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-tab-cast", useUnmergedTree = true).assertIsDisplayed()
+
+        // Title and formatted metadata summary
+        composeRule.onNodeWithTag("series-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Severance").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-meta", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("2022 • Drama, Sci-Fi, Thriller • ★ 8.8").assertIsDisplayed()
+
+        // Aligned metadata rows
+        composeRule.onNodeWithText("Director:").assertIsDisplayed()
+        composeRule.onNodeWithText("Ben Stiller").assertIsDisplayed()
+        composeRule.onNodeWithText("Release Date:").assertIsDisplayed()
+        composeRule.onNodeWithText("2022-02-18").assertIsDisplayed()
+        composeRule.onNodeWithText("Genre:").assertIsDisplayed()
+        composeRule.onNodeWithText("Drama, Sci-Fi, Thriller").assertIsDisplayed()
+
+        // Plot
+        composeRule.onNodeWithTag("series-plot-text", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun seriesDetailsActionsAndPlayDefaultFocus() {
+        val details = sampleSeriesDetails()
+        var favoriteToggled = false
+        var trailerOpened: String? = null
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = 1),
+                        onPlay = {},
+                        onTrailer = { trailerOpened = it },
+                        onFavorite = { favoriteToggled = true },
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Action row buttons
+        composeRule.onNodeWithTag("series-play-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-trailer-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-favorite-button", useUnmergedTree = true).assertIsDisplayed()
+
+        // Click Favourite
+        composeRule.onNodeWithTag("series-favorite-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Clicking favourite button must trigger onFavorite", favoriteToggled)
+
+        // Click Trailer
+        composeRule.onNodeWithTag("series-trailer-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals("dQw4w9WgXcQ", trailerOpened)
+    }
+
+    @Test
+    fun seriesDetailsSeasonSelectorOpensDialogAndSwitchesSeason() {
+        val details = sampleSeriesDetails()
+        var switchedSeason: Int? = null
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = 1),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = { switchedSeason = it },
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Season selector button is visible
+        composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Season 1 ▼").assertIsDisplayed()
+
+        // Click Season selector button to open dialog
+        composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        // Dialog is displayed with canonical seasons
+        composeRule.onNodeWithTag("series-season-dialog", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-season-option-1", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-season-option-2", useUnmergedTree = true).assertIsDisplayed()
+
+        // Select Season 2
+        composeRule.onNodeWithTag("series-season-option-2", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(2, switchedSeason)
+    }
+
+    @Test
+    fun seriesDetailsEpisodeCardFormattingProgressAndCompleted() {
+        val details = sampleSeriesDetails()
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(
+                            loading = false,
+                            details = details,
+                            selectedSeasonNumber = 1,
+                            targetEpisodeId = "ep-102",
+                        ),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Section header
+        composeRule.onNodeWithTag("series-episodes-header", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Season 1 • 2 Episodes").assertIsDisplayed()
+
+        // Episode numbers and titles
+        composeRule.onNodeWithText("S01 • E01").assertIsDisplayed()
+        composeRule.onNodeWithText("Good News About Hell").assertIsDisplayed()
+        composeRule.onAllNodesWithText("53m")[0].assertIsDisplayed()
+
+        composeRule.onNodeWithText("S01 • E02").assertIsDisplayed()
+        composeRule.onNodeWithText("Half Loop").assertIsDisplayed()
+
+        // Episode 1 is completed -> shows Watched badge
+        composeRule.onNodeWithTag("series-episode-watched-badge", useUnmergedTree = true).assertIsDisplayed()
+
+        // Episode 2 is partially watched -> shows progress bar
+        composeRule.onNodeWithTag("series-episode-progress-bar", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun seriesDetailsResumeDialogAppearsOnResumable() {
+        val details = sampleSeriesDetails()
+        var playWithResume: Boolean? = null
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(
+                            loading = false,
+                            details = details,
+                            selectedSeasonNumber = 1,
+                        ),
+                        onPlay = { playWithResume = it },
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Click Play on resumable series
+        composeRule.onNodeWithTag("series-play-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        // Resume Playback Dialog must appear
+        composeRule.onNodeWithTag("resume-playback-dialog", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("resume-dialog-resume-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("resume-dialog-restart-button", useUnmergedTree = true).assertIsDisplayed()
+
+        // Click Resume
+        composeRule.onNodeWithTag("resume-dialog-resume-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals(true, playWithResume)
+    }
+
+    private fun sampleSeriesDetails(
+        seriesId: String = "series-101",
+        title: String = "Severance",
+        isFavorite: Boolean = false,
+        trailerKey: String? = "dQw4w9WgXcQ",
+        seasons: List<WatchioSeason> = listOf(
+            WatchioSeason(ProviderId("provider-a"), seriesId, "s1", 1, "Season 1", "2022-02-18", 2, "Overview", null, "8.8"),
+            WatchioSeason(ProviderId("provider-a"), seriesId, "s2", 2, "Season 2", "2025-01-17", 1, "Overview", null, "9.0"),
+        ),
+        episodes: List<WatchioEpisodeItem> = listOf(
+            WatchioEpisodeItem(
+                providerId = ProviderId("provider-a"),
+                providerType = ProviderType.Xtream,
+                seriesId = seriesId,
+                episodeId = "ep-101",
+                seasonNumber = 1,
+                episodeNumber = 1,
+                title = "Good News About Hell",
+                plot = "Mark Scout leads a team at Lumon Industries...",
+                imageUrl = "https://example.invalid/ep1.jpg",
+                duration = "00:53:00",
+                durationSeconds = 3180,
+                rating = "8.9",
+                releaseDate = "2022-02-18",
+                containerExtension = "mp4",
+                tmdbId = null,
+                directUrl = null,
+                headers = emptyMap(),
+                resumePositionMs = 3100_000L,
+                resumeDurationMs = 3180_000L,
+            ),
+            WatchioEpisodeItem(
+                providerId = ProviderId("provider-a"),
+                providerType = ProviderType.Xtream,
+                seriesId = seriesId,
+                episodeId = "ep-102",
+                seasonNumber = 1,
+                episodeNumber = 2,
+                title = "Half Loop",
+                plot = "The team trains Helly on macrodata refinement.",
+                imageUrl = "https://example.invalid/ep2.jpg",
+                duration = "53m",
+                durationSeconds = 3180,
+                rating = "8.7",
+                releaseDate = "2022-02-18",
+                containerExtension = "mp4",
+                tmdbId = null,
+                directUrl = null,
+                headers = emptyMap(),
+                resumePositionMs = 600_000L,
+                resumeDurationMs = 3180_000L,
+            ),
+            WatchioEpisodeItem(
+                providerId = ProviderId("provider-a"),
+                providerType = ProviderType.Xtream,
+                seriesId = seriesId,
+                episodeId = "ep-201",
+                seasonNumber = 2,
+                episodeNumber = 1,
+                title = "Hello, Ms. Cobel",
+                plot = "Season 2 premiere.",
+                imageUrl = null,
+                duration = "58 min",
+                durationSeconds = 3480,
+                rating = "9.0",
+                releaseDate = "2025-01-17",
+                containerExtension = "mp4",
+                tmdbId = null,
+                directUrl = null,
+                headers = emptyMap(),
+                resumePositionMs = null,
+                resumeDurationMs = null,
+            ),
+        ),
+    ): SeriesDetails = SeriesDetails(
+        series = WatchioSeriesItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = seriesId,
+            name = title,
+            coverUrl = "https://example.invalid/poster.jpg",
+            categoryId = "drama",
+            plot = "Mark leads a team of office workers whose memories have been surgically divided.",
+            cast = "Adam Scott, Zach Cherry, Britt Lower, Patricia Arquette",
+            director = "Ben Stiller",
+            genre = "Drama, Sci-Fi, Thriller",
+            releaseDate = "2022-02-18",
+            rating = "8.8",
+            runtime = "53m",
+            trailerKey = trailerKey,
+            tmdbId = 93405,
+            serverOrder = 0,
+            isFavorite = isFavorite,
+            lastEpisodeId = null,
+        ),
+        title = title,
+        posterUrl = "https://example.invalid/poster.jpg",
+        backdropUrl = "https://example.invalid/backdrop.jpg",
+        plot = "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+        cast = "Adam Scott, Zach Cherry, Britt Lower, Patricia Arquette",
+        director = "Ben Stiller",
+        genre = "Drama, Sci-Fi, Thriller",
+        releaseDate = "2022-02-18",
+        rating = "8.8",
+        runtime = "53m",
+        trailerKey = trailerKey,
+        tmdbId = 93405,
+        seasons = seasons,
+        episodes = episodes,
+    )
 
     private class FakePlayerManager : WatchioPlayerManager {
         private var metadata = WatchioPlayerMetadata()

@@ -431,6 +431,64 @@ class SeriesBehaviorTest {
         return if (prev.episodeId != currentId) prev else null
     }
 
+    @Test
+    fun formatSeriesMetaLineCombinesValidValuesCleanly() {
+        val baseSeries = WatchioSeriesItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "series-1",
+            name = "Breaking Bad",
+            coverUrl = null,
+            categoryId = null,
+            plot = null,
+            cast = null,
+            director = null,
+            genre = null,
+            releaseDate = null,
+            rating = null,
+            runtime = null,
+            trailerKey = null,
+            tmdbId = null,
+            serverOrder = 0,
+            isFavorite = false,
+            lastEpisodeId = null,
+        )
+        val fullDetails = SeriesDetails(
+            series = baseSeries,
+            title = "Breaking Bad",
+            posterUrl = null,
+            backdropUrl = null,
+            plot = "A chemistry teacher diagnosed with inoperable lung cancer...",
+            cast = "Bryan Cranston, Aaron Paul",
+            director = "Vince Gilligan",
+            genre = "Crime, Drama, Thriller",
+            releaseDate = "2008-01-20",
+            rating = "9.5",
+            runtime = "49 min",
+            trailerKey = null,
+            tmdbId = null,
+            seasons = emptyList(),
+            episodes = emptyList(),
+        )
+
+        val meta = com.watchioiptv.nativeapp.feature.series.formatSeriesMetaLine(fullDetails)
+        assertEquals("2008 • Crime, Drama, Thriller • ★ 9.5", meta)
+
+        val partialDetails = fullDetails.copy(
+            releaseDate = null,
+            genre = "Drama",
+            rating = null,
+        )
+        assertEquals("Drama", com.watchioiptv.nativeapp.feature.series.formatSeriesMetaLine(partialDetails))
+
+        val emptyDetails = fullDetails.copy(
+            releaseDate = "",
+            genre = null,
+            rating = "0",
+        )
+        assertEquals("", com.watchioiptv.nativeapp.feature.series.formatSeriesMetaLine(emptyDetails))
+    }
+
     private fun stateWith(episode: WatchioEpisodeItem): SeriesDetailsUiState = SeriesDetailsUiState(
         loading = false,
         details = SeriesDetails(
