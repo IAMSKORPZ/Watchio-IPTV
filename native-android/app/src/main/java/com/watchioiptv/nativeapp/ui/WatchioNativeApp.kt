@@ -1497,7 +1497,7 @@ private fun WatchioHomeBackground() {
 }
 
 @Composable
-private fun HomeTopBar(
+internal fun HomeTopBar(
     now: LocalDateTime,
     onSearch: () -> Unit,
     onSports: () -> Unit,
@@ -1536,10 +1536,10 @@ private fun HomeTopBar(
                 horizontalArrangement = Arrangement.spacedBy(spacing.xs, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                HomeTopAction("Search", HomeIconKind.Search, colors.textPrimary, onSearch, withLabel = !compact, contentDescription = "Search", testTag = "home-search")
-                HomeTopAction("Sports", HomeIconKind.Sports, colors.liveTvAccent, onSports, withLabel = !compact)
-                HomeTopAction("Announcements", HomeIconKind.Announcement, colors.moviesAccent, onAnnouncements, withLabel = !compact)
-                HomeTopAction("Playlist", HomeIconKind.Provider, colors.seriesAccent, onProviders, withLabel = !compact)
+                HomeTopAction("Search", HomeIconKind.Search, colors.textPrimary, onSearch, contentDescription = "Search", testTag = "home-search")
+                HomeTopAction("Sports", HomeIconKind.Sports, colors.liveTvAccent, onSports)
+                HomeTopAction("Announcements", HomeIconKind.Announcement, colors.moviesAccent, onAnnouncements)
+                HomeTopAction("Playlist", HomeIconKind.Provider, colors.seriesAccent, onProviders)
             }
         }
     }
@@ -1606,19 +1606,12 @@ private fun HomeTopAction(
     icon: HomeIconKind,
     tint: Color,
     onClick: () -> Unit,
-    withLabel: Boolean = false,
     contentDescription: String = label,
     testTag: String = "home-action-${label.lowercase()}",
 ) {
     val spacing = LocalWatchioSpacing.current
-    val type = LocalWatchioTypography.current
-    val width = when {
-        !withLabel -> 52.dp
-        label.length > 10 -> 154.dp
-        else -> 104.dp
-    }
     WatchioCard(
-        modifier = Modifier.height(52.dp).width(width).testTag(testTag),
+        modifier = Modifier.size(52.dp).testTag(testTag),
         accent = tint,
         minWidth = 0.dp,
         minHeight = 44.dp,
@@ -1631,10 +1624,6 @@ private fun HomeTopAction(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HomeVectorIcon(icon, tint, Modifier.size(24.dp))
-            if (withLabel) {
-                Spacer(Modifier.width(spacing.sm))
-                Text(label.uppercase(), color = tint, style = type.cardTitle, maxLines = 1)
-            }
         }
     }
 }
