@@ -13,6 +13,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -39,6 +41,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,12 +60,19 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -85,7 +95,9 @@ import com.watchioiptv.nativeapp.ui.components.WatchioCard
 import com.watchioiptv.nativeapp.ui.components.WatchioFocusableCard
 import com.watchioiptv.nativeapp.ui.components.WatchioPageHeader
 import com.watchioiptv.nativeapp.ui.components.WatchioProgressBar
+import com.watchioiptv.nativeapp.ui.theme.LocalWatchioBorders
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioColors
+import com.watchioiptv.nativeapp.ui.theme.LocalWatchioRadii
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioTypography
 import kotlinx.coroutines.delay
 
@@ -515,6 +527,7 @@ fun MovieDetailsScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
+    val type = LocalWatchioTypography.current
     BackHandler(onBack = onBack)
     if (state.loading) {
         Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
@@ -535,67 +548,164 @@ fun MovieDetailsScreen(
     LaunchedEffect(details.movie.id) { firstFocus.requestFocus() }
     Box(Modifier.fillMaxSize().background(Color.Black).testTag("movie-details")) {
         details.backdropUrl?.let {
-            AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            AsyncImage(
+                model = it,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.72f)))
-        Column(Modifier.fillMaxSize().padding(28.dp)) {
-            WatchioFocusableCard("Back", accent = colors.focusGlow, onClick = onBack)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        0.0f to Color.Black.copy(alpha = 0.88f),
+                        0.45f to Color.Black.copy(alpha = 0.72f),
+                        0.75f to Color.Black.copy(alpha = 0.45f),
+                        1.0f to Color.Black.copy(alpha = 0.35f),
+                    )
+                )
+        )
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 14.dp)
+        ) {
+            WatchioPageHeader(
+                title = "MOVIES",
+                onBack = onBack,
+                testTagPrefix = "movie-details",
+            )
             Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                Poster(details.posterUrl, Modifier.width(150.dp).height(225.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(details.title, color = colors.textPrimary, fontWeight = FontWeight.Bold)
-                    Text(metaLine(details), color = colors.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        WatchioFocusableCard(
-                            title = if (resumable) "Resume" else "Play",
-                            accent = colors.moviesAccent,
-                            onClick = {
-                                if (resumable) {
-                                    resumeDialogRequest = ResumePlaybackRequest(
-                                        title = details.title,
-                                        subtitle = "Movie",
-                                        resumePositionMs = details.movie.resumePositionMs ?: 0L,
-                                        durationMs = details.movie.resumeDurationMs,
-                                        onResume = {
-                                            resumeDialogRequest = null
-                                            onPlay(true)
-                                        },
-                                        onRestart = {
-                                            resumeDialogRequest = null
-                                            onPlay(false)
-                                        },
-                                        onDismiss = {
-                                            resumeDialogRequest = null
-                                        },
-                                    )
-                                } else {
-                                    onPlay(false)
-                                }
-                            },
-                            modifier = Modifier.focusRequester(firstFocus).testTag("movie-play-button"),
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val compactLandscape = maxWidth < 980.dp
+                val posterWidth = if (compactLandscape) 140.dp else 165.dp
+                val gap = if (compactLandscape) 20.dp else 28.dp
+
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                ) {
+                    MovieDetailsPoster(
+                        url = details.posterUrl,
+                        modifier = Modifier
+                            .width(posterWidth)
+                            .aspectRatio(2f / 3f)
+                            .testTag("movie-poster"),
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(if (compactLandscape) 6.dp else 10.dp),
+                    ) {
+                        Text(
+                            text = details.title,
+                            color = colors.textPrimary,
+                            style = type.screenTitle,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("movie-title"),
                         )
-                        if (resumable) {
-                            WatchioFocusableCard(
-                                title = "Start Over",
-                                accent = colors.seriesAccent,
-                                onClick = { onPlay(false) },
-                                modifier = Modifier.testTag("movie-start-over-button"),
+                        val metaSummary = formatMovieMetaLine(details)
+                        if (metaSummary.isNotBlank()) {
+                            Text(
+                                text = metaSummary,
+                                color = colors.textSecondary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("movie-details-meta"),
                             )
                         }
-                        details.trailerKey?.takeIf { it.isNotBlank() }?.let { key ->
-                            WatchioFocusableCard("Trailer", accent = colors.liveTvAccent, onClick = { onTrailer(key) })
+                        Spacer(Modifier.height(2.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            MovieDetailsActionButton(
+                                title = "Play",
+                                accent = colors.moviesAccent,
+                                isPrimary = true,
+                                onClick = {
+                                    if (resumable) {
+                                        resumeDialogRequest = ResumePlaybackRequest(
+                                            title = details.title,
+                                            subtitle = "Movie",
+                                            resumePositionMs = details.movie.resumePositionMs ?: 0L,
+                                            durationMs = details.movie.resumeDurationMs,
+                                            onResume = {
+                                                resumeDialogRequest = null
+                                                onPlay(true)
+                                            },
+                                            onRestart = {
+                                                resumeDialogRequest = null
+                                                onPlay(false)
+                                            },
+                                            onDismiss = {
+                                                resumeDialogRequest = null
+                                            },
+                                        )
+                                    } else {
+                                        onPlay(false)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .focusRequester(firstFocus)
+                                    .testTag("movie-play-button"),
+                            )
+                            details.trailerKey?.takeIf { it.isNotBlank() }?.let { key ->
+                                MovieDetailsActionButton(
+                                    title = "Trailer",
+                                    accent = colors.liveTvAccent,
+                                    onClick = { onTrailer(key) },
+                                    modifier = Modifier.testTag("movie-trailer-button"),
+                                )
+                            }
+                            MovieDetailsActionButton(
+                                title = if (details.movie.isFavorite) "Favourited" else "Favourite",
+                                accent = colors.focusGlow,
+                                icon = {
+                                    HeartIcon(
+                                        filled = details.movie.isFavorite,
+                                        color = if (details.movie.isFavorite) colors.moviesAccent else Color.White,
+                                    )
+                                },
+                                onClick = onFavorite,
+                                modifier = Modifier.testTag("movie-favorite-button"),
+                            )
                         }
-                        WatchioFocusableCard(if (details.movie.isFavorite) "Unfavorite" else "Favorite", accent = colors.focusGlow, onClick = onFavorite)
+                        Spacer(Modifier.height(4.dp))
+                        MovieDetailRow("Director", details.director)
+                        MovieDetailRow("Release Date", details.releaseDate)
+                        MovieDetailRow("Genre", details.genre)
+                        MovieDetailRow("Cast", details.cast)
+                        if (!details.plot.isNullOrBlank()) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = "Plot",
+                                color = colors.textPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                modifier = Modifier.testTag("movie-plot-header"),
+                            )
+                            Text(
+                                text = details.plot,
+                                color = colors.textSecondary,
+                                fontSize = 13.5.sp,
+                                lineHeight = 19.sp,
+                                maxLines = 4,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .fillMaxWidth(0.95f)
+                                    .testTag("movie-plot-text"),
+                            )
+                        }
                     }
-                    Spacer(Modifier.height(14.dp))
-                    detailRow("Director", details.director)
-                    detailRow("Release Date", details.releaseDate)
-                    detailRow("Genre", details.genre)
-                    detailRow("Cast", details.cast)
-                    Spacer(Modifier.height(12.dp))
-                    Text(details.plot ?: "No description available", color = colors.textSecondary, maxLines = 4, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -782,7 +892,7 @@ private fun MovieCard(
 }
 
 // --------------------------------------------------------------------------
-// Poster
+// Poster & Movie Details Components
 // --------------------------------------------------------------------------
 
 @Composable
@@ -797,23 +907,282 @@ private fun Poster(url: String?, modifier: Modifier) {
     }
 }
 
+@Composable
+private fun MovieDetailsPoster(url: String?, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(10.dp)
+    Surface(
+        modifier = modifier
+            .shadow(elevation = 10.dp, shape = shape)
+            .border(1.dp, Color.White.copy(alpha = 0.12f), shape),
+        shape = shape,
+        color = Color.DarkGray,
+    ) {
+        if (url.isNullOrBlank()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No Image", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+            }
+        } else {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
+fun HeartIcon(
+    filled: Boolean,
+    color: Color,
+    modifier: Modifier = Modifier.size(16.dp),
+) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val path = Path().apply {
+            moveTo(w * 0.5f, h * 0.82f)
+            cubicTo(w * 0.18f, h * 0.54f, 0f, h * 0.34f, 0f, h * 0.20f)
+            cubicTo(0f, h * 0.06f, w * 0.18f, 0f, w * 0.34f, 0f)
+            cubicTo(w * 0.44f, 0f, w * 0.5f, h * 0.08f, w * 0.5f, h * 0.15f)
+            cubicTo(w * 0.5f, h * 0.08f, w * 0.56f, 0f, w * 0.66f, 0f)
+            cubicTo(w * 0.82f, 0f, w * 1.0f, h * 0.06f, w * 1.0f, h * 0.20f)
+            cubicTo(w * 1.0f, h * 0.34f, w * 0.82f, h * 0.54f, w * 0.5f, h * 0.82f)
+            close()
+        }
+        if (filled) {
+            drawPath(path, color, style = Fill)
+        } else {
+            drawPath(path, color, style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round))
+        }
+    }
+}
+
+@Composable
+private fun MovieDetailsActionButton(
+    title: String,
+    accent: Color,
+    modifier: Modifier = Modifier,
+    isPrimary: Boolean = false,
+    icon: (@Composable () -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    val colors = LocalWatchioColors.current
+    val radii = LocalWatchioRadii.current
+    val borders = LocalWatchioBorders.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
+    val shape = RoundedCornerShape(radii.md)
+
+    Surface(
+        modifier = modifier
+            .defaultMinSize(minWidth = if (isPrimary) 120.dp else 100.dp, minHeight = 44.dp)
+            .shadow(
+                elevation = if (focused) 12.dp else 0.dp,
+                shape = shape,
+                ambientColor = colors.focusGlow,
+                spotColor = colors.focusGlow,
+            )
+            .border(
+                BorderStroke(
+                    width = if (focused) borders.focused else borders.normal,
+                    color = if (focused) colors.focusBorder else Color.White.copy(alpha = 0.08f),
+                ),
+                shape = shape,
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .focusable(interactionSource = interactionSource),
+        color = if (isPrimary && !focused) accent.copy(alpha = 0.22f) else colors.surfaceCard,
+        shape = shape,
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    if (focused) accent.copy(alpha = if (isPrimary) 0.32f else 0.20f)
+                    else if (isPrimary) accent.copy(alpha = 0.18f)
+                    else colors.surfaceCard
+                )
+                .padding(horizontal = 20.dp, vertical = 11.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                icon?.invoke()
+                Text(
+                    text = title,
+                    color = colors.textPrimary,
+                    fontWeight = if (isPrimary || focused) FontWeight.Bold else FontWeight.SemiBold,
+                    fontSize = 14.5.sp,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
 // --------------------------------------------------------------------------
 // Detail helpers
 // --------------------------------------------------------------------------
 
+@Composable
+private fun MovieDetailRow(label: String, value: String?) {
+    value?.takeIf { it.isNotBlank() } ?: return
+    val colors = LocalWatchioColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = "$label:",
+            color = colors.textSecondary,
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.width(96.dp),
+            maxLines = 1,
+        )
+        Text(
+            text = value,
+            color = colors.textPrimary,
+            fontSize = 13.5.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Suppress("unused")
 @Composable
 private fun detailRow(label: String, value: String?) {
     value?.takeIf { it.isNotBlank() } ?: return
     Text("$label: $value", color = LocalWatchioColors.current.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
+@Suppress("unused")
 private fun metaLine(details: MovieDetails): String = listOfNotNull(details.releaseDate, details.runtime, details.genre, details.rating)
     .filter { it.isNotBlank() }
     .joinToString("  |  ")
 
 // --------------------------------------------------------------------------
-// Rating formatting
+// Metadata & Rating formatting
 // --------------------------------------------------------------------------
+
+/**
+ * Extracts a 4-digit release year from various date string formats.
+ *
+ * Supports: "2016-01-01", "2016/01/01", "2016", "Jan 2016".
+ * Returns null if no valid 4-digit year is present.
+ */
+internal fun extractReleaseYear(dateStr: String?): String? {
+    if (dateStr.isNullOrBlank()) return null
+    val trimmed = dateStr.trim()
+    val match = Regex("""\b(19\d{2}|20\d{2})\b""").find(trimmed)
+    return match?.value
+}
+
+/**
+ * Parses and formats movie runtime into a clean, human-readable display string.
+ *
+ * Examples:
+ *  - "01:51:15" or "1:51:15" -> "1h 51m"
+ *  - "00:45:00" -> "45m"
+ *  - "111" or "111 min" or "111 mins" -> "1h 51m"
+ *  - "45" -> "45m"
+ *  - "1h 51m" -> "1h 51m"
+ *  - null / blank / invalid -> null
+ */
+internal fun formatRuntime(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    val trimmed = raw.trim()
+
+    // Case 1: HH:MM:SS or H:MM:SS
+    val hmsMatch = Regex("""^(\d{1,2}):(\d{2}):(\d{2})$""").matchEntire(trimmed)
+    if (hmsMatch != null) {
+        val hours = hmsMatch.groupValues[1].toIntOrNull() ?: 0
+        val mins = hmsMatch.groupValues[2].toIntOrNull() ?: 0
+        return when {
+            hours > 0 && mins > 0 -> "${hours}h ${mins}m"
+            hours > 0 -> "${hours}h"
+            mins > 0 -> "${mins}m"
+            else -> null
+        }
+    }
+
+    // Case 2: MM:SS or M:SS
+    val msMatch = Regex("""^(\d{1,3}):(\d{2})$""").matchEntire(trimmed)
+    if (msMatch != null) {
+        val totalMins = msMatch.groupValues[1].toIntOrNull() ?: 0
+        val hours = totalMins / 60
+        val mins = totalMins % 60
+        return when {
+            hours > 0 && mins > 0 -> "${hours}h ${mins}m"
+            hours > 0 -> "${hours}h"
+            mins > 0 -> "${mins}m"
+            else -> null
+        }
+    }
+
+    // Case 3: "111 min" or "111 mins" or "111m"
+    val minWordMatch = Regex("""^(\d+)\s*(?:min|mins|minute|minutes|m)$""", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+    if (minWordMatch != null) {
+        val totalMins = minWordMatch.groupValues[1].toIntOrNull() ?: 0
+        if (totalMins <= 0) return null
+        val hours = totalMins / 60
+        val mins = totalMins % 60
+        return when {
+            hours > 0 && mins > 0 -> "${hours}h ${mins}m"
+            hours > 0 -> "${hours}h"
+            else -> "${mins}m"
+        }
+    }
+
+    // Case 4: Already formatted like "1h 51m" or "2h" or "45m"
+    val formattedMatch = Regex("""^(\d+h(?:\s*\d+m)?|\d+m)$""", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+    if (formattedMatch != null) {
+        return trimmed
+    }
+
+    // Case 5: Raw numeric value (either minutes or seconds)
+    val num = trimmed.toIntOrNull()
+    if (num != null && num > 0) {
+        // If > 300, treat as seconds (e.g. 6660s = 111m = 1h 51m)
+        val totalMins = if (num > 300) num / 60 else num
+        if (totalMins <= 0) return null
+        val hours = totalMins / 60
+        val mins = totalMins % 60
+        return when {
+            hours > 0 && mins > 0 -> "${hours}h ${mins}m"
+            hours > 0 -> "${hours}h"
+            else -> "${mins}m"
+        }
+    }
+
+    return null
+}
+
+/**
+ * Builds a clean, bullet-separated metadata summary line from valid movie fields.
+ *
+ * Example: "2016 • 1h 51m • Crime, Thriller • ★ 5.0"
+ */
+internal fun formatMovieMetaLine(details: MovieDetails): String {
+    val year = extractReleaseYear(details.releaseDate)
+    val runtime = formatRuntime(details.runtime)
+    val genre = details.genre?.takeIf { it.isNotBlank() }
+    val rating = formatRating(details.rating)
+
+    return listOfNotNull(year, runtime, genre, rating)
+        .joinToString(" • ")
+}
 
 /**
  * Formats a raw rating string from the provider into a display string.
@@ -844,3 +1213,4 @@ fun openYoutubeTrailer(context: android.content.Context, key: String) {
 @Suppress("unused")
 private fun resumeTitle(movie: WatchioMovieItem): String =
     if ((movie.resumePositionMs ?: 0L) > 60_000L) "Resume" else "Play"
+

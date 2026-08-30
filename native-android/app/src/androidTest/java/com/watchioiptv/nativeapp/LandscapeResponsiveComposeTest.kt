@@ -35,6 +35,7 @@ import com.watchioiptv.nativeapp.data.live.LiveTvCategory
 import com.watchioiptv.nativeapp.data.live.LiveTvCategoryKind
 import com.watchioiptv.nativeapp.data.live.LiveTvChannel
 import com.watchioiptv.nativeapp.data.live.LiveTvNowNext
+import com.watchioiptv.nativeapp.data.movies.MovieDetails
 import com.watchioiptv.nativeapp.data.movies.MovieCategory
 import com.watchioiptv.nativeapp.data.movies.MovieCategoryKind
 import com.watchioiptv.nativeapp.data.movies.WatchioMovieItem
@@ -46,6 +47,8 @@ import com.watchioiptv.nativeapp.data.series.WatchioSeriesItem
 import com.watchioiptv.nativeapp.domain.model.ProviderType
 import com.watchioiptv.nativeapp.feature.live.LiveTvScreen
 import com.watchioiptv.nativeapp.feature.live.LiveTvUiState
+import com.watchioiptv.nativeapp.feature.movies.MovieDetailsScreen
+import com.watchioiptv.nativeapp.feature.movies.MovieDetailsUiState
 import com.watchioiptv.nativeapp.feature.movies.MoviesScreen
 import com.watchioiptv.nativeapp.feature.movies.MoviesUiState
 import com.watchioiptv.nativeapp.feature.series.SeriesScreen
@@ -2978,6 +2981,355 @@ class LandscapeResponsiveComposeTest {
         // Back dismisses Up Next overlay first without closing fullscreen player
         assertEquals("Cancel should be called on Back", 1, cancelNextCount)
         assertEquals("Close should NOT be called while Up Next is active", 0, closePlayerCount)
+    }
+
+    // --------------------------------------------------------------------------
+    // Movie Details UI Refresh Tests
+    // --------------------------------------------------------------------------
+
+    @Test
+    fun movieDetailsUsesSharedHeaderAndCorrectTitle() {
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-1",
+            name = "Inception",
+            posterUrl = "http://example.invalid/poster.jpg",
+            categoryId = "action",
+            rating = "8.8",
+            genre = "Sci-Fi, Action",
+            containerExtension = "mp4",
+            trailerKey = "trailer123",
+            serverOrder = 0,
+            directUrl = null,
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "Inception",
+            posterUrl = "http://example.invalid/poster.jpg",
+            backdropUrl = "http://example.invalid/backdrop.jpg",
+            plot = "A thief who steals corporate secrets through dream-sharing technology.",
+            cast = "Leonardo DiCaprio, Joseph Gordon-Levitt",
+            director = "Christopher Nolan",
+            genre = "Sci-Fi, Action",
+            releaseDate = "2010-07-16",
+            rating = "8.8",
+            runtime = "02:28:00",
+            trailerKey = "trailer123",
+            tmdbId = 27205,
+        )
+
+        var backClicked = false
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onBack = { backClicked = true },
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // 1. Shared WatchioPageHeader is displayed
+        composeRule.onNodeWithTag("movie-details-header", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-details-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("MOVIES").assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-details-branding", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-details-clock", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-details-back-icon", useUnmergedTree = true).assertIsDisplayed()
+
+        // 2. Old floating Back card in content area is removed
+        assertTrue(
+            "Old floating Back tile must be absent from content area",
+            composeRule.onAllNodesWithText("Back").fetchSemanticsNodes().isEmpty(),
+        )
+
+        // 3. Header Back button is clickable
+        composeRule.onNodeWithTag("movie-details-back-icon", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Back button in header should trigger onBack", backClicked)
+    }
+
+    @Test
+    fun movieDetailsRendersPosterTitleFormattedMetadataAndPlot() {
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-2",
+            name = "The Fall of the Krays",
+            posterUrl = "http://example.invalid/poster.jpg",
+            categoryId = "crime",
+            rating = "5.023",
+            genre = "Crime, Thriller",
+            containerExtension = "mp4",
+            trailerKey = "trailerKrays",
+            serverOrder = 0,
+            directUrl = null,
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "The Fall of the Krays",
+            posterUrl = "http://example.invalid/poster.jpg",
+            backdropUrl = "http://example.invalid/backdrop.jpg",
+            plot = "The story of the infamous Kray twins.",
+            cast = "Simon Cotton, Kevin Leslie",
+            director = "Zackary Adler",
+            genre = "Crime, Thriller",
+            releaseDate = "2016-01-01",
+            rating = "5.023",
+            runtime = "01:51:15",
+            trailerKey = "trailerKrays",
+            tmdbId = 34567,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Poster, Title, and Metadata Summary
+        composeRule.onNodeWithTag("movie-poster", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("The Fall of the Krays").assertIsDisplayed()
+
+        // Formatted metadata: 2016 • 1h 51m • Crime, Thriller • ★ 5.0
+        composeRule.onNodeWithTag("movie-details-meta", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("2016 • 1h 51m • Crime, Thriller • ★ 5.0").assertIsDisplayed()
+
+        // Detailed metadata rows with aligned labels
+        composeRule.onNodeWithText("Director:").assertIsDisplayed()
+        composeRule.onNodeWithText("Zackary Adler").assertIsDisplayed()
+        composeRule.onNodeWithText("Release Date:").assertIsDisplayed()
+        composeRule.onNodeWithText("2016-01-01").assertIsDisplayed()
+        composeRule.onNodeWithText("Genre:").assertIsDisplayed()
+        composeRule.onNodeWithText("Crime, Thriller").assertIsDisplayed()
+        composeRule.onNodeWithText("Cast:").assertIsDisplayed()
+        composeRule.onNodeWithText("Simon Cotton, Kevin Leslie").assertIsDisplayed()
+
+        // Plot
+        composeRule.onNodeWithTag("movie-plot-header", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag("movie-plot-text", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithText("The story of the infamous Kray twins.").assertExists()
+    }
+
+    @Test
+    fun movieDetailsActionsAndPlayDefaultFocus() {
+        var playCalled = false
+        var trailerKeyPassed: String? = null
+        var favoriteToggled = false
+
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-3",
+            name = "Interstellar",
+            posterUrl = null,
+            categoryId = null,
+            rating = "8.7",
+            genre = "Sci-Fi",
+            containerExtension = "mp4",
+            trailerKey = "interstellarTrailer",
+            serverOrder = 0,
+            directUrl = null,
+            isFavorite = false,
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "Interstellar",
+            posterUrl = null,
+            backdropUrl = null,
+            plot = "A team of explorers travel through a wormhole.",
+            cast = "Matthew McConaughey",
+            director = "Christopher Nolan",
+            genre = "Sci-Fi",
+            releaseDate = "2014-11-07",
+            rating = "8.7",
+            runtime = "02:49:00",
+            trailerKey = "interstellarTrailer",
+            tmdbId = 157336,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = { playCalled = true },
+                        onTrailer = { trailerKeyPassed = it },
+                        onFavorite = { favoriteToggled = true },
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Action buttons exist
+        composeRule.onNodeWithTag("movie-play-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-trailer-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-favorite-button", useUnmergedTree = true).assertIsDisplayed()
+
+        // Verify "Favourite" label when isFavorite = false
+        composeRule.onNodeWithText("Favourite").assertIsDisplayed()
+
+        // Click Trailer
+        composeRule.onNodeWithTag("movie-trailer-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals("interstellarTrailer", trailerKeyPassed)
+
+        // Click Favourite
+        composeRule.onNodeWithTag("movie-favorite-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Favorite toggle should be called", favoriteToggled)
+
+        // Click Play
+        composeRule.onNodeWithTag("movie-play-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Play should be called directly when not resumable", playCalled)
+    }
+
+    @Test
+    fun movieDetailsTrailerHiddenWhenUnavailable() {
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-4",
+            name = "No Trailer Movie",
+            posterUrl = null,
+            categoryId = null,
+            rating = null,
+            genre = null,
+            containerExtension = "mp4",
+            trailerKey = null, // No trailer
+            serverOrder = 0,
+            directUrl = null,
+            isFavorite = true, // Favorited
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "No Trailer Movie",
+            posterUrl = null,
+            backdropUrl = null,
+            plot = null,
+            cast = null,
+            director = null,
+            genre = null,
+            releaseDate = null,
+            rating = null,
+            runtime = null,
+            trailerKey = null,
+            tmdbId = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Trailer button should NOT exist
+        assertTrue(
+            "Trailer button must be absent when trailerKey is null",
+            composeRule.onAllNodesWithTag("movie-trailer-button").fetchSemanticsNodes().isEmpty(),
+        )
+
+        // Favorite button should display "Favourited"
+        composeRule.onNodeWithText("Favourited").assertIsDisplayed()
+    }
+
+    @Test
+    fun movieDetailsResumeDialogAppearsOnResumable() {
+        var playWithResume: Boolean? = null
+
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-5",
+            name = "Resumable Movie",
+            posterUrl = null,
+            categoryId = null,
+            rating = "7.5",
+            genre = "Action",
+            containerExtension = "mp4",
+            trailerKey = null,
+            serverOrder = 0,
+            directUrl = null,
+            resumePositionMs = 120_000L, // 2 mins in
+            resumeDurationMs = 600_000L, // 10 mins duration -> Resumable
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "Resumable Movie",
+            posterUrl = null,
+            backdropUrl = null,
+            plot = null,
+            cast = null,
+            director = null,
+            genre = null,
+            releaseDate = "2023",
+            rating = "7.5",
+            runtime = "10:00",
+            trailerKey = null,
+            tmdbId = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = { playWithResume = it },
+                        onTrailer = {},
+                        onFavorite = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Press Play
+        composeRule.onNodeWithTag("movie-play-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        // Resume Playback Dialog must be displayed
+        composeRule.onNodeWithTag("resume-playback-dialog", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("resume-dialog-resume-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("resume-dialog-restart-button", useUnmergedTree = true).assertIsDisplayed()
+
+        // Click Resume
+        composeRule.onNodeWithTag("resume-dialog-resume-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals(true, playWithResume)
     }
 
     private class FakePlayerManager : WatchioPlayerManager {
