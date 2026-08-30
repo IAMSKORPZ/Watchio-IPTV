@@ -122,3 +122,17 @@ data class EpisodePlaybackRequest(
     val startPositionMs: Long,
 )
 
+@Immutable
+sealed interface NextEpisodeState {
+    data object None : NextEpisodeState
+    data class Countdown(
+        val nextEpisode: WatchioEpisodeItem,
+        val secondsRemaining: Int,
+        val seriesTitle: String,
+    ) : NextEpisodeState
+    data class Ready(
+        val nextEpisode: WatchioEpisodeItem,
+        val seriesTitle: String,
+    ) : NextEpisodeState
+}
+

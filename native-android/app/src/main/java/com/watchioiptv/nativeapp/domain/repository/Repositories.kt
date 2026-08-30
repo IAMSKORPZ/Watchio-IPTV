@@ -39,6 +39,7 @@ enum class VideoScalingMode(val persisted: String, val label: String) {
 
 data class PlayerSettings(
     val autoResume: Boolean = true,
+    val autoPlayNextEpisode: Boolean = true,
     val autoPlayLiveChannel: Boolean = false,
     val rememberLastLiveChannel: Boolean = true,
     val showPlayerControls: Boolean = true,
@@ -131,6 +132,7 @@ interface SettingsRepository {
     suspend fun setXtreamAccountMetadata(providerId: ProviderId, metadata: XtreamAccountMetadata) = Unit
     val playerSettings: Flow<PlayerSettings> get() = flowOf(PlayerSettings())
     suspend fun setAutoResume(enabled: Boolean) = Unit
+    suspend fun setAutoPlayNextEpisode(enabled: Boolean) = Unit
     suspend fun setAutoPlayLiveChannel(enabled: Boolean) = Unit
     suspend fun setRememberLastLiveChannel(enabled: Boolean) = Unit
     suspend fun setShowPlayerControls(enabled: Boolean) = Unit

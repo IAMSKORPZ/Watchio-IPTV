@@ -306,6 +306,131 @@ class SeriesBehaviorTest {
         assertEquals(0, cache.seriesLookup.size)
     }
 
+    @Test
+    fun nextEpisodeResolutionHandlesSameSeasonProgression() {
+        val ep1 = episodeWithSeason("ep-1", season = 1, number = 1)
+        val ep2 = episodeWithSeason("ep-2", season = 1, number = 2)
+        val ep3 = episodeWithSeason("ep-3", season = 1, number = 3)
+        val episodes = listOf(ep1, ep2, ep3)
+
+        val nextOf1 = resolveNextFromList(episodes, currentId = "ep-1")
+        assertEquals("ep-2", nextOf1?.episodeId)
+
+        val nextOf2 = resolveNextFromList(episodes, currentId = "ep-2")
+        assertEquals("ep-3", nextOf2?.episodeId)
+    }
+
+    @Test
+    fun nextEpisodeResolutionHandlesCrossSeasonProgression() {
+        val s1e1 = episodeWithSeason("s1-ep1", season = 1, number = 1)
+        val s1e2 = episodeWithSeason("s1-ep2", season = 1, number = 2)
+        val s2e1 = episodeWithSeason("s2-ep1", season = 2, number = 1)
+        val s2e2 = episodeWithSeason("s2-ep2", season = 2, number = 2)
+        val episodes = listOf(s1e1, s1e2, s2e1, s2e2)
+
+        val nextOfS1Final = resolveNextFromList(episodes, currentId = "s1-ep2")
+        assertEquals("s2-ep1", nextOfS1Final?.episodeId)
+        assertEquals(2, nextOfS1Final?.seasonNumber)
+        assertEquals(1, nextOfS1Final?.episodeNumber)
+    }
+
+    @Test
+    fun nextEpisodeResolutionReturnsNullOnFinalEpisode() {
+        val s1e1 = episodeWithSeason("s1-ep1", season = 1, number = 1)
+        val s2e1 = episodeWithSeason("s2-ep1", season = 2, number = 1)
+        val episodes = listOf(s1e1, s2e1)
+
+        val nextOfFinal = resolveNextFromList(episodes, currentId = "s2-ep1")
+        assertEquals(null, nextOfFinal)
+    }
+
+    @Test
+    fun nextEpisodeResolutionDeduplicatesDuplicateIdsAndPreventsSelfTransitions() {
+        val ep1 = episodeWithSeason("ep-1", season = 1, number = 1)
+        val ep1Dup = episodeWithSeason("ep-1", season = 1, number = 1)
+        val ep2 = episodeWithSeason("ep-2", season = 1, number = 2)
+        val episodes = listOf(ep1, ep1Dup, ep2)
+
+        val next = resolveNextFromList(episodes, currentId = "ep-1")
+        assertEquals("ep-2", next?.episodeId)
+    }
+
+    @Test
+    fun nextEpisodeResolutionHandlesSpecialsAndSeasonZeroSafely() {
+        val special = episodeWithSeason("special-1", season = 0, number = 1)
+        val s1e1 = episodeWithSeason("s1-ep1", season = 1, number = 1)
+        val s1e2 = episodeWithSeason("s1-ep2", season = 1, number = 2)
+        val episodes = listOf(special, s1e1, s1e2)
+
+        // Normal S1E1 proceeds to S1E2, not to S00 special
+        val next = resolveNextFromList(episodes, currentId = "s1-ep1")
+        assertEquals("s1-ep2", next?.episodeId)
+    }
+
+    @Test
+    fun previousEpisodeResolutionHandlesSameAndCrossSeason() {
+        val s1e1 = episodeWithSeason("s1-ep1", season = 1, number = 1)
+        val s1e2 = episodeWithSeason("s1-ep2", season = 1, number = 2)
+        val s2e1 = episodeWithSeason("s2-ep1", season = 2, number = 1)
+        val episodes = listOf(s1e1, s1e2, s2e1)
+
+        val prevOfS2 = resolvePreviousFromList(episodes, currentId = "s2-ep1")
+        assertEquals("s1-ep2", prevOfS2?.episodeId)
+
+        val prevOfFirst = resolvePreviousFromList(episodes, currentId = "s1-ep1")
+        assertEquals(null, prevOfFirst)
+    }
+
+    private fun episodeWithSeason(id: String, season: Int, number: Int): WatchioEpisodeItem = WatchioEpisodeItem(
+        providerId = ProviderId("provider-a"),
+        providerType = ProviderType.Xtream,
+        seriesId = "series-1",
+        episodeId = id,
+        seasonNumber = season,
+        episodeNumber = number,
+        title = "Episode $number",
+        plot = null,
+        imageUrl = null,
+        duration = null,
+        durationSeconds = null,
+        rating = null,
+        releaseDate = null,
+        containerExtension = "mp4",
+        tmdbId = null,
+        directUrl = null,
+        headers = emptyMap(),
+        resumePositionMs = null,
+        resumeDurationMs = null,
+    )
+
+    private fun canonicalEpisodes(raw: List<WatchioEpisodeItem>): List<WatchioEpisodeItem> {
+        return raw
+            .distinctBy { it.episodeId }
+            .sortedWith(
+                compareBy<WatchioEpisodeItem> { ep ->
+                    if (ep.seasonNumber > 0) ep.seasonNumber else Int.MAX_VALUE - 1000 + ep.seasonNumber
+                }.thenBy { ep ->
+                    if (ep.episodeNumber > 0) ep.episodeNumber else Int.MAX_VALUE - 1000 + ep.episodeNumber
+                }
+            )
+    }
+
+    private fun resolveNextFromList(episodes: List<WatchioEpisodeItem>, currentId: String): WatchioEpisodeItem? {
+        val canonical = canonicalEpisodes(episodes)
+        val idx = canonical.indexOfFirst { it.episodeId == currentId }
+        if (idx < 0 || idx >= canonical.size - 1) return null
+        val next = canonical[idx + 1]
+        return if (next.episodeId != currentId) next else null
+    }
+
+    private fun resolvePreviousFromList(episodes: List<WatchioEpisodeItem>, currentId: String): WatchioEpisodeItem? {
+        val canonical = canonicalEpisodes(episodes)
+        val idx = canonical.indexOfFirst { it.episodeId == currentId }
+        if (idx <= 0) return null
+        val prev = canonical[idx - 1]
+        return if (prev.episodeId != currentId) prev else null
+    }
+
     private fun stateWith(episode: WatchioEpisodeItem): SeriesDetailsUiState = SeriesDetailsUiState(
         loading = false,
         details = SeriesDetails(

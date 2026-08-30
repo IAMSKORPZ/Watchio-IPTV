@@ -6,6 +6,7 @@ import com.watchioiptv.nativeapp.core.player.PlaybackMedia
 import com.watchioiptv.nativeapp.core.player.PlayerReliability
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerManager
 import com.watchioiptv.nativeapp.core.util.WatchioClock
+import com.watchioiptv.nativeapp.data.series.NextEpisodeState
 import com.watchioiptv.nativeapp.data.series.SeriesCardUiModel
 import com.watchioiptv.nativeapp.data.series.SeriesCategory
 import com.watchioiptv.nativeapp.data.series.SeriesDetails
@@ -65,15 +66,23 @@ class SeriesViewModel(
 ) : ViewModel() {
     private val mutableSeries = MutableStateFlow(SeriesUiState())
     private val mutableDetails = MutableStateFlow(SeriesDetailsUiState())
+    private val mutableNextEpisodeState = MutableStateFlow<NextEpisodeState>(NextEpisodeState.None)
     private val searchQueryFlow = MutableStateFlow("")
     private var categoryJob: Job? = null
     private var selectedEpisode: WatchioEpisodeItem? = null
     private var progressJob: Job? = null
+    private var countdownJob: Job? = null
     private var initialResumePending = false
     private var initialResumeStartMs = 0L
+    private var cancelledForThisEpisode = false
+    private var autoPlayNextEpisodeEnabled = true
+    private val isEpisodeTransitionInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var lastSavedCompletedEpisodeId: String? = null
+    private var lastProgressSaveEpochMs = 0L
 
     val seriesState: StateFlow<SeriesUiState> = mutableSeries.asStateFlow()
     val detailsState: StateFlow<SeriesDetailsUiState> = mutableDetails.asStateFlow()
+    val nextEpisodeState: StateFlow<NextEpisodeState> = mutableNextEpisodeState.asStateFlow()
     val playerState = playerManager.state
 
     init {
@@ -95,6 +104,19 @@ class SeriesViewModel(
         viewModelScope.launch {
             settingsRepository.playerSettings.collect { settings ->
                 mutableDetails.value = mutableDetails.value.copy(autoResumeEnabled = settings.autoResume)
+                val prevAutoplay = autoPlayNextEpisodeEnabled
+                autoPlayNextEpisodeEnabled = settings.autoPlayNextEpisode
+                if (!settings.autoPlayNextEpisode && prevAutoplay) {
+                    if (mutableNextEpisodeState.value is NextEpisodeState.Countdown) {
+                        countdownJob?.cancel()
+                        countdownJob = null
+                        val nextEp = resolveNextEpisode()
+                        val seriesTitle = mutableDetails.value.details?.title ?: "TV Show"
+                        mutableNextEpisodeState.value = if (nextEp != null) {
+                            NextEpisodeState.Ready(nextEp, seriesTitle)
+                        } else NextEpisodeState.None
+                    }
+                }
             }
         }
         viewModelScope.launch {
@@ -103,13 +125,28 @@ class SeriesViewModel(
                     is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Ended -> {
                         val snapshot = playerManager.snapshot()
                         val episode = selectedEpisode ?: seriesRepository.currentActiveEpisode()
-                        val finalDur = snapshot.durationMs ?: episode?.resumeDurationMs ?: snapshot.positionMs
-                        saveProgress(forcedPosition = finalDur, forcedDuration = finalDur)
+                        if (episode != null) {
+                            val finalDur = snapshot.durationMs ?: episode.resumeDurationMs ?: snapshot.positionMs
+                            saveCompletedProgress(episode, finalDur)
+                            if (!isEpisodeTransitionInProgress.get() && !cancelledForThisEpisode) {
+                                val nextEp = resolveNextEpisode()
+                                if (nextEp != null) {
+                                    val seriesTitle = mutableDetails.value.details?.title ?: "TV Show"
+                                    if (autoPlayNextEpisodeEnabled) {
+                                        if (countdownJob?.isActive != true) {
+                                            performEpisodeTransition(nextEp)
+                                        }
+                                    } else {
+                                        mutableNextEpisodeState.value = NextEpisodeState.Ready(nextEp, seriesTitle)
+                                    }
+                                }
+                            }
+                        }
                         progressJob?.cancel()
                     }
                     is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Playing -> {
                         if (progressJob?.isActive != true) {
-                            (selectedEpisode ?: seriesRepository.currentActiveEpisode())?.let { startProgressSave(it) }
+                            (selectedEpisode ?: seriesRepository.currentActiveEpisode())?.let { startPlaybackLoop(it) }
                         }
                     }
                     else -> {
@@ -250,8 +287,14 @@ class SeriesViewModel(
 
     fun playEpisode(episode: WatchioEpisodeItem, resume: Boolean = true) {
         selectedEpisode = episode
+        cancelledForThisEpisode = false
+        mutableNextEpisodeState.value = NextEpisodeState.None
+        countdownJob?.cancel()
+        countdownJob = null
+        isEpisodeTransitionInProgress.set(false)
+        lastSavedCompletedEpisodeId = null
         seriesRepository.markActiveEpisode(episode)
-        mutableDetails.value = mutableDetails.value.copy(targetEpisodeId = episode.episodeId)
+        mutableDetails.value = mutableDetails.value.copy(targetEpisodeId = episode.episodeId, selectedSeasonNumber = episode.seasonNumber)
         viewModelScope.launch {
             val request = seriesRepository.playback(episode, resume)
             if (request.startPositionMs > 0L) {
@@ -262,7 +305,7 @@ class SeriesViewModel(
                 initialResumePending = false
             }
             playerManager.load(PlaybackMedia(request.url, episode.title, request.headers, request.startPositionMs, isLive = false))
-            startProgressSave(episode)
+            startPlaybackLoop(episode)
         }
     }
 
@@ -280,6 +323,8 @@ class SeriesViewModel(
     }
 
     fun restartPlayback() {
+        resetNextEpisodeCountdown()
+        cancelledForThisEpisode = false
         initialResumePending = false
         initialResumeStartMs = 0L
         playerManager.restart()
@@ -302,12 +347,13 @@ class SeriesViewModel(
             }
             else -> {
                 playerManager.play()
-                selectedEpisode?.let { startProgressSave(it) }
+                selectedEpisode?.let { startPlaybackLoop(it) }
             }
         }
     }
 
     fun pauseForBackground() {
+        resetNextEpisodeCountdown()
         saveProgress()
         progressJob?.cancel()
         playerManager.pause()
@@ -316,65 +362,234 @@ class SeriesViewModel(
     val currentEpisode: WatchioEpisodeItem?
         get() = selectedEpisode ?: seriesRepository.currentActiveEpisode()
 
-    private fun currentSeasonEpisodes(): List<WatchioEpisodeItem> {
+    private fun canonicalEpisodes(): List<WatchioEpisodeItem> {
         val details = mutableDetails.value.details ?: return emptyList()
-        val seasonNum = mutableDetails.value.selectedSeasonNumber
-        val seasonEpisodes = if (seasonNum != null) {
-            details.episodes.filter { it.seasonNumber == seasonNum }
-        } else details.episodes
-        return seasonEpisodes.ifEmpty { details.episodes }
+        return details.episodes
+            .distinctBy { it.episodeId }
+            .sortedWith(
+                compareBy<WatchioEpisodeItem> { ep ->
+                    if (ep.seasonNumber > 0) ep.seasonNumber else Int.MAX_VALUE - 1000 + ep.seasonNumber
+                }.thenBy { ep ->
+                    if (ep.episodeNumber > 0) ep.episodeNumber else Int.MAX_VALUE - 1000 + ep.episodeNumber
+                }
+            )
     }
 
-    fun hasPreviousEpisode(): Boolean {
-        val episodes = currentSeasonEpisodes()
-        val current = currentEpisode ?: return false
+    fun resolveNextEpisode(): WatchioEpisodeItem? {
+        val current = currentEpisode ?: return null
+        val episodes = canonicalEpisodes()
         val idx = episodes.indexOfFirst { it.episodeId == current.episodeId }
-        return idx > 0
+        if (idx < 0 || idx >= episodes.size - 1) return null
+        val next = episodes[idx + 1]
+        return if (next.episodeId != current.episodeId) next else null
     }
 
-    fun hasNextEpisode(): Boolean {
-        val episodes = currentSeasonEpisodes()
-        val current = currentEpisode ?: return false
+    fun resolvePreviousEpisode(): WatchioEpisodeItem? {
+        val current = currentEpisode ?: return null
+        val episodes = canonicalEpisodes()
         val idx = episodes.indexOfFirst { it.episodeId == current.episodeId }
-        return idx >= 0 && idx < episodes.size - 1
+        if (idx <= 0) return null
+        val prev = episodes[idx - 1]
+        return if (prev.episodeId != current.episodeId) prev else null
     }
+
+    fun hasPreviousEpisode(): Boolean = resolvePreviousEpisode() != null
+
+    fun hasNextEpisode(): Boolean = resolveNextEpisode() != null
 
     fun playPreviousEpisode() {
-        val episodes = currentSeasonEpisodes()
-        val current = currentEpisode ?: return
-        val idx = episodes.indexOfFirst { it.episodeId == current.episodeId }
-        if (idx > 0) {
-            playEpisode(episodes[idx - 1], resume = false)
-        }
+        val prev = resolvePreviousEpisode() ?: return
+        resetNextEpisodeCountdown()
+        cancelledForThisEpisode = false
+        playEpisode(prev, resume = false)
     }
 
     fun playNextEpisode() {
-        val episodes = currentSeasonEpisodes()
-        val current = currentEpisode ?: return
-        val idx = episodes.indexOfFirst { it.episodeId == current.episodeId }
-        if (idx >= 0 && idx < episodes.size - 1) {
-            playEpisode(episodes[idx + 1], resume = false)
-        }
+        val next = resolveNextEpisode() ?: return
+        resetNextEpisodeCountdown()
+        performEpisodeTransition(next)
+    }
+
+    fun dismissNextEpisodeForCurrentEpisode() {
+        countdownJob?.cancel()
+        countdownJob = null
+        cancelledForThisEpisode = true
+        mutableNextEpisodeState.value = NextEpisodeState.None
+    }
+
+    fun resetNextEpisodeCountdown() {
+        countdownJob?.cancel()
+        countdownJob = null
+        mutableNextEpisodeState.value = NextEpisodeState.None
     }
 
     fun stopPlayback() {
+        resetNextEpisodeCountdown()
         saveProgress()
         progressJob?.cancel()
         playerManager.stop()
         seriesRepository.clearActiveEpisode()
     }
 
-    private fun startProgressSave(episode: WatchioEpisodeItem) {
+    private fun startPlaybackLoop(episode: WatchioEpisodeItem) {
         progressJob?.cancel()
         selectedEpisode = episode
         progressJob = viewModelScope.launch {
             while (true) {
-                delay(15_000L)
-                if (playerManager.state.value is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Playing) {
-                    saveProgress()
+                delay(500L)
+                if (currentEpisode?.episodeId != episode.episodeId) break
+                val playerVal = playerManager.state.value
+                val snapshot = playerManager.snapshot()
+                if (playerVal is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Playing) {
+                    val pos = snapshot.positionMs
+                    val dur = snapshot.durationMs ?: episode.resumeDurationMs ?: 0L
+                    checkCountdownTrigger(episode, pos, dur)
+
+                    if (System.currentTimeMillis() - lastProgressSaveEpochMs >= 15_000L) {
+                        lastProgressSaveEpochMs = System.currentTimeMillis()
+                        saveProgress()
+                    }
                 }
             }
         }
+    }
+
+    private fun checkCountdownTrigger(episode: WatchioEpisodeItem, positionMs: Long, durationMs: Long) {
+        if (isEpisodeTransitionInProgress.get() || cancelledForThisEpisode) return
+        if (durationMs <= 0L || positionMs < 0L) return
+
+        val remainingMs = durationMs - positionMs
+        val nextEp = resolveNextEpisode() ?: run {
+            resetNextEpisodeCountdown()
+            return
+        }
+        val seriesTitle = mutableDetails.value.details?.title ?: "TV Show"
+
+        if (remainingMs in 1..15_000L) {
+            if (!autoPlayNextEpisodeEnabled) {
+                if (mutableNextEpisodeState.value !is NextEpisodeState.Ready) {
+                    mutableNextEpisodeState.value = NextEpisodeState.Ready(
+                        nextEpisode = nextEp,
+                        seriesTitle = seriesTitle,
+                    )
+                }
+                return
+            }
+
+            if (countdownJob?.isActive != true && mutableNextEpisodeState.value !is NextEpisodeState.Countdown) {
+                startCountdown(episode, nextEp, seriesTitle, remainingMs)
+            }
+        } else if (remainingMs > 15_000L) {
+            if (mutableNextEpisodeState.value !is NextEpisodeState.None) {
+                resetNextEpisodeCountdown()
+            }
+        }
+    }
+
+    private fun startCountdown(
+        currentEp: WatchioEpisodeItem,
+        nextEp: WatchioEpisodeItem,
+        seriesTitle: String,
+        initialRemainingMs: Long,
+    ) {
+        countdownJob?.cancel()
+        countdownJob = viewModelScope.launch {
+            val initialSecs = kotlin.math.min(10, kotlin.math.ceil(initialRemainingMs / 1000.0).toInt()).coerceAtLeast(1)
+            var secondsLeft = initialSecs
+            mutableNextEpisodeState.value = NextEpisodeState.Countdown(
+                nextEpisode = nextEp,
+                secondsRemaining = secondsLeft,
+                seriesTitle = seriesTitle,
+            )
+
+            while (secondsLeft > 0) {
+                delay(1_000L)
+                if (isEpisodeTransitionInProgress.get() || cancelledForThisEpisode) return@launch
+                if (currentEpisode?.episodeId != currentEp.episodeId) return@launch
+                if (!autoPlayNextEpisodeEnabled) {
+                    mutableNextEpisodeState.value = NextEpisodeState.Ready(nextEp, seriesTitle)
+                    return@launch
+                }
+                secondsLeft -= 1
+                if (secondsLeft > 0) {
+                    mutableNextEpisodeState.value = NextEpisodeState.Countdown(
+                        nextEpisode = nextEp,
+                        secondsRemaining = secondsLeft,
+                        seriesTitle = seriesTitle,
+                    )
+                }
+            }
+
+            if (autoPlayNextEpisodeEnabled && !cancelledForThisEpisode) {
+                performEpisodeTransition(nextEp)
+            }
+        }
+    }
+
+    private fun performEpisodeTransition(nextEpisode: WatchioEpisodeItem) {
+        if (isEpisodeTransitionInProgress.getAndSet(true)) return
+
+        val current = currentEpisode
+        countdownJob?.cancel()
+        countdownJob = null
+
+        viewModelScope.launch {
+            try {
+                if (current != null) {
+                    val snap = playerManager.snapshot()
+                    val finalDur = snap.durationMs ?: current.resumeDurationMs ?: snap.positionMs
+                    saveCompletedProgress(current, finalDur)
+                }
+
+                cancelledForThisEpisode = false
+                mutableNextEpisodeState.value = NextEpisodeState.None
+                selectedEpisode = nextEpisode
+                seriesRepository.markActiveEpisode(nextEpisode)
+                mutableDetails.value = mutableDetails.value.copy(
+                    targetEpisodeId = nextEpisode.episodeId,
+                    selectedSeasonNumber = nextEpisode.seasonNumber,
+                )
+
+                val request = seriesRepository.playback(nextEpisode, resume = false)
+                initialResumeStartMs = 0L
+                initialResumePending = false
+
+                playerManager.load(
+                    PlaybackMedia(
+                        url = request.url,
+                        title = nextEpisode.title,
+                        headers = request.headers,
+                        startPositionMs = 0L,
+                        isLive = false,
+                    )
+                )
+
+                startPlaybackLoop(nextEpisode)
+            } finally {
+                delay(300L)
+                isEpisodeTransitionInProgress.set(false)
+            }
+        }
+    }
+
+    private suspend fun saveCompletedProgress(episode: WatchioEpisodeItem, durationMs: Long) {
+        if (lastSavedCompletedEpisodeId == episode.episodeId) return
+        lastSavedCompletedEpisodeId = episode.episodeId
+
+        val validDuration = if (durationMs > 0L) durationMs else episode.resumeDurationMs ?: 600_000L
+        historyRepository.upsert(
+            HistoryItem(
+                providerId = episode.providerId,
+                contentType = ContentType.Episode,
+                contentId = episode.seriesId,
+                subContentId = episode.episodeId,
+                title = episode.title,
+                imageUrl = episode.imageUrl,
+                positionMs = validDuration,
+                durationMs = validDuration,
+                lastWatchedAtEpochMs = clock.nowEpochMs(),
+            ),
+        )
     }
 
     private fun saveProgress(forcedPosition: Long? = null, forcedDuration: Long? = null) {

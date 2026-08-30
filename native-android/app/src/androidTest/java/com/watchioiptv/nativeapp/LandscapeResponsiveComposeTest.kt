@@ -41,6 +41,7 @@ import com.watchioiptv.nativeapp.data.movies.WatchioMovieItem
 import com.watchioiptv.nativeapp.data.series.SeriesCardUiModel
 import com.watchioiptv.nativeapp.data.series.SeriesCategory
 import com.watchioiptv.nativeapp.data.series.SeriesCategoryKind
+import com.watchioiptv.nativeapp.data.series.WatchioEpisodeItem
 import com.watchioiptv.nativeapp.data.series.WatchioSeriesItem
 import com.watchioiptv.nativeapp.domain.model.ProviderType
 import com.watchioiptv.nativeapp.feature.live.LiveTvScreen
@@ -2760,6 +2761,223 @@ class LandscapeResponsiveComposeTest {
         composeRule.onNodeWithTag("player-bottom-deck", useUnmergedTree = true).assertIsDisplayed()
         // And channel HUD is hidden
         composeRule.onAllNodesWithTag("player-channel-hud", useUnmergedTree = true)[0].assertDoesNotExist()
+    }
+
+    @Test
+    fun fullscreenEpisodeUpNextCountdownOverlayRendersAndHandlesActions() {
+        val fakePlayer = FakePlayerManager()
+        var playNextCount = 0
+        var cancelNextCount = 0
+
+        val nextEp = WatchioEpisodeItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            seriesId = "series-1",
+            episodeId = "ep-2",
+            seasonNumber = 1,
+            episodeNumber = 2,
+            title = "The Next Chapter",
+            plot = null,
+            imageUrl = null,
+            duration = null,
+            durationSeconds = null,
+            rating = null,
+            releaseDate = null,
+            containerExtension = "mp4",
+            tmdbId = null,
+            directUrl = null,
+            headers = emptyMap(),
+            resumePositionMs = null,
+            resumeDurationMs = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Episode(
+                            seriesTitle = "Breaking Bad",
+                            seasonNumber = 1,
+                            episodeNumber = 1,
+                            episodeTitle = "Pilot",
+                            hasPreviousEpisode = false,
+                            hasNextEpisode = true,
+                            nextEpisodeState = com.watchioiptv.nativeapp.data.series.NextEpisodeState.Countdown(
+                                nextEpisode = nextEp,
+                                secondsRemaining = 8,
+                                seriesTitle = "Breaking Bad",
+                            ),
+                            onPlayNext = { playNextCount++ },
+                            onCancelNext = { cancelNextCount++ },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Verify Up Next overlay is visible
+        composeRule.onNodeWithTag("up-next-overlay", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-header", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-countdown-text", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-series-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-episode-title", useUnmergedTree = true).assertIsDisplayed()
+
+        // Verify Play Next button click
+        composeRule.onNodeWithTag("up-next-play-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals(1, playNextCount)
+
+        // Verify Cancel button click
+        composeRule.onNodeWithTag("up-next-cancel-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals(1, cancelNextCount)
+    }
+
+    @Test
+    fun fullscreenEpisodeUpNextReadyOverlayRendersWithAutoplayOff() {
+        val fakePlayer = FakePlayerManager()
+
+        val nextEp = WatchioEpisodeItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            seriesId = "series-1",
+            episodeId = "ep-2",
+            seasonNumber = 1,
+            episodeNumber = 2,
+            title = "The Next Chapter",
+            plot = null,
+            imageUrl = null,
+            duration = null,
+            durationSeconds = null,
+            rating = null,
+            releaseDate = null,
+            containerExtension = "mp4",
+            tmdbId = null,
+            directUrl = null,
+            headers = emptyMap(),
+            resumePositionMs = null,
+            resumeDurationMs = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Ended(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(autoPlayNextEpisode = false),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Episode(
+                            seriesTitle = "Breaking Bad",
+                            seasonNumber = 1,
+                            episodeNumber = 1,
+                            episodeTitle = "Pilot",
+                            hasPreviousEpisode = false,
+                            hasNextEpisode = true,
+                            nextEpisodeState = com.watchioiptv.nativeapp.data.series.NextEpisodeState.Ready(
+                                nextEpisode = nextEp,
+                                seriesTitle = "Breaking Bad",
+                            ),
+                            onPlayNext = {},
+                            onCancelNext = {},
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Verify Ready overlay is visible with "Episode Finished" text
+        composeRule.onNodeWithTag("up-next-overlay", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-ready-text", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onAllNodesWithTag("up-next-countdown-text", useUnmergedTree = true)[0].assertDoesNotExist()
+    }
+
+    @Test
+    fun fullscreenEpisodeBackKeyDismissesUpNextOverlayFirst() {
+        val fakePlayer = FakePlayerManager()
+        var cancelNextCount = 0
+        var closePlayerCount = 0
+
+        val nextEp = WatchioEpisodeItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            seriesId = "series-1",
+            episodeId = "ep-2",
+            seasonNumber = 1,
+            episodeNumber = 2,
+            title = "The Next Chapter",
+            plot = null,
+            imageUrl = null,
+            duration = null,
+            durationSeconds = null,
+            rating = null,
+            releaseDate = null,
+            containerExtension = "mp4",
+            tmdbId = null,
+            directUrl = null,
+            headers = emptyMap(),
+            resumePositionMs = null,
+            resumeDurationMs = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Episode(
+                            seriesTitle = "Breaking Bad",
+                            seasonNumber = 1,
+                            episodeNumber = 1,
+                            episodeTitle = "Pilot",
+                            hasPreviousEpisode = false,
+                            hasNextEpisode = true,
+                            nextEpisodeState = com.watchioiptv.nativeapp.data.series.NextEpisodeState.Countdown(
+                                nextEpisode = nextEp,
+                                secondsRemaining = 5,
+                                seriesTitle = "Breaking Bad",
+                            ),
+                            onPlayNext = {},
+                            onCancelNext = { cancelNextCount++ },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = { closePlayerCount++ },
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        Thread.sleep(600)
+
+        // Press Back key
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.Back) }
+        composeRule.waitForIdle()
+
+        // Back dismisses Up Next overlay first without closing fullscreen player
+        assertEquals("Cancel should be called on Back", 1, cancelNextCount)
+        assertEquals("Close should NOT be called while Up Next is active", 0, closePlayerCount)
     }
 
     private class FakePlayerManager : WatchioPlayerManager {

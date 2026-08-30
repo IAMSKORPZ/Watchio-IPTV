@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -85,6 +87,7 @@ import com.watchioiptv.nativeapp.core.player.WatchioPlayerManager
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerMetadata
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerState
 import com.watchioiptv.nativeapp.core.player.WatchioSubtitleTrack
+import com.watchioiptv.nativeapp.data.series.NextEpisodeState
 import com.watchioiptv.nativeapp.domain.repository.ControlAutoHideDelay
 import com.watchioiptv.nativeapp.domain.repository.PlayerSettings
 import com.watchioiptv.nativeapp.domain.repository.VideoScalingMode
@@ -130,6 +133,9 @@ sealed interface PlayerContentContext {
         val hasNextEpisode: Boolean = false,
         val onPreviousEpisode: () -> Unit = {},
         val onNextEpisode: () -> Unit = {},
+        val nextEpisodeState: NextEpisodeState = NextEpisodeState.None,
+        val onPlayNext: () -> Unit = {},
+        val onCancelNext: () -> Unit = {},
     ) : PlayerContentContext
 }
 
@@ -503,10 +509,12 @@ fun WatchioFullscreenPlayerScreen(
     var currentPositionMs by remember { mutableLongStateOf(metadata.positionMs) }
 
     LaunchedEffect(controlsVisible) {
-        if (controlsVisible) {
-            firstFocus.requestFocus()
-        } else {
-            surfaceFocus.requestFocus()
+        if (contentContext !is PlayerContentContext.Episode || contentContext.nextEpisodeState is NextEpisodeState.None) {
+            if (controlsVisible) {
+                firstFocus.requestFocus()
+            } else {
+                surfaceFocus.requestFocus()
+            }
         }
     }
 
@@ -573,7 +581,9 @@ fun WatchioFullscreenPlayerScreen(
             return@BackHandler
         }
         lastInteractionEpochMs = System.currentTimeMillis()
-        if (activeDialog != null) {
+        if (contentContext is PlayerContentContext.Episode && contentContext.nextEpisodeState !is NextEpisodeState.None) {
+            contentContext.onCancelNext()
+        } else if (activeDialog != null) {
             activeDialog = null
         } else if (controlsVisible) {
             controlsVisible = false
@@ -643,7 +653,10 @@ fun WatchioFullscreenPlayerScreen(
                             // Ignore back key from long-press transition that launched fullscreen
                             return@onPreviewKeyEvent true
                         }
-                        if (activeDialog != null) {
+                        if (contentContext is PlayerContentContext.Episode && contentContext.nextEpisodeState !is NextEpisodeState.None) {
+                            contentContext.onCancelNext()
+                            true
+                        } else if (activeDialog != null) {
                             activeDialog = null
                             true
                         } else if (controlsVisible) {
@@ -1355,6 +1368,28 @@ fun WatchioFullscreenPlayerScreen(
             }
             null -> Unit
         }
+
+        // Up Next Countdown / Autoplay Overlay (bottom-right TV card)
+        if (contentContext is PlayerContentContext.Episode && contentContext.nextEpisodeState !is NextEpisodeState.None) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 28.dp, bottom = if (controlsVisible) 130.dp else 40.dp)
+                    .testTag("player-up-next-container"),
+            ) {
+                UpNextOverlay(
+                    state = contentContext.nextEpisodeState,
+                    onPlayNext = {
+                        lastInteractionEpochMs = System.currentTimeMillis()
+                        contentContext.onPlayNext()
+                    },
+                    onCancel = {
+                        lastInteractionEpochMs = System.currentTimeMillis()
+                        contentContext.onCancelNext()
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -1763,5 +1798,139 @@ fun formatPlaybackTime(ms: Long): String {
         "%d:%02d:%02d".format(hours, minutes, seconds)
     } else {
         "%02d:%02d".format(minutes, seconds)
+    }
+}
+
+@Composable
+private fun UpNextOverlay(
+    state: NextEpisodeState,
+    onPlayNext: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalWatchioColors.current
+    val playNextFocus = remember { FocusRequester() }
+
+    LaunchedEffect(state) {
+        try {
+            playNextFocus.requestFocus()
+        } catch (_: Throwable) {}
+    }
+
+    val (nextEp, seriesTitle, countdownSecs) = when (state) {
+        is NextEpisodeState.Countdown -> Triple(state.nextEpisode, state.seriesTitle, state.secondsRemaining)
+        is NextEpisodeState.Ready -> Triple(state.nextEpisode, state.seriesTitle, null)
+        NextEpisodeState.None -> return
+    }
+
+    Surface(
+        modifier = modifier
+            .widthIn(min = 280.dp, max = 340.dp)
+            .testTag("up-next-overlay"),
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFF141722).copy(alpha = 0.94f),
+        border = BorderStroke(1.dp, colors.seriesAccent.copy(alpha = 0.40f)),
+        shadowElevation = 8.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "UP NEXT",
+                    color = colors.seriesAccent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.testTag("up-next-header"),
+                )
+                if (countdownSecs != null) {
+                    Text(
+                        text = "Playing in ${countdownSecs}s",
+                        color = colors.seriesAccent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.testTag("up-next-countdown-text"),
+                    )
+                } else {
+                    Text(
+                        text = "Episode Finished",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.testTag("up-next-ready-text"),
+                    )
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                nextEp.imageUrl?.takeIf { it.isNotBlank() }?.let { imgUrl ->
+                    AsyncImage(
+                        model = imgUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(width = 64.dp, height = 40.dp)
+                            .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(6.dp)),
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = seriesTitle,
+                        color = colors.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("up-next-series-title"),
+                    )
+                    Text(
+                        text = "S${nextEp.seasonNumber} • E${nextEp.episodeNumber}  ${nextEp.title}",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("up-next-episode-title"),
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PlayerControlItem(
+                    title = "Play Next",
+                    icon = PlayerIconKind.SkipNext,
+                    accent = colors.seriesAccent,
+                    isPrimary = true,
+                    focusRequester = playNextFocus,
+                    onClick = onPlayNext,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("up-next-play-button"),
+                )
+                PlayerControlItem(
+                    title = "Cancel",
+                    icon = PlayerIconKind.Close,
+                    accent = colors.focusGlow,
+                    onClick = onCancel,
+                    modifier = Modifier
+                        .weight(0.8f)
+                        .testTag("up-next-cancel-button"),
+                )
+            }
+        }
     }
 }

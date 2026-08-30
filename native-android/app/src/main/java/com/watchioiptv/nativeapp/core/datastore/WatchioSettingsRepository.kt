@@ -66,6 +66,7 @@ class WatchioSettingsRepository(
     override val playerSettings: Flow<PlayerSettings> = dataStore.data.map { preferences ->
         PlayerSettings(
             autoResume = preferences[PlayerAutoResume] ?: true,
+            autoPlayNextEpisode = preferences[PlayerAutoPlayNextEpisode] ?: true,
             autoPlayLiveChannel = preferences[PlayerAutoPlayLiveChannel] ?: false,
             rememberLastLiveChannel = preferences[PlayerRememberLastLiveChannel] ?: true,
             showPlayerControls = preferences[PlayerShowControls] ?: true,
@@ -175,6 +176,10 @@ class WatchioSettingsRepository(
         dataStore.edit { preferences -> preferences[PlayerAutoResume] = enabled }
     }
 
+    override suspend fun setAutoPlayNextEpisode(enabled: Boolean) {
+        dataStore.edit { preferences -> preferences[PlayerAutoPlayNextEpisode] = enabled }
+    }
+
     override suspend fun setAutoPlayLiveChannel(enabled: Boolean) {
         dataStore.edit { preferences -> preferences[PlayerAutoPlayLiveChannel] = enabled }
     }
@@ -252,6 +257,7 @@ class WatchioSettingsRepository(
         val EpgRefreshIntervalKey = stringPreferencesKey("epg_refresh_interval")
         val ResumePlaybackEnabled = booleanPreferencesKey("resume_playback_enabled")
         val PlayerAutoResume = booleanPreferencesKey("player_auto_resume")
+        val PlayerAutoPlayNextEpisode = booleanPreferencesKey("player_auto_play_next_episode")
         val PlayerAutoPlayLiveChannel = booleanPreferencesKey("player_auto_play_live_channel")
         val PlayerRememberLastLiveChannel = booleanPreferencesKey("player_remember_last_live_channel")
         val PlayerShowControls = booleanPreferencesKey("player_show_controls")

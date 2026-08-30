@@ -435,6 +435,7 @@ fun WatchioNativeApp(
                 val playerState by container.playerManager.state.collectAsStateWithLifecycle()
                 val playerSettings by container.settingsRepository.playerSettings.collectAsStateWithLifecycle(initialValue = com.watchioiptv.nativeapp.domain.repository.PlayerSettings())
                 val detailsState by seriesViewModel.detailsState.collectAsStateWithLifecycle()
+                val nextEpisodeState by seriesViewModel.nextEpisodeState.collectAsStateWithLifecycle()
                 val episode = seriesViewModel.currentEpisode
                 val contentContext = PlayerContentContext.Episode(
                     seriesTitle = detailsState.details?.title ?: "TV Show",
@@ -447,6 +448,9 @@ fun WatchioNativeApp(
                     hasNextEpisode = seriesViewModel.hasNextEpisode(),
                     onPreviousEpisode = seriesViewModel::playPreviousEpisode,
                     onNextEpisode = seriesViewModel::playNextEpisode,
+                    nextEpisodeState = nextEpisodeState,
+                    onPlayNext = seriesViewModel::playNextEpisode,
+                    onCancelNext = seriesViewModel::dismissNextEpisodeForCurrentEpisode,
                 )
                 WatchioFullscreenPlayerScreen(
                     playerState = playerState,
@@ -758,6 +762,7 @@ fun WatchioNativeApp(
                     PlayerSettingsContent(
                         state = state,
                         onAutoResume = settingsViewModel::setAutoResume,
+                        onAutoPlayNextEpisode = settingsViewModel::setAutoPlayNextEpisode,
                         onAutoPlayLive = settingsViewModel::setAutoPlayLiveChannel,
                         onRememberLastLive = settingsViewModel::setRememberLastLiveChannel,
                         onShowControls = settingsViewModel::setShowPlayerControls,
@@ -2332,6 +2337,7 @@ private fun StreamFormatSettingsContent(
 private fun PlayerSettingsContent(
     state: SettingsUiState,
     onAutoResume: (Boolean) -> Unit,
+    onAutoPlayNextEpisode: (Boolean) -> Unit,
     onAutoPlayLive: (Boolean) -> Unit,
     onRememberLastLive: (Boolean) -> Unit,
     onShowControls: (Boolean) -> Unit,
@@ -2351,6 +2357,12 @@ private fun PlayerSettingsContent(
             description = "Use saved movie and episode progress for normal play.",
             checked = settings.autoResume,
             onClick = { onAutoResume(!settings.autoResume) },
+        )
+        BooleanSettingCard(
+            title = "Auto Play Next Episode",
+            description = "Automatically play the next episode when the current one ends.",
+            checked = settings.autoPlayNextEpisode,
+            onClick = { onAutoPlayNextEpisode(!settings.autoPlayNextEpisode) },
         )
         BooleanSettingCard(
             title = "Auto Play Live Channel",
