@@ -1,10 +1,12 @@
 package com.watchioiptv.nativeapp.data.series
 
+import androidx.compose.runtime.Immutable
 import com.watchioiptv.nativeapp.core.model.ProviderId
 import com.watchioiptv.nativeapp.domain.model.ProviderType
 
-enum class SeriesCategoryKind { All, Favorites, History, Provider }
+enum class SeriesCategoryKind { All, ContinueWatching, Favorites, History, Provider }
 
+@Immutable
 data class SeriesCategory(
     val id: String,
     val name: String,
@@ -12,6 +14,7 @@ data class SeriesCategory(
     val sourceCategoryId: String? = null,
 )
 
+@Immutable
 data class WatchioSeriesItem(
     val providerId: ProviderId,
     val providerType: ProviderType,
@@ -31,8 +34,31 @@ data class WatchioSeriesItem(
     val serverOrder: Int,
     val isFavorite: Boolean,
     val lastEpisodeId: String?,
+    val normalizedSearchText: String = "",
+    val formattedRating: String? = null,
 )
 
+@Immutable
+data class SeriesCardUiModel(
+    val series: WatchioSeriesItem,
+    val isContinueWatching: Boolean = false,
+    val targetEpisodeId: String? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+    val episodeTitle: String? = null,
+    val episodeLabel: String? = null,
+    val progress: Float? = null,
+)
+
+data class SeriesCatalogCache(
+    val providerId: ProviderId,
+    val series: List<WatchioSeriesItem>,
+    val seriesLookup: Map<String, WatchioSeriesItem>,
+    val episodeLookup: Map<String, WatchioEpisodeItem>,
+    val providerCategories: Map<String, List<WatchioSeriesItem>>,
+)
+
+@Immutable
 data class SeriesDetails(
     val series: WatchioSeriesItem,
     val title: String,
@@ -51,6 +77,7 @@ data class SeriesDetails(
     val episodes: List<WatchioEpisodeItem>,
 )
 
+@Immutable
 data class WatchioSeason(
     val providerId: ProviderId,
     val seriesId: String,
@@ -64,6 +91,7 @@ data class WatchioSeason(
     val rating: String?,
 )
 
+@Immutable
 data class WatchioEpisodeItem(
     val providerId: ProviderId,
     val providerType: ProviderType,
@@ -86,9 +114,11 @@ data class WatchioEpisodeItem(
     val resumeDurationMs: Long?,
 )
 
+@Immutable
 data class EpisodePlaybackRequest(
     val episode: WatchioEpisodeItem,
     val url: String,
     val headers: Map<String, String>,
     val startPositionMs: Long,
 )
+

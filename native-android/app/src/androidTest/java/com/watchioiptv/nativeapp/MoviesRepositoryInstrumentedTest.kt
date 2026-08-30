@@ -158,6 +158,38 @@ class MoviesRepositoryInstrumentedTest {
         assertEquals(listOf("m-1", "m-3"), cwMovies.map { it.id })
     }
 
+    @Test
+    fun catalogInMemeoryCacheReusesObjectsAndInvalidatesCorrectly() = runBlocking {
+        val provider1 = ProviderId("m3u-cache-1")
+        val provider2 = ProviderId("m3u-cache-2")
+
+        database.providerDao().upsert(ProviderEntity(provider1.value, "M3U 1", "m3u_url", "http://example.invalid/list1.m3u", 1, 1, null, true))
+        database.providerDao().upsert(ProviderEntity(provider2.value, "M3U 2", "m3u_url", "http://example.invalid/list2.m3u", 1, 1, null, true))
+
+        database.m3uItemDao().upsertAll(listOf(item(provider1.value, "m-p1-1", 1)))
+        database.m3uItemDao().upsertAll(listOf(item(provider2.value, "m-p2-1", 1)))
+
+        val repo = repository(provider1)
+        val catalog1 = repo.getOrLoadCatalog(provider1)
+        assertEquals(1, catalog1.movies.size)
+        assertEquals("m-p1-1", catalog1.movies.first().id)
+
+        // Second call should return exact same cache instance
+        val catalog1Again = repo.getOrLoadCatalog(provider1)
+        assertTrue(catalog1 === catalog1Again)
+
+        // Load provider 2
+        val catalog2 = repo.getOrLoadCatalog(provider2)
+        assertEquals(1, catalog2.movies.size)
+        assertEquals("m-p2-1", catalog2.movies.first().id)
+
+        // Invalidate provider 1 only
+        repo.invalidateCache(provider1)
+        // Provider 2 cache is not provider 1, so loading provider 1 re-fetches
+        val catalog1Reloaded = repo.getOrLoadCatalog(provider1)
+        assertEquals("m-p1-1", catalog1Reloaded.movies.first().id)
+    }
+
     private fun repository(providerId: ProviderId) = MoviesRepository(
         database = database,
         settingsRepository = FakeSettings(providerId),

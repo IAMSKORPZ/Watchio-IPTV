@@ -203,6 +203,9 @@ interface EpisodeDao {
 
     @Query("SELECT * FROM episodes WHERE providerId = :providerId AND seriesId = :seriesId AND episodeId = :episodeId LIMIT 1")
     suspend fun find(providerId: String, seriesId: String, episodeId: String): EpisodeEntity?
+
+    @Query("SELECT * FROM episodes WHERE providerId = :providerId")
+    suspend fun getByProvider(providerId: String): List<EpisodeEntity>
 }
 
 @Dao

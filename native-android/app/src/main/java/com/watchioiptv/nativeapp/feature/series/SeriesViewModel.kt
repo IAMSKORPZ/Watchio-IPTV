@@ -6,6 +6,7 @@ import com.watchioiptv.nativeapp.core.player.PlaybackMedia
 import com.watchioiptv.nativeapp.core.player.PlayerReliability
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerManager
 import com.watchioiptv.nativeapp.core.util.WatchioClock
+import com.watchioiptv.nativeapp.data.series.SeriesCardUiModel
 import com.watchioiptv.nativeapp.data.series.SeriesCategory
 import com.watchioiptv.nativeapp.data.series.SeriesDetails
 import com.watchioiptv.nativeapp.data.series.SeriesRepository
@@ -17,11 +18,15 @@ import com.watchioiptv.nativeapp.domain.repository.FavoritesRepository
 import com.watchioiptv.nativeapp.domain.repository.HistoryItem
 import com.watchioiptv.nativeapp.domain.repository.HistoryRepository
 import com.watchioiptv.nativeapp.domain.repository.SettingsRepository
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 data class SeriesUiState(
@@ -29,7 +34,7 @@ data class SeriesUiState(
     val errorMessage: String? = null,
     val categories: List<SeriesCategory> = emptyList(),
     val selectedCategory: SeriesCategory? = null,
-    val series: List<WatchioSeriesItem> = emptyList(),
+    val series: List<SeriesCardUiModel> = emptyList(),
     val searchQuery: String = "",
 )
 
@@ -38,15 +43,18 @@ data class SeriesDetailsUiState(
     val errorMessage: String? = null,
     val details: SeriesDetails? = null,
     val selectedSeasonNumber: Int? = null,
+    val targetEpisodeId: String? = null,
     val activeTab: String = "episodes",
     val autoResumeEnabled: Boolean = true,
 ) {
     val selectedEpisodes: List<WatchioEpisodeItem>
         get() = details?.episodes?.filter { it.seasonNumber == selectedSeasonNumber }.orEmpty()
     val resumeEpisode: WatchioEpisodeItem?
-        get() = details?.episodes?.firstOrNull { SeriesRepository.shouldResumePosition(it.resumePositionMs, it.resumeDurationMs) }
+        get() = (targetEpisodeId?.let { id -> details?.episodes?.firstOrNull { it.episodeId == id } })
+            ?: details?.episodes?.firstOrNull { SeriesRepository.shouldResumePosition(it.resumePositionMs, it.resumeDurationMs) }
 }
 
+@OptIn(FlowPreview::class)
 class SeriesViewModel(
     private val seriesRepository: SeriesRepository,
     private val favoritesRepository: FavoritesRepository,
@@ -57,6 +65,8 @@ class SeriesViewModel(
 ) : ViewModel() {
     private val mutableSeries = MutableStateFlow(SeriesUiState())
     private val mutableDetails = MutableStateFlow(SeriesDetailsUiState())
+    private val searchQueryFlow = MutableStateFlow("")
+    private var categoryJob: Job? = null
     private var selectedEpisode: WatchioEpisodeItem? = null
     private var progressJob: Job? = null
     private var initialResumePending = false
@@ -68,6 +78,20 @@ class SeriesViewModel(
 
     init {
         loadSeries()
+        viewModelScope.launch {
+            searchQueryFlow
+                .debounce(250)
+                .distinctUntilChanged()
+                .collectLatest { query ->
+                    val providerId = seriesRepository.selectedProviderId() ?: return@collectLatest
+                    val allCategory = mutableSeries.value.categories.firstOrNull { it.id == "all" }
+                        ?: mutableSeries.value.selectedCategory
+                        ?: return@collectLatest
+                    val category = if (query.isBlank()) mutableSeries.value.selectedCategory ?: allCategory else allCategory
+                    val items = seriesRepository.seriesCards(providerId, category, query)
+                    mutableSeries.value = mutableSeries.value.copy(searchQuery = query, series = items)
+                }
+        }
         viewModelScope.launch {
             settingsRepository.playerSettings.collect { settings ->
                 mutableDetails.value = mutableDetails.value.copy(autoResumeEnabled = settings.autoResume)
@@ -97,7 +121,8 @@ class SeriesViewModel(
     }
 
     fun loadSeries() {
-        viewModelScope.launch {
+        categoryJob?.cancel()
+        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val providerId = seriesRepository.selectedProviderId()
             if (providerId == null) {
                 mutableSeries.value = SeriesUiState(loading = false, errorMessage = "Add a provider first.")
@@ -105,52 +130,66 @@ class SeriesViewModel(
             }
             val categories = seriesRepository.categories(providerId)
             val selected = categories.firstOrNull()
+            val items = selected?.let { seriesRepository.seriesCards(providerId, it) }.orEmpty()
             mutableSeries.value = SeriesUiState(
                 loading = false,
                 categories = categories,
                 selectedCategory = selected,
-                series = selected?.let { seriesRepository.series(providerId, it) }.orEmpty(),
+                series = items,
             )
         }
     }
 
     fun selectCategory(category: SeriesCategory) {
-        viewModelScope.launch {
+        categoryJob?.cancel()
+        val currentQuery = mutableSeries.value.searchQuery
+        mutableSeries.value = mutableSeries.value.copy(selectedCategory = category)
+        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val providerId = seriesRepository.selectedProviderId() ?: return@launch
-            mutableSeries.value = mutableSeries.value.copy(
-                selectedCategory = category,
-                series = seriesRepository.series(providerId, category, mutableSeries.value.searchQuery),
-            )
+            val items = seriesRepository.seriesCards(providerId, category, currentQuery)
+            mutableSeries.value = mutableSeries.value.copy(series = items)
         }
     }
 
     fun updateSearch(query: String) {
-        viewModelScope.launch {
-            val providerId = seriesRepository.selectedProviderId() ?: return@launch
-            val allCategory = mutableSeries.value.categories.firstOrNull { it.id == "all" } ?: mutableSeries.value.selectedCategory ?: return@launch
-            val category = if (query.isBlank()) mutableSeries.value.selectedCategory ?: allCategory else allCategory
-            mutableSeries.value = mutableSeries.value.copy(searchQuery = query, series = seriesRepository.series(providerId, category, query))
+        if (query.isBlank()) {
+            searchQueryFlow.value = ""
+            categoryJob?.cancel()
+            categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                val providerId = seriesRepository.selectedProviderId() ?: return@launch
+                val category = mutableSeries.value.selectedCategory
+                    ?: mutableSeries.value.categories.firstOrNull { it.id == "all" }
+                    ?: return@launch
+                val items = seriesRepository.seriesCards(providerId, category, "")
+                mutableSeries.value = mutableSeries.value.copy(searchQuery = "", series = items)
+            }
+        } else {
+            searchQueryFlow.value = query
         }
     }
 
-    fun loadDetails(series: WatchioSeriesItem) {
+    fun loadDetails(series: WatchioSeriesItem, targetEpisodeId: String? = null) {
         viewModelScope.launch {
             val currentAutoResume = mutableDetails.value.autoResumeEnabled
-            mutableDetails.value = SeriesDetailsUiState(loading = true, autoResumeEnabled = currentAutoResume)
+            mutableDetails.value = SeriesDetailsUiState(loading = true, autoResumeEnabled = currentAutoResume, targetEpisodeId = targetEpisodeId)
             val details = seriesRepository.details(series)
-            val selected = details.seasons.firstOrNull { it.seasonNumber == 1 }?.seasonNumber
+            val targetEpisode = targetEpisodeId?.let { id -> details.episodes.firstOrNull { it.episodeId == id } }
+            val selected = targetEpisode?.seasonNumber
+                ?: details.seasons.firstOrNull { it.seasonNumber == 1 }?.seasonNumber
                 ?: details.seasons.firstOrNull { it.seasonNumber > 0 }?.seasonNumber
                 ?: details.seasons.firstOrNull()?.seasonNumber
+            selectedEpisode = targetEpisode
             mutableDetails.value = SeriesDetailsUiState(
                 loading = false,
                 details = details,
                 selectedSeasonNumber = selected,
+                targetEpisodeId = targetEpisodeId,
                 autoResumeEnabled = currentAutoResume,
             )
         }
     }
 
-    fun loadDetails(seriesId: String) {
+    fun loadDetails(seriesId: String, targetEpisodeId: String? = null) {
         viewModelScope.launch {
             val providerId = seriesRepository.selectedProviderId()
             val item = providerId?.let { seriesRepository.item(it, seriesId) }
@@ -162,18 +201,7 @@ class SeriesViewModel(
                 )
                 return@launch
             }
-            val currentAutoResume = mutableDetails.value.autoResumeEnabled
-            mutableDetails.value = SeriesDetailsUiState(loading = true, autoResumeEnabled = currentAutoResume)
-            val details = seriesRepository.details(item)
-            val selected = details.seasons.firstOrNull { it.seasonNumber == 1 }?.seasonNumber
-                ?: details.seasons.firstOrNull { it.seasonNumber > 0 }?.seasonNumber
-                ?: details.seasons.firstOrNull()?.seasonNumber
-            mutableDetails.value = SeriesDetailsUiState(
-                loading = false,
-                details = details,
-                selectedSeasonNumber = selected,
-                autoResumeEnabled = currentAutoResume,
-            )
+            loadDetails(item, targetEpisodeId)
         }
     }
 
@@ -223,6 +251,7 @@ class SeriesViewModel(
     fun playEpisode(episode: WatchioEpisodeItem, resume: Boolean = true) {
         selectedEpisode = episode
         seriesRepository.markActiveEpisode(episode)
+        mutableDetails.value = mutableDetails.value.copy(targetEpisodeId = episode.episodeId)
         viewModelScope.launch {
             val request = seriesRepository.playback(episode, resume)
             if (request.startPositionMs > 0L) {
@@ -239,7 +268,9 @@ class SeriesViewModel(
 
     fun playTopLevel(resume: Boolean = true) {
         val details = mutableDetails.value.details ?: return
-        val resumeEpisode = details.episodes.firstOrNull { seriesRepository.shouldResume(it.resumePositionMs, it.resumeDurationMs) }
+        val targetEpId = mutableDetails.value.targetEpisodeId
+        val targetEpisode = targetEpId?.let { id -> details.episodes.firstOrNull { it.episodeId == id } }
+        val resumeEpisode = targetEpisode ?: details.episodes.firstOrNull { seriesRepository.shouldResume(it.resumePositionMs, it.resumeDurationMs) }
         val target = if (resume) {
             if (mutableDetails.value.autoResumeEnabled) resumeEpisode ?: details.episodes.firstOrNull() else details.episodes.firstOrNull()
         } else {

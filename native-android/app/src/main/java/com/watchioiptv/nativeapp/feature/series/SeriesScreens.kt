@@ -61,7 +61,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.watchioiptv.nativeapp.data.series.SeriesCardUiModel
 import com.watchioiptv.nativeapp.data.series.SeriesCategory
+import com.watchioiptv.nativeapp.data.series.SeriesCategoryKind
 import com.watchioiptv.nativeapp.data.series.SeriesDetails
 import com.watchioiptv.nativeapp.data.series.WatchioEpisodeItem
 import com.watchioiptv.nativeapp.data.series.WatchioSeriesItem
@@ -80,14 +82,14 @@ fun SeriesScreen(
     onCategory: (SeriesCategory) -> Unit,
     onCategorySearch: (String) -> Unit = {},
     onSearch: (String) -> Unit,
-    onSeries: (WatchioSeriesItem) -> Unit,
+    onSeries: (SeriesCardUiModel) -> Unit,
     onBack: () -> Unit,
     initialSearchVisible: Boolean = false,
 ) {
     val colors = LocalWatchioColors.current
     val firstCategoryFocus = remember { FocusRequester() }
     var searchVisible by remember { mutableStateOf(initialSearchVisible) }
-    var optionsSeries by remember { mutableStateOf<WatchioSeriesItem?>(null) }
+    var optionsSeries by remember { mutableStateOf<SeriesCardUiModel?>(null) }
     BackHandler {
         if (searchVisible) {
             searchVisible = false
@@ -121,7 +123,7 @@ fun SeriesScreen(
             }
             optionsSeries?.let { series ->
                 SeriesOptionsDialog(
-                    series = series,
+                    item = series,
                     onDetails = {
                         optionsSeries = null
                         onSeries(series)
@@ -152,8 +154,9 @@ fun SeriesScreen(
                             if (state.series.isEmpty()) {
                                 Box(Modifier.fillMaxSize().testTag("series-empty"), contentAlignment = Alignment.Center) {
                                     Text(
-                                        if (state.selectedCategory?.id == "favorites") "No favourite series yet."
-                                        else if (state.selectedCategory?.id == "history") "No series history yet."
+                                        if (state.selectedCategory?.kind == SeriesCategoryKind.ContinueWatching || state.selectedCategory?.id == "continue_watching") "Nothing to continue watching"
+                                        else if (state.selectedCategory?.kind == SeriesCategoryKind.Favorites || state.selectedCategory?.id == "favorites") "No favourite series yet."
+                                        else if (state.selectedCategory?.kind == SeriesCategoryKind.History || state.selectedCategory?.id == "history") "No series history yet."
                                         else "No series in this category.",
                                         color = colors.textSecondary,
                                     )
@@ -166,9 +169,9 @@ fun SeriesScreen(
                                     contentPadding = PaddingValues(bottom = 24.dp),
                                     modifier = Modifier.fillMaxSize().testTag("series-grid"),
                                 ) {
-                                    items(state.series, key = { it.id }) { item ->
+                                    items(state.series, key = { "${it.series.providerId.value}:${it.series.id}" }) { item ->
                                         SeriesCard(
-                                            series = item,
+                                            item = item,
                                             onSeries = onSeries,
                                             onSeriesOptions = { optionsSeries = it },
                                         )
@@ -384,9 +387,9 @@ private fun SeriesCategoryRow(
 @Composable
 private fun SeriesSearchOverlay(
     query: String,
-    results: List<WatchioSeriesItem>,
+    results: List<SeriesCardUiModel>,
     onSearch: (String) -> Unit,
-    onSelect: (WatchioSeriesItem) -> Unit,
+    onSelect: (SeriesCardUiModel) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
@@ -433,9 +436,9 @@ private fun SeriesSearchOverlay(
                     contentPadding = PaddingValues(bottom = 16.dp),
                     modifier = Modifier.fillMaxSize().testTag("series-search-results"),
                 ) {
-                    items(results.take(120), key = { it.id }) { series ->
+                    items(results.take(120), key = { "${it.series.providerId.value}:${it.series.id}" }) { item ->
                         Box(Modifier.testTag("series-search-result")) {
-                            SeriesCard(series = series, onSeries = onSelect, onSeriesOptions = { onSelect(it) })
+                            SeriesCard(item = item, onSeries = onSelect, onSeriesOptions = { onSelect(it) })
                         }
                     }
                 }
@@ -449,11 +452,11 @@ private fun SeriesSearchOverlay(
 // --------------------------------------------------------------------------
 
 @Composable
-private fun SeriesOptionsDialog(series: WatchioSeriesItem, onDetails: () -> Unit, onDismiss: () -> Unit) {
+private fun SeriesOptionsDialog(item: SeriesCardUiModel, onDetails: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Series Options") },
-        text = { Text(series.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = { Text(item.series.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         confirmButton = {
             TextButton(onClick = onDetails) { Text("View Details") }
         },
@@ -481,14 +484,15 @@ private fun SeriesOptionsDialog(series: WatchioSeriesItem, onDetails: () -> Unit
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SeriesCard(
-    series: WatchioSeriesItem,
-    onSeries: (WatchioSeriesItem) -> Unit,
-    onSeriesOptions: (WatchioSeriesItem) -> Unit = {},
+    item: SeriesCardUiModel,
+    onSeries: (SeriesCardUiModel) -> Unit,
+    onSeriesOptions: (SeriesCardUiModel) -> Unit = {},
 ) {
     val colors = LocalWatchioColors.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
-    val formattedRating = formatRating(series.rating)
+    val formattedRating = item.series.formattedRating ?: formatRating(item.series.rating)
+    val showProgress = item.isContinueWatching && item.progress != null && item.progress > 0f
     Column(
         Modifier
             .border(if (focused) 3.dp else 1.dp, if (focused) colors.focusBorder else Color.Transparent)
@@ -496,8 +500,8 @@ private fun SeriesCard(
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = { onSeries(series) },
-                onLongClick = { onSeriesOptions(series) },
+                onClick = { onSeries(item) },
+                onLongClick = { onSeriesOptions(item) },
                 onLongClickLabel = "Series Options",
             )
             .focusable(interactionSource = interactionSource)
@@ -505,7 +509,7 @@ private fun SeriesCard(
             .padding(6.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
-            Poster(series.coverUrl, Modifier.fillMaxSize().testTag("series-poster"))
+            Poster(item.series.coverUrl, Modifier.fillMaxSize().testTag("series-poster"))
             if (formattedRating != null) {
                 Box(
                     modifier = Modifier
@@ -525,16 +529,47 @@ private fun SeriesCard(
                     )
                 }
             }
+            if (showProgress) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .testTag("series-progress-bar-track"),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(item.progress ?: 0f)
+                            .background(colors.moviesAccent)
+                            .testTag("series-progress-bar"),
+                    )
+                }
+            }
         }
         Spacer(Modifier.height(6.dp))
         // Fixed-height title region — all cards reserve identical vertical space.
         Box(Modifier.fillMaxWidth().height(52.dp).testTag("series-title-region")) {
-            Text(
-                text = series.name,
-                color = colors.textPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column {
+                Text(
+                    text = item.series.name,
+                    color = colors.textPrimary,
+                    maxLines = if (item.isContinueWatching && item.episodeLabel != null) 1 else 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (item.isContinueWatching && item.episodeLabel != null) {
+                    Text(
+                        text = item.episodeLabel,
+                        color = colors.seriesAccent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("series-episode-label"),
+                    )
+                }
+            }
         }
     }
 }

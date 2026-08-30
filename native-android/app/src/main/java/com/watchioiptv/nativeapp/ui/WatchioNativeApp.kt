@@ -86,6 +86,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -361,14 +363,33 @@ fun WatchioNativeApp(
                     state = state,
                     onCategory = seriesViewModel::selectCategory,
                     onSearch = seriesViewModel::updateSearch,
-                    onSeries = { item -> navController.navigate("series/${item.id}") },
+                    onSeries = { item ->
+                        val targetEp = item.targetEpisodeId?.let { java.net.URLEncoder.encode(it, "UTF-8") }
+                        if (targetEp != null) {
+                            navController.navigate("series/${item.series.id}?episodeId=$targetEp")
+                        } else {
+                            navController.navigate("series/${item.series.id}")
+                        }
+                    },
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable("series/{seriesId}") { backStackEntry ->
+            composable(
+                route = "series/{seriesId}?episodeId={episodeId}",
+                arguments = listOf(
+                    navArgument("seriesId") { type = NavType.StringType },
+                    navArgument("episodeId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) { backStackEntry ->
                 val seriesViewModel: SeriesViewModel = viewModel(factory = seriesFactory(container))
                 val seriesId = backStackEntry.arguments?.getString("seriesId").orEmpty()
-                LaunchedEffect(seriesId) { seriesViewModel.loadDetails(seriesId) }
+                val rawEpisodeId = backStackEntry.arguments?.getString("episodeId")
+                val episodeId = rawEpisodeId?.let { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+                LaunchedEffect(seriesId, episodeId) { seriesViewModel.loadDetails(seriesId, targetEpisodeId = episodeId) }
                 val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner, seriesId) {
                     val observer = LifecycleEventObserver { _, event ->

@@ -38,6 +38,7 @@ import com.watchioiptv.nativeapp.data.live.LiveTvNowNext
 import com.watchioiptv.nativeapp.data.movies.MovieCategory
 import com.watchioiptv.nativeapp.data.movies.MovieCategoryKind
 import com.watchioiptv.nativeapp.data.movies.WatchioMovieItem
+import com.watchioiptv.nativeapp.data.series.SeriesCardUiModel
 import com.watchioiptv.nativeapp.data.series.SeriesCategory
 import com.watchioiptv.nativeapp.data.series.SeriesCategoryKind
 import com.watchioiptv.nativeapp.data.series.WatchioSeriesItem
@@ -205,7 +206,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(seriesCategory("all")),
                             selectedCategory = seriesCategory("all"),
-                            series = (1..10).map { series("$it") },
+                            series = (1..10).map { SeriesCardUiModel(series("$it")) },
                         ),
                         onCategory = {},
                         onSearch = {},
@@ -1357,7 +1358,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(seriesCategory("all")),
                             selectedCategory = seriesCategory("all"),
-                            series = listOf(ratedSeries, zeroSeries),
+                            series = listOf(SeriesCardUiModel(ratedSeries), SeriesCardUiModel(zeroSeries)),
                         ),
                         onCategory = {},
                         onCategorySearch = {},
@@ -1385,7 +1386,7 @@ class LandscapeResponsiveComposeTest {
 
     @Test
     fun seriesTapOpensDetailsAndLongPressOpensOptions() {
-        var openedSeries: WatchioSeriesItem? = null
+        var openedSeries: SeriesCardUiModel? = null
         val target = series("target").copy(name = "Target Series")
 
         setLandscapeContent {
@@ -1396,7 +1397,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(seriesCategory("all")),
                             selectedCategory = seriesCategory("all"),
-                            series = listOf(target),
+                            series = listOf(SeriesCardUiModel(target)),
                         ),
                         onCategory = {},
                         onCategorySearch = {},
@@ -1412,7 +1413,7 @@ class LandscapeResponsiveComposeTest {
         // Click opens details
         composeRule.onNodeWithTag("series-card", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
-        assertTrue("Click should trigger onSeries callback", openedSeries?.id == target.id)
+        assertTrue("Click should trigger onSeries callback", openedSeries?.series?.id == target.id)
 
         // Long press opens options dialog
         composeRule.onNodeWithTag("series-card", useUnmergedTree = true).performTouchInput { longClick() }
@@ -1424,7 +1425,7 @@ class LandscapeResponsiveComposeTest {
 
     @Test
     fun seriesSearchOverlayOpensAndResultsWork() {
-        var openedSeries: WatchioSeriesItem? by mutableStateOf(null)
+        var openedSeries: SeriesCardUiModel? by mutableStateOf(null)
         var searchQuery by mutableStateOf("")
         val target = series("found").copy(name = "Found Series")
 
@@ -1436,7 +1437,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(seriesCategory("all")),
                             selectedCategory = seriesCategory("all"),
-                            series = if (searchQuery.isNotBlank()) listOf(target) else emptyList(),
+                            series = if (searchQuery.isNotBlank()) listOf(SeriesCardUiModel(target)) else emptyList(),
                             searchQuery = searchQuery,
                         ),
                         onCategory = {},
@@ -1461,7 +1462,7 @@ class LandscapeResponsiveComposeTest {
         }
         composeRule.onAllNodesWithTag("series-search-result", useUnmergedTree = true)[0].performClick()
         composeRule.waitForIdle()
-        assertTrue("Selecting search result opens details", openedSeries?.id == target.id)
+        assertTrue("Selecting search result opens details", openedSeries?.series?.id == target.id)
     }
 
     // --------------------------------------------------------------------------
@@ -1665,7 +1666,7 @@ class LandscapeResponsiveComposeTest {
         val comedySeries = series("2").copy(name = "Ted Lasso", categoryId = "comedy")
         val dramaCategory = SeriesCategory("drama", "DRAMA", SeriesCategoryKind.Provider, "drama")
         val allCategory = SeriesCategory("all", "ALL SERIES", SeriesCategoryKind.All, "all")
-        var openedSeries: WatchioSeriesItem? = null
+        var openedSeries: SeriesCardUiModel? = null
         var searchQuery by mutableStateOf("")
 
         setLandscapeContent {
@@ -1676,7 +1677,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(allCategory, dramaCategory),
                             selectedCategory = dramaCategory,
-                            series = if (searchQuery.isBlank()) listOf(dramaSeries) else listOf(dramaSeries, comedySeries).filter { it.name.contains(searchQuery, ignoreCase = true) },
+                            series = if (searchQuery.isBlank()) listOf(SeriesCardUiModel(dramaSeries)) else listOf(dramaSeries, comedySeries).filter { it.name.contains(searchQuery, ignoreCase = true) }.map { SeriesCardUiModel(it) },
                             searchQuery = searchQuery,
                         ),
                         onCategory = {},
@@ -1702,7 +1703,7 @@ class LandscapeResponsiveComposeTest {
         composeRule.onAllNodesWithTag("series-search-result", useUnmergedTree = true)[0].performClick()
         composeRule.waitForIdle()
 
-        assertTrue("Selecting series opens details", openedSeries?.id == comedySeries.id)
+        assertTrue("Selecting series opens details", openedSeries?.series?.id == comedySeries.id)
     }
 
     @Test

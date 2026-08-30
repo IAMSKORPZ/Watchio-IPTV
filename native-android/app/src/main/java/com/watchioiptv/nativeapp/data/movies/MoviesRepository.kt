@@ -23,6 +23,8 @@ import com.watchioiptv.nativeapp.domain.repository.HistoryRepository
 import com.watchioiptv.nativeapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -43,6 +45,16 @@ class MoviesRepository(
     private val tmdbRetrofitFactory: (String) -> Retrofit,
     private val clock: WatchioClock,
 ) {
+    private val cacheMutex = Mutex()
+    @Volatile
+    private var catalogCache: MovieCatalogCache? = null
+
+    fun invalidateCache(providerId: ProviderId? = null) {
+        if (providerId == null || catalogCache?.providerId == providerId) {
+            catalogCache = null
+        }
+    }
+
     suspend fun selectedProviderId(): ProviderId? = settingsRepository.selectedProviderId.first()
 
     suspend fun categories(providerId: ProviderId): List<MovieCategory> = withContext(Dispatchers.IO) {
@@ -54,40 +66,96 @@ class MoviesRepository(
         ) + database.categoryDao().getByType(providerId.value, ContentType.Movie.persisted).map { it.toMovieCategory() }
     }
 
-    suspend fun movies(providerId: ProviderId, category: MovieCategory, query: String = ""): List<WatchioMovieItem> = withContext(Dispatchers.IO) {
-        val provider = database.providerDao().findById(providerId.value) ?: return@withContext emptyList()
-        val providerType = ProviderType.fromPersisted(provider.type)
-        val favorites = favoritesRepository.getFavorites(providerId).filter { it.contentType == ContentType.Movie }.associateBy { it.contentId }
-        val historyList = historyRepository.recent(providerId).filter { it.contentType == ContentType.Movie }
-        val history = historyList.associateBy { it.contentId }
-        val normalizedQuery = TextNormalizer.normalizeForSearch(query)
-        val all = when (providerType) {
-            ProviderType.Xtream -> xtreamMovies(providerId, category, normalizedQuery)
-            ProviderType.M3uUrl, ProviderType.M3uFile -> m3uMovies(providerId, category, normalizedQuery)
-        }.map { row ->
-            when (row) {
-                is MovieRow.Xtream -> row.entity.toMovie(providerType, favorites.containsKey(row.entity.streamId), history[row.entity.streamId])
-                is MovieRow.M3u -> row.entity.toMovie(providerType, favorites.containsKey(row.entity.itemId), history[row.entity.itemId])
+    suspend fun getOrLoadCatalog(providerId: ProviderId): MovieCatalogCache = withContext(Dispatchers.IO) {
+        val current = catalogCache
+        if (current != null && current.providerId == providerId) {
+            return@withContext current
+        }
+        cacheMutex.withLock {
+            val locked = catalogCache
+            if (locked != null && locked.providerId == providerId) {
+                locked
+            } else {
+                val provider = database.providerDao().findById(providerId.value)
+                if (provider == null) {
+                    MovieCatalogCache(providerId, emptyList(), emptyMap(), emptyMap())
+                } else {
+                    val providerType = ProviderType.fromPersisted(provider.type)
+                    val rows = when (providerType) {
+                        ProviderType.Xtream -> database.vodDao().getByProvider(providerId.value).map { row ->
+                            row.toMovie(providerType)
+                        }
+                        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().getByProviderAndType(providerId.value, ContentType.Movie.persisted).map { row ->
+                            row.toMovie(providerType)
+                        }
+                    }
+                    val lookup = rows.associateBy { it.id }
+                    val categoryMap = rows.groupBy { it.categoryId.orEmpty() }
+                    val newCache = MovieCatalogCache(
+                        providerId = providerId,
+                        movies = rows,
+                        movieLookup = lookup,
+                        providerCategories = categoryMap,
+                    )
+                    catalogCache = newCache
+                    newCache
+                }
             }
         }
+    }
+
+    suspend fun movies(providerId: ProviderId, category: MovieCategory, query: String = ""): List<WatchioMovieItem> = withContext(Dispatchers.IO) {
+        val catalog = getOrLoadCatalog(providerId)
+        val normalizedQuery = if (query.isNotBlank()) TextNormalizer.normalizeForSearch(query) else ""
+
+        if (normalizedQuery.isNotBlank()) {
+            return@withContext catalog.movies.filter { it.normalizedSearchText.contains(normalizedQuery) }
+        }
+
         when (category.kind) {
+            MovieCategoryKind.All -> catalog.movies
             MovieCategoryKind.ContinueWatching -> {
-                val resumable = historyList.filter { shouldResumePosition(it.positionMs, it.durationMs) }
-                val movieMap = all.associateBy { it.id }
-                resumable.mapNotNull { hist -> movieMap[hist.contentId] }
+                val resumableHistory = historyRepository.recent(providerId)
+                    .filter { it.contentType == ContentType.Movie && shouldResumePosition(it.positionMs, it.durationMs) }
+                resumableHistory.mapNotNull { hist ->
+                    catalog.movieLookup[hist.contentId]?.copy(
+                        resumePositionMs = hist.positionMs,
+                        resumeDurationMs = hist.durationMs,
+                    )
+                }
             }
-            MovieCategoryKind.Favorites -> all.filter { it.isFavorite }
+            MovieCategoryKind.Favorites -> {
+                val favoriteIds = favoritesRepository.getFavorites(providerId)
+                    .filter { it.contentType == ContentType.Movie }
+                    .map { it.contentId }
+                    .toSet()
+                catalog.movies.filter { favoriteIds.contains(it.id) }.map { it.copy(isFavorite = true) }
+            }
             MovieCategoryKind.History -> {
-                val movieMap = all.associateBy { it.id }
-                historyList.mapNotNull { hist -> movieMap[hist.contentId] }
+                val historyList = historyRepository.recent(providerId).filter { it.contentType == ContentType.Movie }
+                historyList.mapNotNull { hist ->
+                    catalog.movieLookup[hist.contentId]?.copy(
+                        resumePositionMs = hist.positionMs,
+                        resumeDurationMs = hist.durationMs,
+                    )
+                }
             }
-            else -> all
+            MovieCategoryKind.Provider -> {
+                catalog.providerCategories[category.sourceCategoryId.orEmpty()] ?: emptyList()
+            }
         }
     }
 
     suspend fun movie(providerId: ProviderId, movieId: String): WatchioMovieItem? {
-        val all = categories(providerId).firstOrNull { it.kind == MovieCategoryKind.All } ?: return null
-        return movies(providerId, all).firstOrNull { it.id == movieId }
+        val catalog = getOrLoadCatalog(providerId)
+        val base = catalog.movieLookup[movieId] ?: return null
+        val fav = favoritesRepository.isFavorite(providerId, ContentType.Movie, movieId)
+        val hist = historyRepository.find(providerId, ContentType.Movie, movieId)
+        return base.copy(
+            isFavorite = fav,
+            resumePositionMs = hist?.positionMs,
+            resumeDurationMs = hist?.durationMs,
+        )
     }
 
     suspend fun details(movie: WatchioMovieItem): MovieDetails = withContext(Dispatchers.IO) {
@@ -160,27 +228,9 @@ class MoviesRepository(
         }
     }
 
-    private suspend fun xtreamMovies(providerId: ProviderId, category: MovieCategory, query: String): List<MovieRow> {
-        val rows = when {
-            query.isNotBlank() -> database.vodDao().search(providerId.value, query, SEARCH_LIMIT)
-            category.kind == MovieCategoryKind.Provider -> database.vodDao().getByCategory(providerId.value, category.sourceCategoryId.orEmpty())
-            else -> database.vodDao().getByProvider(providerId.value)
-        }
-        return rows.map { MovieRow.Xtream(it) }
-    }
-
-    private suspend fun m3uMovies(providerId: ProviderId, category: MovieCategory, query: String): List<MovieRow> {
-        val dao = database.m3uItemDao()
-        val rows = when (category.kind) {
-            MovieCategoryKind.Provider -> dao.getByCategoryAndType(providerId.value, ContentType.Movie.persisted, category.sourceCategoryId.orEmpty())
-            else -> dao.getByProviderAndType(providerId.value, ContentType.Movie.persisted)
-        }.filter { query.isBlank() || it.normalizedName.contains(query) }
-        return rows.map { MovieRow.M3u(it) }
-    }
-
     private fun CategoryEntity.toMovieCategory() = MovieCategory(categoryId, name, MovieCategoryKind.Provider, categoryId)
 
-    private fun VodStreamEntity.toMovie(providerType: ProviderType, favorite: Boolean, history: com.watchioiptv.nativeapp.domain.repository.HistoryItem?) = WatchioMovieItem(
+    private fun VodStreamEntity.toMovie(providerType: ProviderType) = WatchioMovieItem(
         providerId = ProviderId(providerId),
         providerType = providerType,
         id = streamId,
@@ -194,12 +244,14 @@ class MoviesRepository(
         serverOrder = serverOrder,
         directUrl = null,
         headers = emptyMap(),
-        isFavorite = favorite,
-        resumePositionMs = history?.positionMs,
-        resumeDurationMs = history?.durationMs,
+        isFavorite = false,
+        resumePositionMs = null,
+        resumeDurationMs = null,
+        normalizedSearchText = TextNormalizer.normalizeForSearch("${MediaTitleNormalizer.cleanTitle(name).displayTitle} ${genre.orEmpty()}"),
+        formattedRating = com.watchioiptv.nativeapp.feature.movies.formatRating(rating),
     )
 
-    private fun M3uItemEntity.toMovie(providerType: ProviderType, favorite: Boolean, history: com.watchioiptv.nativeapp.domain.repository.HistoryItem?) = WatchioMovieItem(
+    private fun M3uItemEntity.toMovie(providerType: ProviderType) = WatchioMovieItem(
         providerId = ProviderId(providerId),
         providerType = providerType,
         id = itemId,
@@ -216,9 +268,11 @@ class MoviesRepository(
             userAgent?.takeIf { it.isNotBlank() }?.let { put("User-Agent", it) }
             referrer?.takeIf { it.isNotBlank() }?.let { put("Referer", it) }
         },
-        isFavorite = favorite,
-        resumePositionMs = history?.positionMs,
-        resumeDurationMs = history?.durationMs,
+        isFavorite = false,
+        resumePositionMs = null,
+        resumeDurationMs = null,
+        normalizedSearchText = TextNormalizer.normalizeForSearch("${MediaTitleNormalizer.cleanTitle(name).displayTitle}"),
+        formattedRating = null,
     )
 
     private fun cleanM3uMovieTitle(raw: String): String = MediaTitleNormalizer.cleanTitle(raw).displayTitle

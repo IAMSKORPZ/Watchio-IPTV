@@ -38,6 +38,8 @@ class M3uRepository(
     private val parser: M3uParser = M3uParser(),
     private val batchSize: Int = 1_000,
 ) {
+    var onMoviesUpdated: ((ProviderId) -> Unit)? = null
+    var onSeriesUpdated: ((ProviderId) -> Unit)? = null
     private val _state = MutableStateFlow<M3uImportState>(M3uImportState.Idle)
     val state: StateFlow<M3uImportState> = _state.asStateFlow()
 
@@ -222,6 +224,12 @@ class M3uRepository(
                         database.m3uItemDao().replaceTypeFromStaging(providerId, sessionId, type.persisted, batchSize)
                     }
                     database.m3uItemDao().deleteStaged(sessionId)
+                }
+                if (replaceTypes.contains(ContentType.Movie)) {
+                    onMoviesUpdated?.invoke(ProviderId(providerId))
+                }
+                if (replaceTypes.contains(ContentType.Series)) {
+                    onSeriesUpdated?.invoke(ProviderId(providerId))
                 }
                 headerEpgUrl?.trim()?.takeIf { it.isNotBlank() }?.let { epgUrl ->
                     database.epgDao().upsertSource(

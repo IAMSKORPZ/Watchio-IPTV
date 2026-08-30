@@ -178,7 +178,11 @@ fun MoviesScreen(
                                     contentPadding = PaddingValues(bottom = 24.dp),
                                     modifier = Modifier.fillMaxSize().testTag("movie-grid"),
                                 ) {
-                                    items(state.movies, key = { it.id }) { movie ->
+                                    items(
+                                        items = state.movies,
+                                        key = { "${it.providerId.value}:${it.id}" },
+                                        contentType = { "movie_card" },
+                                    ) { movie ->
                                         MovieCard(
                                             movie = movie,
                                             showProgress = isContinueWatching,
@@ -468,7 +472,11 @@ private fun MovieSearchOverlay(
                     contentPadding = PaddingValues(bottom = 16.dp),
                     modifier = Modifier.fillMaxSize().testTag("movie-search-results"),
                 ) {
-                    items(results.take(120), key = { it.id }) { movie ->
+                    items(
+                        items = results.take(120),
+                        key = { "${it.providerId.value}:${it.id}" },
+                        contentType = { "movie_card" },
+                    ) { movie ->
                         Box(Modifier.testTag("movie-search-result")) {
                             MovieCard(movie = movie, onMovie = onSelect, onMovieOptions = { onSelect(it) })
                         }
@@ -703,7 +711,7 @@ private fun MovieCard(
     val colors = LocalWatchioColors.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
-    val formattedRating = formatRating(movie.rating)
+    val formattedRating = movie.formattedRating ?: formatRating(movie.rating)
     Column(
         Modifier
             .border(if (focused) 3.dp else 1.dp, if (focused) colors.focusBorder else Color.Transparent)

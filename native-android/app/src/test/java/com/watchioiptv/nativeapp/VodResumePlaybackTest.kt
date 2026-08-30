@@ -175,4 +175,16 @@ class VodResumePlaybackTest {
         assertEquals("25:40", formatPlaybackTime((25 * 60 + 40) * 1000L))
         assertEquals("1:05:12", formatPlaybackTime((3600 + 5 * 60 + 12) * 1000L))
     }
+
+    @Test
+    fun formatRatingHidesZeroOrInvalid() {
+        assertEquals(null, com.watchioiptv.nativeapp.feature.movies.formatRating(null))
+        assertEquals(null, com.watchioiptv.nativeapp.feature.movies.formatRating(""))
+        assertEquals(null, com.watchioiptv.nativeapp.feature.movies.formatRating("0"))
+        assertEquals(null, com.watchioiptv.nativeapp.feature.movies.formatRating("0.0"))
+        assertEquals(null, com.watchioiptv.nativeapp.feature.movies.formatRating("-1.5"))
+        assertEquals(null, com.watchioiptv.nativeapp.feature.movies.formatRating("abc"))
+        assertEquals("★ 6.5", com.watchioiptv.nativeapp.feature.movies.formatRating("6.458"))
+        assertEquals("★ 7.0", com.watchioiptv.nativeapp.feature.movies.formatRating("7"))
+    }
 }

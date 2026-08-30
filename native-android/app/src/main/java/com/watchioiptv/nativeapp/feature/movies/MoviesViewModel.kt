@@ -16,12 +16,17 @@ import com.watchioiptv.nativeapp.domain.repository.FavoritesRepository
 import com.watchioiptv.nativeapp.domain.repository.HistoryItem
 import com.watchioiptv.nativeapp.domain.repository.HistoryRepository
 import com.watchioiptv.nativeapp.domain.repository.SettingsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class MoviesUiState(
     val loading: Boolean = true,
@@ -40,6 +45,7 @@ data class MovieDetailsUiState(
     val autoResumeEnabled: Boolean = true,
 )
 
+@OptIn(kotlinx.coroutines.FlowPreview::class)
 class MoviesViewModel(
     private val moviesRepository: MoviesRepository,
     private val favoritesRepository: FavoritesRepository,
@@ -50,8 +56,10 @@ class MoviesViewModel(
 ) : ViewModel() {
     private val mutableMovies = MutableStateFlow(MoviesUiState())
     private val mutableDetails = MutableStateFlow(MovieDetailsUiState())
+    private val searchQueryFlow = MutableStateFlow("")
     private var selectedMovie: WatchioMovieItem? = null
     private var progressJob: Job? = null
+    private var categoryJob: Job? = null
     private var initialResumePending = false
     private var initialResumeStartMs = 0L
 
@@ -61,6 +69,16 @@ class MoviesViewModel(
 
     init {
         loadMovies()
+        viewModelScope.launch {
+            searchQueryFlow
+                .debounce(250L)
+                .distinctUntilChanged()
+                .collectLatest { query ->
+                    if (query.isNotBlank()) {
+                        executeSearch(query)
+                    }
+                }
+        }
         viewModelScope.launch {
             settingsRepository.playerSettings.collect { settings ->
                 mutableDetails.value = mutableDetails.value.copy(autoResumeEnabled = settings.autoResume)
@@ -89,7 +107,8 @@ class MoviesViewModel(
     }
 
     fun loadMovies() {
-        viewModelScope.launch {
+        categoryJob?.cancel()
+        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val providerId = moviesRepository.selectedProviderId()
             if (providerId == null) {
                 mutableMovies.value = MoviesUiState(loading = false, errorMessage = "Add a provider first.")
@@ -97,33 +116,54 @@ class MoviesViewModel(
             }
             val categories = moviesRepository.categories(providerId)
             val selected = categories.firstOrNull()
+            val items = selected?.let { moviesRepository.movies(providerId, it) }.orEmpty()
             mutableMovies.value = MoviesUiState(
                 loading = false,
                 categories = categories,
                 selectedCategory = selected,
-                movies = selected?.let { moviesRepository.movies(providerId, it) }.orEmpty(),
+                movies = items,
             )
         }
     }
 
     fun selectCategory(category: MovieCategory) {
-        viewModelScope.launch {
+        categoryJob?.cancel()
+        val currentQuery = mutableMovies.value.searchQuery
+        mutableMovies.value = mutableMovies.value.copy(selectedCategory = category)
+        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val providerId = moviesRepository.selectedProviderId() ?: return@launch
-            mutableMovies.value = mutableMovies.value.copy(
-                selectedCategory = category,
-                movies = moviesRepository.movies(providerId, category, mutableMovies.value.searchQuery),
-            )
+            val items = moviesRepository.movies(providerId, category, currentQuery)
+            mutableMovies.value = mutableMovies.value.copy(movies = items)
         }
     }
 
     fun updateSearch(query: String) {
-        viewModelScope.launch {
-            val state = mutableMovies.value
-            val providerId = moviesRepository.selectedProviderId() ?: return@launch
-            val allCategory = state.categories.firstOrNull { it.id == "all" } ?: state.selectedCategory ?: return@launch
-            val category = if (query.isBlank()) state.selectedCategory ?: allCategory else allCategory
-            mutableMovies.value = state.copy(searchQuery = query, movies = moviesRepository.movies(providerId, category, query))
+        val state = mutableMovies.value
+        mutableMovies.value = state.copy(searchQuery = query)
+        if (query.isBlank()) {
+            searchQueryFlow.value = ""
+            categoryJob?.cancel()
+            categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                val providerId = moviesRepository.selectedProviderId() ?: return@launch
+                val currentCategory = mutableMovies.value.selectedCategory
+                    ?: mutableMovies.value.categories.firstOrNull()
+                    ?: return@launch
+                val items = moviesRepository.movies(providerId, currentCategory, "")
+                mutableMovies.value = mutableMovies.value.copy(movies = items)
+            }
+        } else {
+            searchQueryFlow.value = query
         }
+    }
+
+    private suspend fun executeSearch(query: String) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        val providerId = moviesRepository.selectedProviderId() ?: return@withContext
+        val state = mutableMovies.value
+        val allCategory = state.categories.firstOrNull { it.kind == com.watchioiptv.nativeapp.data.movies.MovieCategoryKind.All }
+            ?: state.categories.firstOrNull()
+            ?: return@withContext
+        val results = moviesRepository.movies(providerId, allCategory, query)
+        mutableMovies.value = mutableMovies.value.copy(movies = results)
     }
 
     fun updateCategorySearch(query: String) {

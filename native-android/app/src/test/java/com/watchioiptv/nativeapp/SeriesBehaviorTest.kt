@@ -7,6 +7,7 @@ import com.watchioiptv.nativeapp.core.security.SensitiveUrlMasker
 import com.watchioiptv.nativeapp.core.security.XtreamCredentials
 import com.watchioiptv.nativeapp.data.movies.MoviesRepository
 import com.watchioiptv.nativeapp.data.series.SeriesDetails
+import com.watchioiptv.nativeapp.data.series.SeriesRepository
 import com.watchioiptv.nativeapp.data.series.WatchioEpisodeItem
 import com.watchioiptv.nativeapp.data.series.WatchioSeriesItem
 import com.watchioiptv.nativeapp.feature.series.SeriesDetailsUiState
@@ -80,6 +81,207 @@ class SeriesBehaviorTest {
 
         val complete = episode("episode-3", positionMs = 590_000, durationMs = 600_000)
         assertEquals(null, stateWith(complete).resumeEpisode)
+    }
+
+    @Test
+    fun episodeLabelFormattingHandlesPaddedAndFallbackValues() {
+        assertEquals("S02 • E04", SeriesRepository.formatEpisodeLabel(2, 4, "Episode 4"))
+        assertEquals("E04", SeriesRepository.formatEpisodeLabel(0, 4, "Episode 4"))
+        assertEquals("E04", SeriesRepository.formatEpisodeLabel(null, 4, "Episode 4"))
+        assertEquals("S01", SeriesRepository.formatEpisodeLabel(1, 0, "Special"))
+        assertEquals("Pilot", SeriesRepository.formatEpisodeLabel(0, 0, "Pilot"))
+        assertEquals("Pilot", SeriesRepository.formatEpisodeLabel(null, null, "Pilot"))
+        assertEquals(null, SeriesRepository.formatEpisodeLabel(0, 0, null))
+        assertEquals(null, SeriesRepository.formatEpisodeLabel(null, null, ""))
+    }
+
+    @Test
+    fun detailsStatePrioritizesTargetEpisodeId() {
+        val ep1 = episode("ep-1", positionMs = 120_000, durationMs = 600_000)
+        val ep2 = episode("ep-2", positionMs = 240_000, durationMs = 600_000)
+        val baseState = SeriesDetailsUiState(
+            loading = false,
+            targetEpisodeId = "ep-2",
+            details = SeriesDetails(
+                series = WatchioSeriesItem(
+                    providerId = ProviderId("provider-a"),
+                    providerType = ProviderType.Xtream,
+                    id = "series-1",
+                    name = "Show",
+                    coverUrl = null,
+                    categoryId = null,
+                    plot = null,
+                    cast = null,
+                    director = null,
+                    genre = null,
+                    releaseDate = null,
+                    rating = null,
+                    runtime = null,
+                    trailerKey = null,
+                    tmdbId = null,
+                    serverOrder = 0,
+                    isFavorite = false,
+                    lastEpisodeId = null,
+                ),
+                title = "Show",
+                posterUrl = null,
+                backdropUrl = null,
+                plot = null,
+                cast = null,
+                director = null,
+                genre = null,
+                releaseDate = null,
+                rating = null,
+                runtime = null,
+                trailerKey = null,
+                tmdbId = null,
+                seasons = emptyList(),
+                episodes = listOf(ep1, ep2),
+            ),
+        )
+
+        assertEquals("ep-2", baseState.resumeEpisode?.episodeId)
+    }
+
+    @Test
+    fun continueWatchingDeduplicationPreservesLatestActivityAcrossSeasons() {
+        val series1 = WatchioSeriesItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "series-1",
+            name = "Breaking Bad",
+            coverUrl = null,
+            categoryId = null,
+            plot = null,
+            cast = null,
+            director = null,
+            genre = null,
+            releaseDate = null,
+            rating = null,
+            runtime = null,
+            trailerKey = null,
+            tmdbId = null,
+            serverOrder = 0,
+            isFavorite = false,
+            lastEpisodeId = null,
+        )
+        val epS03E02 = WatchioEpisodeItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            seriesId = "series-1",
+            episodeId = "ep-s03e02",
+            seasonNumber = 3,
+            episodeNumber = 2,
+            title = "Caballo Sin Nombre",
+            plot = null,
+            imageUrl = null,
+            duration = null,
+            durationSeconds = null,
+            rating = null,
+            releaseDate = null,
+            containerExtension = "mp4",
+            tmdbId = null,
+            directUrl = null,
+            headers = emptyMap(),
+            resumePositionMs = 120_000,
+            resumeDurationMs = 600_000,
+        )
+        val epS01E08 = WatchioEpisodeItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            seriesId = "series-1",
+            episodeId = "ep-s01e08",
+            seasonNumber = 1,
+            episodeNumber = 8,
+            title = "Pilot",
+            plot = null,
+            imageUrl = null,
+            duration = null,
+            durationSeconds = null,
+            rating = null,
+            releaseDate = null,
+            containerExtension = "mp4",
+            tmdbId = null,
+            directUrl = null,
+            headers = emptyMap(),
+            resumePositionMs = 150_000,
+            resumeDurationMs = 600_000,
+        )
+        val catalog = com.watchioiptv.nativeapp.data.series.SeriesCatalogCache(
+            providerId = ProviderId("provider-a"),
+            series = listOf(series1),
+            seriesLookup = mapOf("series-1" to series1),
+            episodeLookup = mapOf(
+                "series-1:ep-s03e02" to epS03E02,
+                "ep-s03e02" to epS03E02,
+                "series-1:ep-s01e08" to epS01E08,
+                "ep-s01e08" to epS01E08,
+            ),
+            providerCategories = emptyMap(),
+        )
+
+        // S03E02 watched yesterday (epoch 1000), S01E08 watched today (epoch 2000)
+        val histories = listOf(
+            com.watchioiptv.nativeapp.domain.repository.HistoryItem(
+                providerId = ProviderId("provider-a"),
+                contentType = ContentType.Episode,
+                contentId = "series-1",
+                subContentId = "ep-s01e08",
+                title = "Episode 8",
+                positionMs = 150_000,
+                durationMs = 600_000,
+                lastWatchedAtEpochMs = 2000,
+            ),
+            com.watchioiptv.nativeapp.domain.repository.HistoryItem(
+                providerId = ProviderId("provider-a"),
+                contentType = ContentType.Episode,
+                contentId = "series-1",
+                subContentId = "ep-s03e02",
+                title = "Episode 2",
+                positionMs = 120_000,
+                durationMs = 600_000,
+                lastWatchedAtEpochMs = 1000,
+            ),
+        )
+
+        val continueWatching = histories
+            .filter { it.providerId == ProviderId("provider-a") }
+            .filter { it.contentType == ContentType.Episode }
+            .filter { !it.contentId.isNullOrBlank() && !it.subContentId.isNullOrBlank() }
+            .filter { SeriesRepository.shouldResumePosition(it.positionMs, it.durationMs) }
+            .filter { !SeriesRepository.isCompletedPosition(it.positionMs, it.durationMs) }
+            .sortedByDescending { it.lastWatchedAtEpochMs }
+            .mapNotNull { h ->
+                val series = catalog.seriesLookup[h.contentId] ?: return@mapNotNull null
+                val ep = catalog.episodeLookup["${h.contentId}:${h.subContentId}"]
+                    ?: catalog.episodeLookup[h.subContentId.orEmpty()]
+                    ?: return@mapNotNull null
+
+                val seasonNum = ep.seasonNumber.takeIf { it > 0 }
+                val epNum = ep.episodeNumber.takeIf { it > 0 }
+                val epTitle = ep.title.ifBlank { h.title }
+                val label = SeriesRepository.formatEpisodeLabel(seasonNum, epNum, epTitle)
+                val progress = if (h.durationMs != null && h.durationMs > 0L && h.positionMs != null && h.positionMs > 0L) {
+                    (h.positionMs.toFloat() / h.durationMs.toFloat()).coerceIn(0f, 1f)
+                } else null
+
+                com.watchioiptv.nativeapp.data.series.SeriesCardUiModel(
+                    series = series,
+                    isContinueWatching = true,
+                    targetEpisodeId = h.subContentId,
+                    seasonNumber = seasonNum,
+                    episodeNumber = epNum,
+                    episodeTitle = epTitle,
+                    episodeLabel = label,
+                    progress = progress,
+                )
+            }.distinctBy { it.series.id }
+
+        assertEquals(1, continueWatching.size)
+        val selected = continueWatching.single()
+        assertEquals("ep-s01e08", selected.targetEpisodeId)
+        assertEquals("S01 • E08", selected.episodeLabel)
+        assertEquals(0.25f, selected.progress ?: 0f, 0.001f)
     }
 
     private fun stateWith(episode: WatchioEpisodeItem): SeriesDetailsUiState = SeriesDetailsUiState(

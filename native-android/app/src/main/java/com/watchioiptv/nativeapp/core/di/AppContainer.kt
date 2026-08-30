@@ -154,4 +154,11 @@ class AppContainer(context: Context) {
         okHttpClient = networkModule.okHttpClient,
         manifestUrl = if (BuildConfig.APPLICATION_ID.endsWith(".uitest")) UpdateRepository.UITEST_MANIFEST_URL else null,
     )
+
+    init {
+        xtreamRepository.onMoviesUpdated = { moviesRepository.invalidateCache(it) }
+        m3uRepository.onMoviesUpdated = { moviesRepository.invalidateCache(it) }
+        xtreamRepository.onSeriesUpdated = { seriesRepository.invalidateCache(it) }
+        m3uRepository.onSeriesUpdated = { seriesRepository.invalidateCache(it) }
+    }
 }
