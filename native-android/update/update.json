@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "channel": "dev",
+  "versionCode": 4,
+  "versionName": "0.1.0-dev.3-debug",
+  "minimumSupportedVersionCode": 1,
+  "mandatory": false,
+  "publishedAt": "2026-08-28T22:09:19.358937Z",
+  "releaseNotes": [
+    "Automated development release pipeline is now active.",
+    "- Polished the Updates experience.",
+    "- Improved update download progress and status information.",
+    "- Improved update verification and installation states.",
+    "- Added secure automated GitHub development releases.",
+    "- Added development signing certificate verification.",
+    "- Improved Android TV and remote-friendly update UX."
+  ],
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.3",
+  "apk": {
+    "fileName": "watchio-dev-0.1.0-dev.3-debug.apk",
+    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.3/watchio-dev-0.1.0-dev.3-debug.apk",
+    "sha256": "3fd107cb8077ca40d49e0acf7d3676893e6429253ce069bba690b322b86c139b"
+  }
+}

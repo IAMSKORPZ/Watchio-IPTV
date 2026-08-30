@@ -10,6 +10,7 @@ import com.watchioiptv.nativeapp.data.epg.EpgRefreshInterval
 import com.watchioiptv.nativeapp.domain.model.InputMode
 import com.watchioiptv.nativeapp.domain.model.StreamFormat
 import com.watchioiptv.nativeapp.domain.repository.ControlAutoHideDelay
+import com.watchioiptv.nativeapp.domain.repository.LiveTvBrowsingState
 import com.watchioiptv.nativeapp.domain.repository.VideoScalingMode
 import com.watchioiptv.nativeapp.domain.repository.XtreamAccountMetadata
 import com.watchioiptv.nativeapp.ui.theme.WatchioThemeId
@@ -165,5 +166,44 @@ class DataStoreSettingsTest {
         repository.setRememberLastLiveChannel(false)
 
         assertNull(repository.observeLastLiveChannelId(providerA).first())
+    }
+
+    @Test
+    fun liveBrowsingStateIsProviderScopedAndClearsWhenRememberDisabled() = runBlocking {
+        val providerA = ProviderId("provider-a")
+        val providerB = ProviderId("provider-b")
+
+        val stateA = LiveTvBrowsingState(
+            categoryId = "cat-movies",
+            categoryName = "Sky Movies",
+            channelId = "ch-comedy",
+            channelName = "Sky Cinema Comedy FHD",
+            channelIndex = 17,
+            scrollIndex = 17,
+            scrollOffset = 0,
+        )
+
+        repository.saveLiveBrowsingState(providerA, stateA)
+
+        val restoredA = repository.observeLiveBrowsingState(providerA).first()
+        assertEquals("cat-movies", restoredA.categoryId)
+        assertEquals("Sky Movies", restoredA.categoryName)
+        assertEquals("ch-comedy", restoredA.channelId)
+        assertEquals("Sky Cinema Comedy FHD", restoredA.channelName)
+        assertEquals(17, restoredA.channelIndex)
+        assertEquals(17, restoredA.scrollIndex)
+
+        // Verify provider B is completely isolated
+        val restoredB = repository.observeLiveBrowsingState(providerB).first()
+        assertNull(restoredB.categoryId)
+        assertNull(restoredB.channelId)
+
+        // Clear when remember disabled
+        repository.setRememberLastLiveChannel(false)
+
+        val clearedA = repository.observeLiveBrowsingState(providerA).first()
+        assertNull(clearedA.categoryId)
+        assertNull(clearedA.channelId)
+        assertNull(clearedA.channelIndex)
     }
 }

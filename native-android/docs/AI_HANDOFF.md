@@ -13,6 +13,20 @@ This file is the current quick handoff for future AI work.
 
 Native Watchio is a Kotlin/Compose Android app in `native-android`. Room is schema v6. DataStore owns settings and bootstrap state. SecretStore owns provider credentials. Media3 is the only player engine.
 
+Updates are implemented under Settings -> Check for Updates. `UpdateRepository` fetches the public dev manifest from `https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/dev/native-android/update/update.json`, compares Android `versionCode`, downloads APKs to `cacheDir/updates`, verifies SHA-256, then opens Android's package installer through a scoped FileProvider. No silent install, no GitHub auth, no broad storage permission.
+
+The Updates screen is intentionally user-driven: it may check on open, but it does not automatically download and does not automatically open Android's installer after verification. The user presses `Download Update`, then `Install Update`.
+
+Development release automation lives in `.github/workflows/dev-release.yml`. It is manual-only (`workflow_dispatch`) and must be run from `dev`. It requires GitHub secrets for the stable development keystore and repo variable `WATCHIO_DEV_CERT_SHA256`. Current local dev certificate fingerprint is:
+
+```text
+5fefc70d51dc15494aaa88a1c951c94349710a7a9c77b479c28b8e93967a981b
+```
+
+Do not commit keystores or signing passwords. Do not publish CI-built APKs unless the certificate fingerprint matches the installed development app certificate.
+
+Device rule from update workflow validation: direct ADB installs of the real debug app are allowed only on the S22 test device unless the user explicitly says otherwise. Do not direct-install, uninstall, or clear the BRAVIA `192.168.1.49:5555`; BRAVIA should update through Watchio's in-app updater.
+
 Startup flow is:
 
 - Loading

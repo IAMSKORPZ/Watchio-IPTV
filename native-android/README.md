@@ -67,6 +67,8 @@ adb -s <SERIAL> install -r app\build\outputs\apk\debug\app-debug.apk
 
 Use scoped ADB when multiple devices are connected.
 
+Development releases are distributed through Settings -> Check for Updates and the manual GitHub Actions workflow `.github/workflows/dev-release.yml`. See `docs/UPDATES.md` before publishing a new dev update. Do not direct-install over the BRAVIA development app unless explicitly approved; use in-app updates there.
+
 ## Documentation
 
 Start with:

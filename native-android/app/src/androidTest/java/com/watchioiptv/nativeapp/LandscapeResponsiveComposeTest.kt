@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -16,9 +17,14 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,17 +38,26 @@ import com.watchioiptv.nativeapp.data.live.LiveTvCategory
 import com.watchioiptv.nativeapp.data.live.LiveTvCategoryKind
 import com.watchioiptv.nativeapp.data.live.LiveTvChannel
 import com.watchioiptv.nativeapp.data.live.LiveTvNowNext
+import com.watchioiptv.nativeapp.data.movies.MovieDetails
 import com.watchioiptv.nativeapp.data.movies.MovieCategory
 import com.watchioiptv.nativeapp.data.movies.MovieCategoryKind
 import com.watchioiptv.nativeapp.data.movies.WatchioMovieItem
+import com.watchioiptv.nativeapp.data.series.SeriesCardUiModel
 import com.watchioiptv.nativeapp.data.series.SeriesCategory
 import com.watchioiptv.nativeapp.data.series.SeriesCategoryKind
+import com.watchioiptv.nativeapp.data.series.SeriesDetails
+import com.watchioiptv.nativeapp.data.series.WatchioEpisodeItem
+import com.watchioiptv.nativeapp.data.series.WatchioSeason
 import com.watchioiptv.nativeapp.data.series.WatchioSeriesItem
 import com.watchioiptv.nativeapp.domain.model.ProviderType
 import com.watchioiptv.nativeapp.feature.live.LiveTvScreen
 import com.watchioiptv.nativeapp.feature.live.LiveTvUiState
+import com.watchioiptv.nativeapp.feature.movies.MovieDetailsScreen
+import com.watchioiptv.nativeapp.feature.movies.MovieDetailsUiState
 import com.watchioiptv.nativeapp.feature.movies.MoviesScreen
 import com.watchioiptv.nativeapp.feature.movies.MoviesUiState
+import com.watchioiptv.nativeapp.feature.series.SeriesDetailsScreen
+import com.watchioiptv.nativeapp.feature.series.SeriesDetailsUiState
 import com.watchioiptv.nativeapp.feature.series.SeriesScreen
 import com.watchioiptv.nativeapp.feature.series.SeriesUiState
 import com.watchioiptv.nativeapp.feature.tvguide.TvGuideScreen
@@ -59,6 +74,8 @@ import com.watchioiptv.nativeapp.feature.tvguide.WatchioGuideChannel
 import com.watchioiptv.nativeapp.ui.theme.WatchioTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -200,7 +217,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(seriesCategory("all")),
                             selectedCategory = seriesCategory("all"),
-                            series = (1..10).map { series("$it") },
+                            series = (1..10).map { SeriesCardUiModel(series("$it")) },
                         ),
                         onCategory = {},
                         onSearch = {},
@@ -1352,7 +1369,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(seriesCategory("all")),
                             selectedCategory = seriesCategory("all"),
-                            series = listOf(ratedSeries, zeroSeries),
+                            series = listOf(SeriesCardUiModel(ratedSeries), SeriesCardUiModel(zeroSeries)),
                         ),
                         onCategory = {},
                         onCategorySearch = {},
@@ -1380,7 +1397,7 @@ class LandscapeResponsiveComposeTest {
 
     @Test
     fun seriesTapOpensDetailsAndLongPressOpensOptions() {
-        var openedSeries: WatchioSeriesItem? = null
+        var openedSeries: SeriesCardUiModel? = null
         val target = series("target").copy(name = "Target Series")
 
         setLandscapeContent {
@@ -1391,7 +1408,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(seriesCategory("all")),
                             selectedCategory = seriesCategory("all"),
-                            series = listOf(target),
+                            series = listOf(SeriesCardUiModel(target)),
                         ),
                         onCategory = {},
                         onCategorySearch = {},
@@ -1407,7 +1424,7 @@ class LandscapeResponsiveComposeTest {
         // Click opens details
         composeRule.onNodeWithTag("series-card", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
-        assertTrue("Click should trigger onSeries callback", openedSeries?.id == target.id)
+        assertTrue("Click should trigger onSeries callback", openedSeries?.series?.id == target.id)
 
         // Long press opens options dialog
         composeRule.onNodeWithTag("series-card", useUnmergedTree = true).performTouchInput { longClick() }
@@ -1419,7 +1436,7 @@ class LandscapeResponsiveComposeTest {
 
     @Test
     fun seriesSearchOverlayOpensAndResultsWork() {
-        var openedSeries: WatchioSeriesItem? by mutableStateOf(null)
+        var openedSeries: SeriesCardUiModel? by mutableStateOf(null)
         var searchQuery by mutableStateOf("")
         val target = series("found").copy(name = "Found Series")
 
@@ -1431,7 +1448,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(seriesCategory("all")),
                             selectedCategory = seriesCategory("all"),
-                            series = if (searchQuery.isNotBlank()) listOf(target) else emptyList(),
+                            series = if (searchQuery.isNotBlank()) listOf(SeriesCardUiModel(target)) else emptyList(),
                             searchQuery = searchQuery,
                         ),
                         onCategory = {},
@@ -1456,7 +1473,7 @@ class LandscapeResponsiveComposeTest {
         }
         composeRule.onAllNodesWithTag("series-search-result", useUnmergedTree = true)[0].performClick()
         composeRule.waitForIdle()
-        assertTrue("Selecting search result opens details", openedSeries?.id == target.id)
+        assertTrue("Selecting search result opens details", openedSeries?.series?.id == target.id)
     }
 
     // --------------------------------------------------------------------------
@@ -1660,7 +1677,7 @@ class LandscapeResponsiveComposeTest {
         val comedySeries = series("2").copy(name = "Ted Lasso", categoryId = "comedy")
         val dramaCategory = SeriesCategory("drama", "DRAMA", SeriesCategoryKind.Provider, "drama")
         val allCategory = SeriesCategory("all", "ALL SERIES", SeriesCategoryKind.All, "all")
-        var openedSeries: WatchioSeriesItem? = null
+        var openedSeries: SeriesCardUiModel? = null
         var searchQuery by mutableStateOf("")
 
         setLandscapeContent {
@@ -1671,7 +1688,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(allCategory, dramaCategory),
                             selectedCategory = dramaCategory,
-                            series = if (searchQuery.isBlank()) listOf(dramaSeries) else listOf(dramaSeries, comedySeries).filter { it.name.contains(searchQuery, ignoreCase = true) },
+                            series = if (searchQuery.isBlank()) listOf(SeriesCardUiModel(dramaSeries)) else listOf(dramaSeries, comedySeries).filter { it.name.contains(searchQuery, ignoreCase = true) }.map { SeriesCardUiModel(it) },
                             searchQuery = searchQuery,
                         ),
                         onCategory = {},
@@ -1697,7 +1714,7 @@ class LandscapeResponsiveComposeTest {
         composeRule.onAllNodesWithTag("series-search-result", useUnmergedTree = true)[0].performClick()
         composeRule.waitForIdle()
 
-        assertTrue("Selecting series opens details", openedSeries?.id == comedySeries.id)
+        assertTrue("Selecting series opens details", openedSeries?.series?.id == comedySeries.id)
     }
 
     @Test
@@ -2187,16 +2204,1596 @@ class LandscapeResponsiveComposeTest {
         liveChannel = channel,
     )
 
+    // --------------------------------------------------------------------------
+    // Full Player Controls + TV Remote UX tests
+    // --------------------------------------------------------------------------
+
+    @Test
+    fun fullscreenPlayerVodShowsSeekAndProgressControls() {
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    currentMedia = PlaybackMedia("http://example.invalid/movie.mp4", "Sample Movie", isLive = false),
+                    positionMs = 120_000L,
+                    durationMs = 600_000L,
+                    isSeekable = true,
+                )
+            )
+        }
+        var seekDelta = 0L
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Movie(
+                            title = "Sample Movie",
+                            year = "2024",
+                            rating = "★ 8.5",
+                            runtime = "1h 40m",
+                            genre = "Sci-Fi",
+                        ),
+                        onPlayPause = {},
+                        onSeek = { seekDelta = it },
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-play-pause", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-rewind", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-forward", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-restart", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-position", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-duration", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-progress-bar", useUnmergedTree = true).assertIsDisplayed()
+
+        // Clicking rewind triggers seek feedback
+        composeRule.onNodeWithTag("player-rewind", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("seekDelta should be -10s; was $seekDelta", seekDelta == -10_000L)
+        composeRule.onNodeWithTag("player-seek-feedback", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullscreenPlayerLiveHidesFakeSeekControls() {
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    currentMedia = PlaybackMedia("http://example.invalid/live.ts", "Live Channel", isLive = true),
+                    isSeekable = false,
+                )
+            )
+        }
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            programmeTitle = "Evening News",
+                            programmeStartTime = "20:00",
+                            programmeEndTime = "21:00",
+                            programmeProgress = 0.5f,
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-play-pause", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-prev-channel", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-next-channel", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-live-epg-progress", useUnmergedTree = true).assertIsDisplayed()
+
+        // Standard live must not have rewind or forward controls
+        assertTrue(composeRule.onAllNodesWithTag("player-rewind").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeRule.onAllNodesWithTag("player-forward").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun fullscreenPlayerLiveSeekableShowsSeekControls() {
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    currentMedia = PlaybackMedia("http://example.invalid/timeshift.ts", "Timeshift Channel", isLive = true),
+                    positionMs = 30_000L,
+                    durationMs = 120_000L,
+                    isSeekable = true,
+                )
+            )
+        }
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "Timeshift Channel",
+                            programmeTitle = "Catchup Programme",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-play-pause", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-rewind", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-forward", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullscreenPlayerEpisodeShowsEpisodeNavigation() {
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    currentMedia = PlaybackMedia("http://example.invalid/ep2.mp4", "Episode 2", isLive = false),
+                    positionMs = 60_000L,
+                    durationMs = 300_000L,
+                    isSeekable = true,
+                )
+            )
+        }
+        var prevEpClicked = false
+        var nextEpClicked = false
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Episode(
+                            seriesTitle = "Great Series",
+                            seasonNumber = 1,
+                            episodeNumber = 2,
+                            episodeTitle = "The Next Chapter",
+                            hasPreviousEpisode = true,
+                            hasNextEpisode = true,
+                            onPreviousEpisode = { prevEpClicked = true },
+                            onNextEpisode = { nextEpClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-prev-episode", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-next-episode", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-prev-episode", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag("player-next-episode", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("prevEpClicked should be true", prevEpClicked)
+        assertTrue("nextEpClicked should be true", nextEpClicked)
+    }
+
+    @Test
+    fun fullscreenPlayerAudioAndSubtitleDialogsOpenAndDismiss() {
+        val audio1 = com.watchioiptv.nativeapp.core.player.WatchioAudioTrack("a1", "English • 5.1", isSelected = true)
+        val audio2 = com.watchioiptv.nativeapp.core.player.WatchioAudioTrack("a2", "Spanish • Stereo", isSelected = false)
+        val sub1 = com.watchioiptv.nativeapp.core.player.WatchioSubtitleTrack("s1", "English", isSelected = true)
+
+        val fakePlayer = FakePlayerManager().apply {
+            setMetadata(
+                WatchioPlayerMetadata(
+                    audioTracks = listOf(audio1, audio2),
+                    selectedAudioTrack = audio1,
+                    subtitleTracks = listOf(sub1),
+                    selectedSubtitleTrack = sub1,
+                    isSeekable = true,
+                )
+            )
+        }
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Movie(
+                            title = "Movie With Tracks",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-audio-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-audio-dialog", useUnmergedTree = true).assertIsDisplayed()
+
+        // Close audio dialog
+        composeRule.onNodeWithTag("player-dialog-close", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        // Open subtitles dialog
+        composeRule.onNodeWithTag("player-subtitles-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-subtitles-dialog", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullscreenPlayerRecoveringShowsReconnectingAndNotFailureErrorPanel() {
+        val fakePlayer = FakePlayerManager()
+        val recoveringState = WatchioPlayerState.Recovering("Stream reconnecting...", fakePlayer.snapshot())
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = recoveringState,
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "Live Channel",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-recovering", useUnmergedTree = true).assertIsDisplayed()
+        assertTrue("player-error should not be displayed when recovering", composeRule.onAllNodesWithTag("player-error").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun fullscreenPlayerFailedShowsRetryAndBackButtons() {
+        val fakePlayer = FakePlayerManager()
+        val failedState = WatchioPlayerState.Failed("Stream unreachable", fakePlayer.snapshot())
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = failedState,
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "Live Channel",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-error", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-retry", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-error-back", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullscreenPlayerLiveChannelsAndSettingsOpen() {
+        val fakePlayer = FakePlayerManager()
+        var channelsClicked = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            onChannelsClick = { channelsClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-channels-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-channels-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("channelsClicked should be true", channelsClicked)
+
+        // Open settings dialog
+        composeRule.onNodeWithTag("player-settings-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("player-settings-dialog", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun fullscreenLiveOverlayHiddenDpadUpSwitchesToPreviousChannel() {
+        val fakePlayer = FakePlayerManager()
+        var prevClicked = false
+        var nextClicked = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                            onPreviousChannel = { prevClicked = true },
+                            onNextChannel = { nextClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        // Tap screen to hide overlay
+        composeRule.onNodeWithTag("fullscreen-player").performClick()
+        composeRule.waitForIdle()
+
+        // Press UP when overlay is hidden
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.waitForIdle()
+        assertTrue("prevClicked should be true on DPAD UP when overlay is hidden", prevClicked)
+        assertFalse("nextClicked should remain false", nextClicked)
+    }
+
+    @Test
+    fun fullscreenLiveOverlayHiddenDpadDownSwitchesToNextChannel() {
+        val fakePlayer = FakePlayerManager()
+        var prevClicked = false
+        var nextClicked = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                            onPreviousChannel = { prevClicked = true },
+                            onNextChannel = { nextClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        // Tap screen to hide overlay
+        composeRule.onNodeWithTag("fullscreen-player").performClick()
+        composeRule.waitForIdle()
+
+        // Press DOWN when overlay is hidden
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.waitForIdle()
+        assertTrue("nextClicked should be true on DPAD DOWN when overlay is hidden", nextClicked)
+        assertFalse("prevClicked should remain false", prevClicked)
+    }
+
+    @Test
+    fun fullscreenLiveOverlayVisibleDpadUpDownDoesNotSwitchChannel() {
+        val fakePlayer = FakePlayerManager()
+        var prevClicked = false
+        var nextClicked = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "BBC One HD",
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                            onPreviousChannel = { prevClicked = true },
+                            onNextChannel = { nextClicked = true },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        // Overlay is visible by default
+        composeRule.onNodeWithTag("player-bottom-deck", useUnmergedTree = true).assertIsDisplayed()
+
+        // Press UP / DOWN when overlay is visible
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.waitForIdle()
+        assertFalse("prevClicked should be false when overlay is visible", prevClicked)
+        assertFalse("nextClicked should be false when overlay is visible", nextClicked)
+    }
+
+    @Test
+    fun fullscreenMovieDpadUpDownDoesNotSwitchLiveChannels() {
+        val fakePlayer = FakePlayerManager()
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Movie(
+                            title = "Sample Movie",
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("fullscreen-player").performClick()
+        composeRule.waitForIdle()
+        // Pressing UP / DOWN in Movie mode should not throw
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.waitForIdle()
+    }
+
+    @Test
+    fun fullscreenLiveRepeatedSurfingKeepsDeckHiddenAndOkOpensDeck() {
+        val fakePlayer = FakePlayerManager()
+        var prevCount = 0
+        var nextCount = 0
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Live(
+                            channelName = "Sky Sports Main Event HD",
+                            programmeTitle = "Premier League Live",
+                            hasPreviousChannel = true,
+                            hasNextChannel = true,
+                            onPreviousChannel = { prevCount++ },
+                            onNextChannel = { nextCount++ },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        // Tap to hide initial controls
+        composeRule.onNodeWithTag("fullscreen-player").performClick()
+        composeRule.waitForIdle()
+
+        // Rapid surfing: UP, UP, DOWN
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.waitForIdle()
+
+        assertEquals("prevCount should be 2 after 2 UP presses", 2, prevCount)
+        assertEquals("nextCount should be 1 after 1 DOWN press", 1, nextCount)
+
+        // Transient Channel HUD is displayed
+        composeRule.onNodeWithTag("player-channel-hud", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-channel-hud-name", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("player-channel-hud-prog", useUnmergedTree = true).assertIsDisplayed()
+
+        // Full player deck remains hidden during surfing
+        composeRule.onAllNodesWithTag("player-bottom-deck", useUnmergedTree = true)[0].assertDoesNotExist()
+
+        // Press Enter / OK while HUD is visible -> opens full player controls
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.DirectionCenter) }
+        composeRule.waitForIdle()
+
+        // Now full bottom deck is displayed
+        composeRule.onNodeWithTag("player-bottom-deck", useUnmergedTree = true).assertIsDisplayed()
+        // And channel HUD is hidden
+        composeRule.onAllNodesWithTag("player-channel-hud", useUnmergedTree = true)[0].assertDoesNotExist()
+    }
+
+    @Test
+    fun fullscreenEpisodeUpNextCountdownOverlayRendersAndHandlesActions() {
+        val fakePlayer = FakePlayerManager()
+        var playNextCount = 0
+        var cancelNextCount = 0
+
+        val nextEp = WatchioEpisodeItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            seriesId = "series-1",
+            episodeId = "ep-2",
+            seasonNumber = 1,
+            episodeNumber = 2,
+            title = "The Next Chapter",
+            plot = null,
+            imageUrl = null,
+            duration = null,
+            durationSeconds = null,
+            rating = null,
+            releaseDate = null,
+            containerExtension = "mp4",
+            tmdbId = null,
+            directUrl = null,
+            headers = emptyMap(),
+            resumePositionMs = null,
+            resumeDurationMs = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Episode(
+                            seriesTitle = "Breaking Bad",
+                            seasonNumber = 1,
+                            episodeNumber = 1,
+                            episodeTitle = "Pilot",
+                            hasPreviousEpisode = false,
+                            hasNextEpisode = true,
+                            nextEpisodeState = com.watchioiptv.nativeapp.data.series.NextEpisodeState.Countdown(
+                                nextEpisode = nextEp,
+                                secondsRemaining = 8,
+                                seriesTitle = "Breaking Bad",
+                            ),
+                            onPlayNext = { playNextCount++ },
+                            onCancelNext = { cancelNextCount++ },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Verify Up Next overlay is visible
+        composeRule.onNodeWithTag("up-next-overlay", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-header", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-countdown-text", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-series-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-episode-title", useUnmergedTree = true).assertIsDisplayed()
+
+        // Verify Play Next button click
+        composeRule.onNodeWithTag("up-next-play-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals(1, playNextCount)
+
+        // Verify Cancel button click
+        composeRule.onNodeWithTag("up-next-cancel-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals(1, cancelNextCount)
+    }
+
+    @Test
+    fun fullscreenEpisodeUpNextReadyOverlayRendersWithAutoplayOff() {
+        val fakePlayer = FakePlayerManager()
+
+        val nextEp = WatchioEpisodeItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            seriesId = "series-1",
+            episodeId = "ep-2",
+            seasonNumber = 1,
+            episodeNumber = 2,
+            title = "The Next Chapter",
+            plot = null,
+            imageUrl = null,
+            duration = null,
+            durationSeconds = null,
+            rating = null,
+            releaseDate = null,
+            containerExtension = "mp4",
+            tmdbId = null,
+            directUrl = null,
+            headers = emptyMap(),
+            resumePositionMs = null,
+            resumeDurationMs = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Ended(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(autoPlayNextEpisode = false),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Episode(
+                            seriesTitle = "Breaking Bad",
+                            seasonNumber = 1,
+                            episodeNumber = 1,
+                            episodeTitle = "Pilot",
+                            hasPreviousEpisode = false,
+                            hasNextEpisode = true,
+                            nextEpisodeState = com.watchioiptv.nativeapp.data.series.NextEpisodeState.Ready(
+                                nextEpisode = nextEp,
+                                seriesTitle = "Breaking Bad",
+                            ),
+                            onPlayNext = {},
+                            onCancelNext = {},
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Verify Ready overlay is visible with "Episode Finished" text
+        composeRule.onNodeWithTag("up-next-overlay", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("up-next-ready-text", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onAllNodesWithTag("up-next-countdown-text", useUnmergedTree = true)[0].assertDoesNotExist()
+    }
+
+    @Test
+    fun fullscreenEpisodeBackKeyDismissesUpNextOverlayFirst() {
+        val fakePlayer = FakePlayerManager()
+        var cancelNextCount = 0
+        var closePlayerCount = 0
+
+        val nextEp = WatchioEpisodeItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            seriesId = "series-1",
+            episodeId = "ep-2",
+            seasonNumber = 1,
+            episodeNumber = 2,
+            title = "The Next Chapter",
+            plot = null,
+            imageUrl = null,
+            duration = null,
+            durationSeconds = null,
+            rating = null,
+            releaseDate = null,
+            containerExtension = "mp4",
+            tmdbId = null,
+            directUrl = null,
+            headers = emptyMap(),
+            resumePositionMs = null,
+            resumeDurationMs = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen(
+                        playerState = WatchioPlayerState.Playing(fakePlayer.snapshot()),
+                        playerSettings = com.watchioiptv.nativeapp.domain.repository.PlayerSettings(),
+                        playerManager = fakePlayer,
+                        contentContext = com.watchioiptv.nativeapp.feature.player.PlayerContentContext.Episode(
+                            seriesTitle = "Breaking Bad",
+                            seasonNumber = 1,
+                            episodeNumber = 1,
+                            episodeTitle = "Pilot",
+                            hasPreviousEpisode = false,
+                            hasNextEpisode = true,
+                            nextEpisodeState = com.watchioiptv.nativeapp.data.series.NextEpisodeState.Countdown(
+                                nextEpisode = nextEp,
+                                secondsRemaining = 5,
+                                seriesTitle = "Breaking Bad",
+                            ),
+                            onPlayNext = {},
+                            onCancelNext = { cancelNextCount++ },
+                        ),
+                        onPlayPause = {},
+                        onSeek = {},
+                        onRestart = {},
+                        onRetry = {},
+                        onClose = { closePlayerCount++ },
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+        Thread.sleep(600)
+
+        // Press Back key
+        composeRule.onNodeWithTag("fullscreen-player").performKeyInput { pressKey(Key.Back) }
+        composeRule.waitForIdle()
+
+        // Back dismisses Up Next overlay first without closing fullscreen player
+        assertEquals("Cancel should be called on Back", 1, cancelNextCount)
+        assertEquals("Close should NOT be called while Up Next is active", 0, closePlayerCount)
+    }
+
+    // --------------------------------------------------------------------------
+    // Movie Details UI Refresh Tests
+    // --------------------------------------------------------------------------
+
+    @Test
+    fun movieDetailsUsesSharedHeaderAndCorrectTitle() {
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-1",
+            name = "Inception",
+            posterUrl = "http://example.invalid/poster.jpg",
+            categoryId = "action",
+            rating = "8.8",
+            genre = "Sci-Fi, Action",
+            containerExtension = "mp4",
+            trailerKey = "trailer123",
+            serverOrder = 0,
+            directUrl = null,
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "Inception",
+            posterUrl = "http://example.invalid/poster.jpg",
+            backdropUrl = "http://example.invalid/backdrop.jpg",
+            plot = "A thief who steals corporate secrets through dream-sharing technology.",
+            cast = "Leonardo DiCaprio, Joseph Gordon-Levitt",
+            director = "Christopher Nolan",
+            genre = "Sci-Fi, Action",
+            releaseDate = "2010-07-16",
+            rating = "8.8",
+            runtime = "02:28:00",
+            trailerKey = "trailer123",
+            tmdbId = 27205,
+        )
+
+        var backClicked = false
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onBack = { backClicked = true },
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // 1. Shared WatchioPageHeader is displayed
+        composeRule.onNodeWithTag("movie-details-header", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-details-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("MOVIES").assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-details-branding", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-details-clock", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-details-back-icon", useUnmergedTree = true).assertIsDisplayed()
+
+        // 2. Old floating Back card in content area is removed
+        assertTrue(
+            "Old floating Back tile must be absent from content area",
+            composeRule.onAllNodesWithText("Back").fetchSemanticsNodes().isEmpty(),
+        )
+
+        // 3. Header Back button is clickable
+        composeRule.onNodeWithTag("movie-details-back-icon", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Back button in header should trigger onBack", backClicked)
+    }
+
+    @Test
+    fun movieDetailsRendersPosterTitleFormattedMetadataAndPlot() {
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-2",
+            name = "The Fall of the Krays",
+            posterUrl = "http://example.invalid/poster.jpg",
+            categoryId = "crime",
+            rating = "5.023",
+            genre = "Crime, Thriller",
+            containerExtension = "mp4",
+            trailerKey = "trailerKrays",
+            serverOrder = 0,
+            directUrl = null,
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "The Fall of the Krays",
+            posterUrl = "http://example.invalid/poster.jpg",
+            backdropUrl = "http://example.invalid/backdrop.jpg",
+            plot = "The story of the infamous Kray twins.",
+            cast = "Simon Cotton, Kevin Leslie",
+            director = "Zackary Adler",
+            genre = "Crime, Thriller",
+            releaseDate = "2016-01-01",
+            rating = "5.023",
+            runtime = "01:51:15",
+            trailerKey = "trailerKrays",
+            tmdbId = 34567,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Poster, Title, and Metadata Summary
+        composeRule.onNodeWithTag("movie-poster", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("The Fall of the Krays").assertIsDisplayed()
+
+        // Formatted metadata: 2016 • 1h 51m • Crime, Thriller • ★ 5.0
+        composeRule.onNodeWithTag("movie-details-meta", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("2016 • 1h 51m • Crime, Thriller • ★ 5.0").assertIsDisplayed()
+
+        // Detailed metadata rows with aligned labels
+        composeRule.onNodeWithText("Director:").assertIsDisplayed()
+        composeRule.onNodeWithText("Zackary Adler").assertIsDisplayed()
+        composeRule.onNodeWithText("Release Date:").assertIsDisplayed()
+        composeRule.onNodeWithText("2016-01-01").assertIsDisplayed()
+        composeRule.onNodeWithText("Genre:").assertIsDisplayed()
+        composeRule.onNodeWithText("Crime, Thriller").assertIsDisplayed()
+        composeRule.onNodeWithText("Cast:").assertIsDisplayed()
+        composeRule.onNodeWithText("Simon Cotton, Kevin Leslie").assertIsDisplayed()
+
+        // Plot
+        composeRule.onNodeWithTag("movie-plot-header", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag("movie-plot-text", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithText("The story of the infamous Kray twins.").assertExists()
+    }
+
+    @Test
+    fun movieDetailsActionsAndPlayDefaultFocus() {
+        var playCalled = false
+        var trailerKeyPassed: String? = null
+        var favoriteToggled = false
+
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-3",
+            name = "Interstellar",
+            posterUrl = null,
+            categoryId = null,
+            rating = "8.7",
+            genre = "Sci-Fi",
+            containerExtension = "mp4",
+            trailerKey = "interstellarTrailer",
+            serverOrder = 0,
+            directUrl = null,
+            isFavorite = false,
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "Interstellar",
+            posterUrl = null,
+            backdropUrl = null,
+            plot = "A team of explorers travel through a wormhole.",
+            cast = "Matthew McConaughey",
+            director = "Christopher Nolan",
+            genre = "Sci-Fi",
+            releaseDate = "2014-11-07",
+            rating = "8.7",
+            runtime = "02:49:00",
+            trailerKey = "interstellarTrailer",
+            tmdbId = 157336,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = { playCalled = true },
+                        onTrailer = { trailerKeyPassed = it },
+                        onFavorite = { favoriteToggled = true },
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Action buttons exist
+        composeRule.onNodeWithTag("movie-play-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-trailer-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-favorite-button", useUnmergedTree = true).assertIsDisplayed()
+
+        // Verify "Favourite" label when isFavorite = false
+        composeRule.onNodeWithText("Favourite").assertIsDisplayed()
+
+        // Click Trailer
+        composeRule.onNodeWithTag("movie-trailer-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals("interstellarTrailer", trailerKeyPassed)
+
+        // Click Favourite
+        composeRule.onNodeWithTag("movie-favorite-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Favorite toggle should be called", favoriteToggled)
+
+        // Click Play
+        composeRule.onNodeWithTag("movie-play-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Play should be called directly when not resumable", playCalled)
+    }
+
+    @Test
+    fun movieDetailsTrailerHiddenWhenUnavailable() {
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-4",
+            name = "No Trailer Movie",
+            posterUrl = null,
+            categoryId = null,
+            rating = null,
+            genre = null,
+            containerExtension = "mp4",
+            trailerKey = null, // No trailer
+            serverOrder = 0,
+            directUrl = null,
+            isFavorite = true, // Favorited
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "No Trailer Movie",
+            posterUrl = null,
+            backdropUrl = null,
+            plot = null,
+            cast = null,
+            director = null,
+            genre = null,
+            releaseDate = null,
+            rating = null,
+            runtime = null,
+            trailerKey = null,
+            tmdbId = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Trailer button should NOT exist
+        assertTrue(
+            "Trailer button must be absent when trailerKey is null",
+            composeRule.onAllNodesWithTag("movie-trailer-button").fetchSemanticsNodes().isEmpty(),
+        )
+
+        // Favorite button should display "Favourited"
+        composeRule.onNodeWithText("Favourited").assertIsDisplayed()
+    }
+
+    @Test
+    fun movieDetailsResumeDialogAppearsOnResumable() {
+        var playWithResume: Boolean? = null
+
+        val dummyMovie = WatchioMovieItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = "m-5",
+            name = "Resumable Movie",
+            posterUrl = null,
+            categoryId = null,
+            rating = "7.5",
+            genre = "Action",
+            containerExtension = "mp4",
+            trailerKey = null,
+            serverOrder = 0,
+            directUrl = null,
+            resumePositionMs = 120_000L, // 2 mins in
+            resumeDurationMs = 600_000L, // 10 mins duration -> Resumable
+        )
+        val details = MovieDetails(
+            movie = dummyMovie,
+            title = "Resumable Movie",
+            posterUrl = null,
+            backdropUrl = null,
+            plot = null,
+            cast = null,
+            director = null,
+            genre = null,
+            releaseDate = "2023",
+            rating = "7.5",
+            runtime = "10:00",
+            trailerKey = null,
+            tmdbId = null,
+        )
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    MovieDetailsScreen(
+                        state = MovieDetailsUiState(loading = false, details = details),
+                        onPlay = { playWithResume = it },
+                        onTrailer = {},
+                        onFavorite = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Press Play
+        composeRule.onNodeWithTag("movie-play-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        // Resume Playback Dialog must be displayed
+        composeRule.onNodeWithTag("resume-playback-dialog", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("resume-dialog-resume-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("resume-dialog-restart-button", useUnmergedTree = true).assertIsDisplayed()
+
+        // Click Resume
+        composeRule.onNodeWithTag("resume-dialog-resume-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals(true, playWithResume)
+    }
+
+    // --------------------------------------------------------------------------
+    // Series Details UI Refresh tests
+    // --------------------------------------------------------------------------
+
+    @Test
+    fun seriesDetailsUsesSharedHeaderAndCorrectTitle() {
+        val details = sampleSeriesDetails()
+        var backPressed = false
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = 1),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = { backPressed = true },
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // 1. Shared WatchioPageHeader is present
+        composeRule.onNodeWithTag("series-details-header", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-branding", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-clock", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-back-icon", useUnmergedTree = true).assertIsDisplayed()
+
+        // 2. Title matches the SERIES section title exactly
+        composeRule.onNodeWithText("SERIES").assertIsDisplayed()
+
+        // 3. Old floating Back card in content area is removed
+        assertTrue(
+            "Floating Back card text must be removed from content area",
+            composeRule.onAllNodesWithText("Back").fetchSemanticsNodes().isEmpty(),
+        )
+
+        // 4. Back button works
+        composeRule.onNodeWithTag("series-details-back-icon", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Back button in header must trigger onBack", backPressed)
+    }
+
+    @Test
+    fun seriesDetailsRendersPosterRatingTabsTitleMetaAndPlot() {
+        val details = sampleSeriesDetails()
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = 1),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Poster, Rating, and Tabs
+        composeRule.onNodeWithTag("series-poster", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-rating", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("★ 8.8").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-tab-cast", useUnmergedTree = true).assertIsDisplayed()
+
+        // Title and formatted metadata summary
+        composeRule.onNodeWithTag("series-title", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Severance").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-details-meta", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("2022 • Drama, Sci-Fi, Thriller • ★ 8.8").assertIsDisplayed()
+
+        // Aligned metadata rows
+        composeRule.onNodeWithText("Director:").assertIsDisplayed()
+        composeRule.onNodeWithText("Ben Stiller").assertIsDisplayed()
+        composeRule.onNodeWithText("Release Date:").assertIsDisplayed()
+        composeRule.onNodeWithText("2022-02-18").assertIsDisplayed()
+        composeRule.onNodeWithText("Genre:").assertIsDisplayed()
+        composeRule.onNodeWithText("Drama, Sci-Fi, Thriller").assertIsDisplayed()
+
+        // Plot
+        composeRule.onNodeWithTag("series-plot-text", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun seriesDetailsActionsAndPlayDefaultFocus() {
+        val details = sampleSeriesDetails()
+        var favoriteToggled = false
+        var trailerOpened: String? = null
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = 1),
+                        onPlay = {},
+                        onTrailer = { trailerOpened = it },
+                        onFavorite = { favoriteToggled = true },
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Action row buttons
+        composeRule.onNodeWithTag("series-play-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-trailer-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-favorite-button", useUnmergedTree = true).assertIsDisplayed()
+
+        // Click Favourite
+        composeRule.onNodeWithTag("series-favorite-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertTrue("Clicking favourite button must trigger onFavorite", favoriteToggled)
+
+        // Click Trailer
+        composeRule.onNodeWithTag("series-trailer-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals("dQw4w9WgXcQ", trailerOpened)
+    }
+
+    @Test
+    fun seriesDetailsSeasonSelectorOpensDialogAndSwitchesSeason() {
+        val details = sampleSeriesDetails()
+        var switchedSeason: Int? = null
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = 1),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = { switchedSeason = it },
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Season selector button is visible and there is exactly ONE selector on screen
+        assertEquals(
+            "There must be exactly one season selector on screen",
+            1,
+            composeRule.onAllNodesWithTag("series-season-selector-button").fetchSemanticsNodes().size,
+        )
+        composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Season 1 ▼").assertIsDisplayed()
+
+        // Verify Season selector sits directly under Episodes / Cast tabs in left column
+        val tabsBounds = composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val seasonBounds = composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertTrue("Season selector must sit below Episodes tab", seasonBounds.top >= tabsBounds.bottom)
+        assertTrue("Season selector must align horizontally with left column", seasonBounds.left <= tabsBounds.left)
+
+        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).assertIsFocused()
+        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).performKeyInput {
+            pressKey(Key.DirectionDown)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).assertIsFocused()
+
+        // Click Season selector button to open dialog
+        composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        // Dialog is displayed with canonical seasons
+        composeRule.onNodeWithTag("series-season-dialog", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-season-option-1", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-season-option-2", useUnmergedTree = true).assertIsDisplayed()
+
+        // Select Season 2
+        composeRule.onNodeWithTag("series-season-option-2", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(2, switchedSeason)
+    }
+
+    @Test
+    fun seriesDetailsEpisodeCardFormattingProgressAndCompleted() {
+        val details = sampleSeriesDetails()
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(
+                            loading = false,
+                            details = details,
+                            selectedSeasonNumber = 1,
+                            targetEpisodeId = "ep-102",
+                        ),
+                        onPlay = {},
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Section header
+        composeRule.onNodeWithTag("series-episodes-header", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Season 1 • 2 Episodes").assertIsDisplayed()
+
+        // Episode numbers and titles
+        composeRule.onNodeWithText("S01 • E01").assertIsDisplayed()
+        composeRule.onNodeWithText("Good News About Hell").assertIsDisplayed()
+        composeRule.onAllNodesWithText("53m")[0].assertIsDisplayed()
+
+        composeRule.onNodeWithText("S01 • E02").assertIsDisplayed()
+        composeRule.onNodeWithText("Half Loop").assertIsDisplayed()
+
+        // Episode 1 is completed -> shows Watched badge
+        composeRule.onNodeWithTag("series-episode-watched-badge", useUnmergedTree = true).assertIsDisplayed()
+
+        // Episode 2 is partially watched -> shows progress bar
+        composeRule.onNodeWithTag("series-episode-progress-bar", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun seriesDetailsResumeDialogAppearsOnResumable() {
+        val details = sampleSeriesDetails()
+        var playWithResume: Boolean? = null
+
+        setLandscapeContent {
+            WatchioTheme {
+                Box(Modifier.fillMaxSize()) {
+                    SeriesDetailsScreen(
+                        state = SeriesDetailsUiState(
+                            loading = false,
+                            details = details,
+                            selectedSeasonNumber = 1,
+                        ),
+                        onPlay = { playWithResume = it },
+                        onTrailer = {},
+                        onFavorite = {},
+                        onSeason = {},
+                        onTab = {},
+                        onEpisode = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Click Play on resumable series
+        composeRule.onNodeWithTag("series-play-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+
+        // Resume Playback Dialog must appear
+        composeRule.onNodeWithTag("resume-playback-dialog", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("resume-dialog-resume-button", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("resume-dialog-restart-button", useUnmergedTree = true).assertIsDisplayed()
+
+        // Click Resume
+        composeRule.onNodeWithTag("resume-dialog-resume-button", useUnmergedTree = true).performClick()
+        composeRule.waitForIdle()
+        assertEquals(true, playWithResume)
+    }
+
+    private fun sampleSeriesDetails(
+        seriesId: String = "series-101",
+        title: String = "Severance",
+        isFavorite: Boolean = false,
+        trailerKey: String? = "dQw4w9WgXcQ",
+        seasons: List<WatchioSeason> = listOf(
+            WatchioSeason(ProviderId("provider-a"), seriesId, "s1", 1, "Season 1", "2022-02-18", 2, "Overview", null, "8.8"),
+            WatchioSeason(ProviderId("provider-a"), seriesId, "s2", 2, "Season 2", "2025-01-17", 1, "Overview", null, "9.0"),
+        ),
+        episodes: List<WatchioEpisodeItem> = listOf(
+            WatchioEpisodeItem(
+                providerId = ProviderId("provider-a"),
+                providerType = ProviderType.Xtream,
+                seriesId = seriesId,
+                episodeId = "ep-101",
+                seasonNumber = 1,
+                episodeNumber = 1,
+                title = "Good News About Hell",
+                plot = "Mark Scout leads a team at Lumon Industries...",
+                imageUrl = "https://example.invalid/ep1.jpg",
+                duration = "00:53:00",
+                durationSeconds = 3180,
+                rating = "8.9",
+                releaseDate = "2022-02-18",
+                containerExtension = "mp4",
+                tmdbId = null,
+                directUrl = null,
+                headers = emptyMap(),
+                resumePositionMs = 3100_000L,
+                resumeDurationMs = 3180_000L,
+            ),
+            WatchioEpisodeItem(
+                providerId = ProviderId("provider-a"),
+                providerType = ProviderType.Xtream,
+                seriesId = seriesId,
+                episodeId = "ep-102",
+                seasonNumber = 1,
+                episodeNumber = 2,
+                title = "Half Loop",
+                plot = "The team trains Helly on macrodata refinement.",
+                imageUrl = "https://example.invalid/ep2.jpg",
+                duration = "53m",
+                durationSeconds = 3180,
+                rating = "8.7",
+                releaseDate = "2022-02-18",
+                containerExtension = "mp4",
+                tmdbId = null,
+                directUrl = null,
+                headers = emptyMap(),
+                resumePositionMs = 600_000L,
+                resumeDurationMs = 3180_000L,
+            ),
+            WatchioEpisodeItem(
+                providerId = ProviderId("provider-a"),
+                providerType = ProviderType.Xtream,
+                seriesId = seriesId,
+                episodeId = "ep-201",
+                seasonNumber = 2,
+                episodeNumber = 1,
+                title = "Hello, Ms. Cobel",
+                plot = "Season 2 premiere.",
+                imageUrl = null,
+                duration = "58 min",
+                durationSeconds = 3480,
+                rating = "9.0",
+                releaseDate = "2025-01-17",
+                containerExtension = "mp4",
+                tmdbId = null,
+                directUrl = null,
+                headers = emptyMap(),
+                resumePositionMs = null,
+                resumeDurationMs = null,
+            ),
+        ),
+    ): SeriesDetails = SeriesDetails(
+        series = WatchioSeriesItem(
+            providerId = ProviderId("provider-a"),
+            providerType = ProviderType.Xtream,
+            id = seriesId,
+            name = title,
+            coverUrl = "https://example.invalid/poster.jpg",
+            categoryId = "drama",
+            plot = "Mark leads a team of office workers whose memories have been surgically divided.",
+            cast = "Adam Scott, Zach Cherry, Britt Lower, Patricia Arquette",
+            director = "Ben Stiller",
+            genre = "Drama, Sci-Fi, Thriller",
+            releaseDate = "2022-02-18",
+            rating = "8.8",
+            runtime = "53m",
+            trailerKey = trailerKey,
+            tmdbId = 93405,
+            serverOrder = 0,
+            isFavorite = isFavorite,
+            lastEpisodeId = null,
+        ),
+        title = title,
+        posterUrl = "https://example.invalid/poster.jpg",
+        backdropUrl = "https://example.invalid/backdrop.jpg",
+        plot = "Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.",
+        cast = "Adam Scott, Zach Cherry, Britt Lower, Patricia Arquette",
+        director = "Ben Stiller",
+        genre = "Drama, Sci-Fi, Thriller",
+        releaseDate = "2022-02-18",
+        rating = "8.8",
+        runtime = "53m",
+        trailerKey = trailerKey,
+        tmdbId = 93405,
+        seasons = seasons,
+        episodes = episodes,
+    )
+
     private class FakePlayerManager : WatchioPlayerManager {
-        private val mutableState = MutableStateFlow<WatchioPlayerState>(WatchioPlayerState.Idle())
+        private var metadata = WatchioPlayerMetadata()
+        private val mutableState = MutableStateFlow<WatchioPlayerState>(WatchioPlayerState.Idle(metadata))
         override val state: StateFlow<WatchioPlayerState> = mutableState
-        override suspend fun load(media: PlaybackMedia) = Unit
-        override fun play() = Unit
-        override fun pause() = Unit
-        override fun stop() = Unit
+
+        fun setMetadata(newMetadata: WatchioPlayerMetadata) {
+            metadata = newMetadata
+            mutableState.value = WatchioPlayerState.Playing(newMetadata)
+        }
+
+        override suspend fun load(media: PlaybackMedia) {
+            metadata = metadata.copy(currentMedia = media, isSeekable = !media.isLive)
+            mutableState.value = WatchioPlayerState.Playing(metadata)
+        }
+        override fun play() {
+            mutableState.value = WatchioPlayerState.Playing(metadata)
+        }
+        override fun pause() {
+            mutableState.value = WatchioPlayerState.Paused(metadata)
+        }
+        override fun stop() {
+            metadata = metadata.copy(currentMedia = null)
+            mutableState.value = WatchioPlayerState.Idle(metadata)
+        }
         override fun retry() = Unit
-        override fun seekTo(positionMs: Long) = Unit
-        override fun snapshot(): WatchioPlayerMetadata = WatchioPlayerMetadata()
+        override fun seekTo(positionMs: Long) {
+            metadata = metadata.copy(positionMs = positionMs)
+        }
+        override fun seekBy(deltaMs: Long) {
+            metadata = metadata.copy(positionMs = (metadata.positionMs + deltaMs).coerceAtLeast(0L))
+        }
+        override fun selectAudioTrack(track: com.watchioiptv.nativeapp.core.player.WatchioAudioTrack) {
+            metadata = metadata.copy(selectedAudioTrack = track)
+        }
+        override fun selectSubtitleTrack(track: com.watchioiptv.nativeapp.core.player.WatchioSubtitleTrack?) {
+            metadata = metadata.copy(selectedSubtitleTrack = track)
+        }
+        override fun setVideoScalingMode(mode: com.watchioiptv.nativeapp.domain.repository.VideoScalingMode) {
+            metadata = metadata.copy(videoScalingMode = mode)
+        }
+        override fun setPlaybackSpeed(speed: Float) {
+            metadata = metadata.copy(playbackSpeed = speed)
+        }
+        override fun setMuted(muted: Boolean) {
+            metadata = metadata.copy(isMuted = muted)
+        }
+        override fun restart() {
+            seekTo(0L)
+            play()
+        }
+        override fun snapshot(): WatchioPlayerMetadata = metadata
         override fun attachSurface(container: ViewGroup) = Unit
         override fun detachSurface(container: ViewGroup) = Unit
         override fun release() = Unit

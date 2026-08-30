@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.watchioiptv.nativeapp.core.model.ProviderId
@@ -13,6 +14,7 @@ import com.watchioiptv.nativeapp.domain.model.InputMode
 import com.watchioiptv.nativeapp.domain.model.StreamFormat
 import com.watchioiptv.nativeapp.data.epg.EpgRefreshInterval
 import com.watchioiptv.nativeapp.domain.repository.ControlAutoHideDelay
+import com.watchioiptv.nativeapp.domain.repository.LiveTvBrowsingState
 import com.watchioiptv.nativeapp.domain.repository.PlayerSettings
 import com.watchioiptv.nativeapp.domain.repository.SettingsRepository
 import com.watchioiptv.nativeapp.domain.repository.VideoScalingMode
@@ -64,6 +66,7 @@ class WatchioSettingsRepository(
     override val playerSettings: Flow<PlayerSettings> = dataStore.data.map { preferences ->
         PlayerSettings(
             autoResume = preferences[PlayerAutoResume] ?: true,
+            autoPlayNextEpisode = preferences[PlayerAutoPlayNextEpisode] ?: true,
             autoPlayLiveChannel = preferences[PlayerAutoPlayLiveChannel] ?: false,
             rememberLastLiveChannel = preferences[PlayerRememberLastLiveChannel] ?: true,
             showPlayerControls = preferences[PlayerShowControls] ?: true,
@@ -173,6 +176,10 @@ class WatchioSettingsRepository(
         dataStore.edit { preferences -> preferences[PlayerAutoResume] = enabled }
     }
 
+    override suspend fun setAutoPlayNextEpisode(enabled: Boolean) {
+        dataStore.edit { preferences -> preferences[PlayerAutoPlayNextEpisode] = enabled }
+    }
+
     override suspend fun setAutoPlayLiveChannel(enabled: Boolean) {
         dataStore.edit { preferences -> preferences[PlayerAutoPlayLiveChannel] = enabled }
     }
@@ -182,7 +189,7 @@ class WatchioSettingsRepository(
             preferences[PlayerRememberLastLiveChannel] = enabled
             if (!enabled) {
                 preferences.asMap().keys
-                    .filter { it.name.startsWith("provider_") && it.name.endsWith("_last_live_channel_id") }
+                    .filter { it.name.startsWith("provider_") && it.name.contains("_last_live_") }
                     .forEach { preferences.remove(it) }
             }
         }
@@ -215,6 +222,31 @@ class WatchioSettingsRepository(
         dataStore.edit { preferences -> preferences.setOrRemove(lastLiveChannelKey(providerId), channelId) }
     }
 
+    override fun observeLiveBrowsingState(providerId: ProviderId): Flow<LiveTvBrowsingState> =
+        dataStore.data.map { preferences ->
+            LiveTvBrowsingState(
+                categoryId = preferences[lastLiveCategoryIdKey(providerId)],
+                categoryName = preferences[lastLiveCategoryNameKey(providerId)],
+                channelId = preferences[lastLiveChannelKey(providerId)],
+                channelName = preferences[lastLiveChannelNameKey(providerId)],
+                channelIndex = preferences[lastLiveChannelIndexKey(providerId)],
+                scrollIndex = preferences[lastLiveScrollIndexKey(providerId)],
+                scrollOffset = preferences[lastLiveScrollOffsetKey(providerId)],
+            )
+        }
+
+    override suspend fun saveLiveBrowsingState(providerId: ProviderId, state: LiveTvBrowsingState) {
+        dataStore.edit { preferences ->
+            preferences.setOrRemove(lastLiveCategoryIdKey(providerId), state.categoryId)
+            preferences.setOrRemove(lastLiveCategoryNameKey(providerId), state.categoryName)
+            preferences.setOrRemove(lastLiveChannelKey(providerId), state.channelId)
+            preferences.setOrRemove(lastLiveChannelNameKey(providerId), state.channelName)
+            preferences.setOrRemoveInt(lastLiveChannelIndexKey(providerId), state.channelIndex)
+            preferences.setOrRemoveInt(lastLiveScrollIndexKey(providerId), state.scrollIndex)
+            preferences.setOrRemoveInt(lastLiveScrollOffsetKey(providerId), state.scrollOffset)
+        }
+    }
+
     private companion object {
         val SelectedProviderId = stringPreferencesKey("selected_provider_id")
         val ThemeJson = stringPreferencesKey("theme_json")
@@ -225,6 +257,7 @@ class WatchioSettingsRepository(
         val EpgRefreshIntervalKey = stringPreferencesKey("epg_refresh_interval")
         val ResumePlaybackEnabled = booleanPreferencesKey("resume_playback_enabled")
         val PlayerAutoResume = booleanPreferencesKey("player_auto_resume")
+        val PlayerAutoPlayNextEpisode = booleanPreferencesKey("player_auto_play_next_episode")
         val PlayerAutoPlayLiveChannel = booleanPreferencesKey("player_auto_play_live_channel")
         val PlayerRememberLastLiveChannel = booleanPreferencesKey("player_remember_last_live_channel")
         val PlayerShowControls = booleanPreferencesKey("player_show_controls")
@@ -239,11 +272,21 @@ class WatchioSettingsRepository(
         fun accountMaxConnectionsKey(providerId: ProviderId) = stringPreferencesKey("provider_${providerId.value}_xtream_max_connections")
         fun accountActiveConnectionsKey(providerId: ProviderId) = stringPreferencesKey("provider_${providerId.value}_xtream_active_connections")
         fun accountOutputFormatsKey(providerId: ProviderId) = stringPreferencesKey("provider_${providerId.value}_xtream_output_formats")
+        fun lastLiveCategoryIdKey(providerId: ProviderId) = stringPreferencesKey("provider_${providerId.value}_last_live_category_id")
+        fun lastLiveCategoryNameKey(providerId: ProviderId) = stringPreferencesKey("provider_${providerId.value}_last_live_category_name")
         fun lastLiveChannelKey(providerId: ProviderId) = stringPreferencesKey("provider_${providerId.value}_last_live_channel_id")
+        fun lastLiveChannelNameKey(providerId: ProviderId) = stringPreferencesKey("provider_${providerId.value}_last_live_channel_name")
+        fun lastLiveChannelIndexKey(providerId: ProviderId) = intPreferencesKey("provider_${providerId.value}_last_live_channel_index")
+        fun lastLiveScrollIndexKey(providerId: ProviderId) = intPreferencesKey("provider_${providerId.value}_last_live_scroll_index")
+        fun lastLiveScrollOffsetKey(providerId: ProviderId) = intPreferencesKey("provider_${providerId.value}_last_live_scroll_offset")
     }
 }
 
 private fun MutablePreferences.setOrRemove(key: Preferences.Key<String>, value: String?) {
     val cleaned = value?.trim()?.takeIf { it.isNotBlank() }
     if (cleaned == null) remove(key) else this[key] = cleaned
+}
+
+private fun MutablePreferences.setOrRemoveInt(key: Preferences.Key<Int>, value: Int?) {
+    if (value == null || value < 0) remove(key) else this[key] = value
 }

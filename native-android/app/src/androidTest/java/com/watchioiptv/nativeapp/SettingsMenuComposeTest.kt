@@ -90,6 +90,9 @@ class SettingsMenuComposeTest {
         composeRule.onNodeWithTag("settings-check-updates").performScrollTo().performClick()
         composeRule.waitUntilAtLeastOneExists(hasText("CHECK FOR UPDATES"), 5_000)
         assertSingleSettingsBack()
+        composeRule.onNodeWithTag("updates-content").assertIsDisplayed()
+        composeRule.onNodeWithText("Current Version").assertIsDisplayed()
+        composeRule.onNodeWithTag("updates-check").assertIsDisplayed()
         pressBack()
         composeRule.waitUntilAtLeastOneExists(hasText("SETTINGS"), 5_000)
     }

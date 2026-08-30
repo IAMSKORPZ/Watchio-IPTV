@@ -97,6 +97,10 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.setAutoResume(enabled) }
     }
 
+    fun setAutoPlayNextEpisode(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAutoPlayNextEpisode(enabled) }
+    }
+
     fun setAutoPlayLiveChannel(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setAutoPlayLiveChannel(enabled) }
     }

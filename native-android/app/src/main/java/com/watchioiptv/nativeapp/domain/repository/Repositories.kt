@@ -39,6 +39,7 @@ enum class VideoScalingMode(val persisted: String, val label: String) {
 
 data class PlayerSettings(
     val autoResume: Boolean = true,
+    val autoPlayNextEpisode: Boolean = true,
     val autoPlayLiveChannel: Boolean = false,
     val rememberLastLiveChannel: Boolean = true,
     val showPlayerControls: Boolean = true,
@@ -104,6 +105,16 @@ interface HistoryRepository {
     suspend fun recent(providerId: ProviderId): List<HistoryItem>
 }
 
+data class LiveTvBrowsingState(
+    val categoryId: String? = null,
+    val categoryName: String? = null,
+    val channelId: String? = null,
+    val channelName: String? = null,
+    val channelIndex: Int? = null,
+    val scrollIndex: Int? = null,
+    val scrollOffset: Int? = null,
+)
+
 interface SettingsRepository {
     val selectedProviderId: Flow<ProviderId?>
     val inputMode: Flow<InputMode>
@@ -121,6 +132,7 @@ interface SettingsRepository {
     suspend fun setXtreamAccountMetadata(providerId: ProviderId, metadata: XtreamAccountMetadata) = Unit
     val playerSettings: Flow<PlayerSettings> get() = flowOf(PlayerSettings())
     suspend fun setAutoResume(enabled: Boolean) = Unit
+    suspend fun setAutoPlayNextEpisode(enabled: Boolean) = Unit
     suspend fun setAutoPlayLiveChannel(enabled: Boolean) = Unit
     suspend fun setRememberLastLiveChannel(enabled: Boolean) = Unit
     suspend fun setShowPlayerControls(enabled: Boolean) = Unit
@@ -130,4 +142,6 @@ interface SettingsRepository {
     suspend fun setVideoScalingMode(mode: VideoScalingMode) = Unit
     fun observeLastLiveChannelId(providerId: ProviderId): Flow<String?> = flowOf(null)
     suspend fun setLastLiveChannelId(providerId: ProviderId, channelId: String?) = Unit
+    fun observeLiveBrowsingState(providerId: ProviderId): Flow<LiveTvBrowsingState> = flowOf(LiveTvBrowsingState())
+    suspend fun saveLiveBrowsingState(providerId: ProviderId, state: LiveTvBrowsingState) = Unit
 }

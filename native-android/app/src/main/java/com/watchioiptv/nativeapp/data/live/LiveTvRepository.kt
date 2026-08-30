@@ -15,18 +15,19 @@ import com.watchioiptv.nativeapp.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
-class LiveTvRepository(
-    private val database: WatchioDatabase,
-    private val settingsRepository: SettingsRepository,
-    private val favoritesRepository: FavoritesRepository,
-    private val historyRepository: HistoryRepository,
-    private val playbackUrlResolver: PlaybackUrlResolver,
+open class LiveTvRepository(
+    private val database: WatchioDatabase? = null,
+    private val settingsRepository: SettingsRepository? = null,
+    private val favoritesRepository: FavoritesRepository? = null,
+    private val historyRepository: HistoryRepository? = null,
+    private val playbackUrlResolver: PlaybackUrlResolver? = null,
 ) {
-    suspend fun selectedProviderId(): ProviderId? = settingsRepository.selectedProviderId.first()
-    fun observeSelectedProviderId(): Flow<ProviderId?> = settingsRepository.selectedProviderId
+    open suspend fun selectedProviderId(): ProviderId? = settingsRepository?.selectedProviderId?.first()
+    open fun observeSelectedProviderId(): Flow<ProviderId?> = settingsRepository?.selectedProviderId ?: kotlinx.coroutines.flow.flowOf(null)
 
-    suspend fun categories(providerId: ProviderId): List<LiveTvCategory> {
-        val providerCategories = database.categoryDao()
+    open suspend fun categories(providerId: ProviderId): List<LiveTvCategory> {
+        val db = database ?: return emptyList()
+        val providerCategories = db.categoryDao()
             .getByType(providerId.value, ContentType.Live.persisted)
             .map { it.toLiveCategory() }
         return listOf(
@@ -36,15 +37,18 @@ class LiveTvRepository(
         ) + providerCategories
     }
 
-    suspend fun channels(providerId: ProviderId, category: LiveTvCategory): List<LiveTvChannel> {
-        val provider = database.providerDao().findById(providerId.value) ?: return emptyList()
+    open suspend fun channels(providerId: ProviderId, category: LiveTvCategory): List<LiveTvChannel> {
+        val db = database ?: return emptyList()
+        val provider = db.providerDao().findById(providerId.value) ?: return emptyList()
         val providerType = ProviderType.fromPersisted(provider.type)
-        val favorites = favoritesRepository.getFavorites(providerId)
-            .filter { it.contentType == ContentType.Live }
-            .associateBy { it.contentId }
-        val historyIds = historyRepository.recent(providerId)
-            .filter { it.contentType == ContentType.Live }
-            .map { it.contentId }
+        val favorites = favoritesRepository?.getFavorites(providerId)
+            ?.filter { it.contentType == ContentType.Live }
+            ?.associateBy { it.contentId }
+            ?: emptyMap()
+        val historyIds = historyRepository?.recent(providerId)
+            ?.filter { it.contentType == ContentType.Live }
+            ?.map { it.contentId }
+            ?: emptyList()
         val rows = when (providerType) {
             ProviderType.Xtream -> xtreamChannels(providerId, category)
             ProviderType.M3uUrl,
@@ -64,21 +68,22 @@ class LiveTvRepository(
         }
     }
 
-    suspend fun playback(channel: LiveTvChannel): LiveTvPlaybackRequest {
+    open suspend fun playback(channel: LiveTvChannel): LiveTvPlaybackRequest {
         val url = when (channel.providerType) {
-            ProviderType.Xtream -> playbackUrlResolver.resolve(
+            ProviderType.Xtream -> playbackUrlResolver?.resolve(
                 PlaybackUrlRequest(channel.providerId, ContentType.Live, channel.id),
-            )
+            ) ?: throw IllegalStateException("Stream URL unavailable.")
             ProviderType.M3uUrl,
             ProviderType.M3uFile -> channel.directUrl ?: throw IllegalStateException("Stream URL unavailable.")
         }
         return LiveTvPlaybackRequest(channel, url, channel.headers)
     }
 
-    suspend fun nowNext(channel: LiveTvChannel, nowEpochMs: Long): LiveTvNowNext {
+    open suspend fun nowNext(channel: LiveTvChannel, nowEpochMs: Long): LiveTvNowNext {
+        val db = database ?: return LiveTvNowNext(null, null, 0f)
         val epgId = channel.epgChannelId?.takeIf { it.isNotBlank() } ?: return LiveTvNowNext(null, null, 0f)
-        val current = database.epgDao().getCurrentProgramme(channel.providerId.value, epgId, nowEpochMs)
-        val next = database.epgDao().getNextProgramme(channel.providerId.value, epgId, nowEpochMs)
+        val current = db.epgDao().getCurrentProgramme(channel.providerId.value, epgId, nowEpochMs)
+        val next = db.epgDao().getNextProgramme(channel.providerId.value, epgId, nowEpochMs)
         val progress = current?.let {
             val duration = it.endTimeEpochMs - it.startTimeEpochMs
             if (duration <= 0L) 0f else ((nowEpochMs - it.startTimeEpochMs).toFloat() / duration).coerceIn(0f, 1f)
@@ -94,7 +99,8 @@ class LiveTvRepository(
     }
 
     private suspend fun xtreamChannels(providerId: ProviderId, category: LiveTvCategory): List<LiveRow> {
-        val dao = database.liveStreamDao()
+        val db = database ?: return emptyList()
+        val dao = db.liveStreamDao()
         return when (category.kind) {
             LiveTvCategoryKind.Provider -> dao.getByCategory(providerId.value, category.sourceCategoryId.orEmpty())
             else -> dao.getByProvider(providerId.value)
@@ -102,7 +108,8 @@ class LiveTvRepository(
     }
 
     private suspend fun m3uChannels(providerId: ProviderId, category: LiveTvCategory): List<LiveRow> {
-        val dao = database.m3uItemDao()
+        val db = database ?: return emptyList()
+        val dao = db.m3uItemDao()
         return when (category.kind) {
             LiveTvCategoryKind.Provider -> dao.getByCategoryAndType(providerId.value, ContentType.Live.persisted, category.sourceCategoryId.orEmpty())
             else -> dao.getByProviderAndType(providerId.value, ContentType.Live.persisted)

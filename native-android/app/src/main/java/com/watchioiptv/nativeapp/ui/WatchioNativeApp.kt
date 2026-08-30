@@ -28,9 +28,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -84,6 +86,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -109,6 +113,8 @@ import com.watchioiptv.nativeapp.feature.movies.MoviePlayerScreen
 import com.watchioiptv.nativeapp.feature.movies.MoviesScreen
 import com.watchioiptv.nativeapp.feature.movies.MoviesViewModel
 import com.watchioiptv.nativeapp.feature.movies.openYoutubeTrailer
+import com.watchioiptv.nativeapp.feature.player.PlayerContentContext
+import com.watchioiptv.nativeapp.feature.player.WatchioFullscreenPlayerScreen
 import com.watchioiptv.nativeapp.feature.series.SeriesDetailsScreen
 import com.watchioiptv.nativeapp.feature.series.SeriesScreen
 import com.watchioiptv.nativeapp.feature.series.SeriesViewModel
@@ -121,6 +127,8 @@ import com.watchioiptv.nativeapp.feature.settings.AccountInformationUiState
 import com.watchioiptv.nativeapp.feature.settings.AccountInformationViewModel
 import com.watchioiptv.nativeapp.feature.settings.SettingsUiState
 import com.watchioiptv.nativeapp.feature.settings.SettingsViewModel
+import com.watchioiptv.nativeapp.feature.settings.UpdatesScreen
+import com.watchioiptv.nativeapp.feature.settings.UpdatesViewModel
 import com.watchioiptv.nativeapp.feature.tvguide.TvGuideScreen
 import com.watchioiptv.nativeapp.feature.tvguide.TvGuideViewModel
 import com.watchioiptv.nativeapp.core.util.SystemWatchioClock
@@ -129,11 +137,14 @@ import com.watchioiptv.nativeapp.domain.model.ProviderType
 import com.watchioiptv.nativeapp.domain.model.StreamFormat
 import com.watchioiptv.nativeapp.domain.repository.ControlAutoHideDelay
 import com.watchioiptv.nativeapp.domain.repository.VideoScalingMode
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.watchioiptv.nativeapp.ui.components.WatchioButton
 import com.watchioiptv.nativeapp.ui.components.WatchioButtonVariant
 import com.watchioiptv.nativeapp.ui.components.WatchioCard
 import com.watchioiptv.nativeapp.ui.components.WatchioFocusableCard
 import com.watchioiptv.nativeapp.ui.components.WatchioPageHeader
+import com.watchioiptv.nativeapp.ui.components.WatchioProgressBar
 import com.watchioiptv.nativeapp.ui.components.WatchioScreenHeader
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioColors
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioComponentSizes
@@ -352,14 +363,33 @@ fun WatchioNativeApp(
                     state = state,
                     onCategory = seriesViewModel::selectCategory,
                     onSearch = seriesViewModel::updateSearch,
-                    onSeries = { item -> navController.navigate("series/${item.id}") },
+                    onSeries = { item ->
+                        val targetEp = item.targetEpisodeId?.let { java.net.URLEncoder.encode(it, "UTF-8") }
+                        if (targetEp != null) {
+                            navController.navigate("series/${item.series.id}?episodeId=$targetEp")
+                        } else {
+                            navController.navigate("series/${item.series.id}")
+                        }
+                    },
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable("series/{seriesId}") { backStackEntry ->
+            composable(
+                route = "series/{seriesId}?episodeId={episodeId}",
+                arguments = listOf(
+                    navArgument("seriesId") { type = NavType.StringType },
+                    navArgument("episodeId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) { backStackEntry ->
                 val seriesViewModel: SeriesViewModel = viewModel(factory = seriesFactory(container))
                 val seriesId = backStackEntry.arguments?.getString("seriesId").orEmpty()
-                LaunchedEffect(seriesId) { seriesViewModel.loadDetails(seriesId) }
+                val rawEpisodeId = backStackEntry.arguments?.getString("episodeId")
+                val episodeId = rawEpisodeId?.let { runCatching { java.net.URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
+                LaunchedEffect(seriesId, episodeId) { seriesViewModel.loadDetails(seriesId, targetEpisodeId = episodeId) }
                 val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner, seriesId) {
                     val observer = LifecycleEventObserver { _, event ->
@@ -389,20 +419,48 @@ fun WatchioNativeApp(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable("series/player/{seriesId}") {
-                val seriesViewModel: SeriesViewModel = viewModel(factory = seriesFactory(container))
+            composable("series/player/{seriesId}") { backStackEntry ->
+                val seriesBackStackEntry = remember(backStackEntry) {
+                    runCatching { navController.previousBackStackEntry }.getOrNull()
+                }
+                val seriesViewModel: SeriesViewModel = if (seriesBackStackEntry != null) {
+                    viewModel(viewModelStoreOwner = seriesBackStackEntry, factory = seriesFactory(container))
+                } else {
+                    viewModel(factory = seriesFactory(container))
+                }
                 PlaybackBackgroundHandler(
                     onBackground = seriesViewModel::pauseForBackground,
                     setHandler = { backgroundPlaybackHandler = it },
                 )
                 val playerState by container.playerManager.state.collectAsStateWithLifecycle()
                 val playerSettings by container.settingsRepository.playerSettings.collectAsStateWithLifecycle(initialValue = com.watchioiptv.nativeapp.domain.repository.PlayerSettings())
-                MoviePlayerScreen(
+                val detailsState by seriesViewModel.detailsState.collectAsStateWithLifecycle()
+                val nextEpisodeState by seriesViewModel.nextEpisodeState.collectAsStateWithLifecycle()
+                val episode = seriesViewModel.currentEpisode
+                val contentContext = PlayerContentContext.Episode(
+                    seriesTitle = detailsState.details?.title ?: "TV Show",
+                    seasonNumber = episode?.seasonNumber ?: (detailsState.selectedSeasonNumber ?: 1),
+                    episodeNumber = episode?.episodeNumber ?: 1,
+                    episodeTitle = episode?.title ?: "Episode",
+                    duration = episode?.duration,
+                    posterUrl = episode?.imageUrl ?: detailsState.details?.posterUrl,
+                    hasPreviousEpisode = seriesViewModel.hasPreviousEpisode(),
+                    hasNextEpisode = seriesViewModel.hasNextEpisode(),
+                    onPreviousEpisode = seriesViewModel::playPreviousEpisode,
+                    onNextEpisode = seriesViewModel::playNextEpisode,
+                    nextEpisodeState = nextEpisodeState,
+                    onPlayNext = seriesViewModel::playNextEpisode,
+                    onCancelNext = seriesViewModel::dismissNextEpisodeForCurrentEpisode,
+                )
+                WatchioFullscreenPlayerScreen(
                     playerState = playerState,
                     playerSettings = playerSettings,
                     playerManager = container.playerManager,
+                    contentContext = contentContext,
                     onPlayPause = seriesViewModel::playPause,
                     onSeek = seriesViewModel::seekBy,
+                    onRestart = seriesViewModel::restartPlayback,
+                    onRetry = container.playerManager::retry,
                     onClose = {
                         seriesViewModel.stopPlayback()
                         navController.popBackStack()
@@ -439,7 +497,14 @@ fun WatchioNativeApp(
                 )
             }
             composable("movies/player/{movieId}") { backStackEntry ->
-                val moviesViewModel: MoviesViewModel = viewModel(factory = moviesFactory(container))
+                val moviesBackStackEntry = remember(backStackEntry) {
+                    runCatching { navController.previousBackStackEntry }.getOrNull()
+                }
+                val moviesViewModel: MoviesViewModel = if (moviesBackStackEntry != null) {
+                    viewModel(viewModelStoreOwner = moviesBackStackEntry, factory = moviesFactory(container))
+                } else {
+                    viewModel(factory = moviesFactory(container))
+                }
                 val movieId = backStackEntry.arguments?.getString("movieId").orEmpty()
                 LaunchedEffect(movieId) { moviesViewModel.loadDetails(movieId) }
                 PlaybackBackgroundHandler(
@@ -448,12 +513,25 @@ fun WatchioNativeApp(
                 )
                 val playerState by container.playerManager.state.collectAsStateWithLifecycle()
                 val playerSettings by container.settingsRepository.playerSettings.collectAsStateWithLifecycle(initialValue = com.watchioiptv.nativeapp.domain.repository.PlayerSettings())
-                MoviePlayerScreen(
+                val detailsState by moviesViewModel.detailsState.collectAsStateWithLifecycle()
+                val movie = detailsState.details?.movie
+                val contentContext = PlayerContentContext.Movie(
+                    title = detailsState.details?.title ?: movie?.name ?: "Movie",
+                    year = detailsState.details?.releaseDate ?: movie?.rating,
+                    rating = detailsState.details?.rating ?: movie?.rating,
+                    runtime = detailsState.details?.runtime,
+                    genre = detailsState.details?.genre ?: movie?.genre,
+                    posterUrl = detailsState.details?.posterUrl ?: movie?.posterUrl,
+                )
+                WatchioFullscreenPlayerScreen(
                     playerState = playerState,
                     playerSettings = playerSettings,
                     playerManager = container.playerManager,
+                    contentContext = contentContext,
                     onPlayPause = moviesViewModel::playPause,
                     onSeek = moviesViewModel::seekBy,
+                    onRestart = moviesViewModel::restartPlayback,
+                    onRetry = container.playerManager::retry,
                     onClose = {
                         moviesViewModel.stopPlayback()
                         navController.popBackStack()
@@ -461,22 +539,7 @@ fun WatchioNativeApp(
                 )
             }
             composable("live") {
-                val liveViewModel: LiveTvViewModel = viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        @Suppress("UNCHECKED_CAST")
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return LiveTvViewModel(
-                                liveTvRepository = container.liveTvRepository,
-                                favoritesRepository = container.favoritesRepository,
-                                historyRepository = container.historyRepository,
-                                settingsRepository = container.settingsRepository,
-                                epgRefreshCoordinator = container.epgRefreshCoordinator,
-                                playerManager = container.playerManager,
-                                clock = SystemWatchioClock,
-                            ) as T
-                        }
-                    },
-                )
+                val liveViewModel: LiveTvViewModel = viewModel(factory = liveTvFactory(container))
                 val state by liveViewModel.combinedState.collectAsStateWithLifecycle()
                 PlaybackBackgroundHandler(
                     onBackground = liveViewModel::pauseForBackground,
@@ -502,22 +565,7 @@ fun WatchioNativeApp(
             }
             composable("live/{channelId}") { backStackEntry ->
                 val channelId = backStackEntry.arguments?.getString("channelId")
-                val liveViewModel: LiveTvViewModel = viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        @Suppress("UNCHECKED_CAST")
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return LiveTvViewModel(
-                                liveTvRepository = container.liveTvRepository,
-                                favoritesRepository = container.favoritesRepository,
-                                historyRepository = container.historyRepository,
-                                settingsRepository = container.settingsRepository,
-                                epgRefreshCoordinator = container.epgRefreshCoordinator,
-                                playerManager = container.playerManager,
-                                clock = SystemWatchioClock,
-                            ) as T
-                        }
-                    },
-                )
+                val liveViewModel: LiveTvViewModel = viewModel(factory = liveTvFactory(container))
                 LaunchedEffect(channelId) {
                     if (!channelId.isNullOrBlank()) {
                         liveViewModel.selectChannelById(channelId)
@@ -546,23 +594,46 @@ fun WatchioNativeApp(
                     },
                 )
             }
-            composable("live/fullscreen") {
+            composable("live/fullscreen") { backStackEntry ->
+                val liveBackStackEntry = remember(backStackEntry) {
+                    runCatching { navController.getBackStackEntry("live") }.getOrNull()
+                        ?: runCatching { navController.previousBackStackEntry }.getOrNull()
+                }
+                val liveViewModel: LiveTvViewModel = if (liveBackStackEntry != null) {
+                    viewModel(viewModelStoreOwner = liveBackStackEntry, factory = liveTvFactory(container))
+                } else {
+                    viewModel(factory = liveTvFactory(container))
+                }
+                val liveState by liveViewModel.uiState.collectAsStateWithLifecycle()
                 val playerState by container.playerManager.state.collectAsStateWithLifecycle()
                 val playerSettings by container.settingsRepository.playerSettings.collectAsStateWithLifecycle(initialValue = com.watchioiptv.nativeapp.domain.repository.PlayerSettings())
                 PlaybackBackgroundHandler(
-                    onBackground = container.playerManager::pause,
+                    onBackground = liveViewModel::pauseForBackground,
                     setHandler = { backgroundPlaybackHandler = it },
                 )
-                FullscreenPlayerScreen(
+                val selected = liveState.selectedChannel
+                val nowNext = liveState.nowNext
+                val contentContext = PlayerContentContext.Live(
+                    channelName = selected?.name ?: "Live TV",
+                    channelLogoUrl = selected?.logoUrl,
+                    programmeTitle = nowNext.currentTitle ?: "Live Broadcast",
+                    programmeStartTime = formatEpochToTime(nowNext.currentStartEpochMs),
+                    programmeEndTime = formatEpochToTime(nowNext.currentEndEpochMs),
+                    programmeProgress = nowNext.progress,
+                    hasPreviousChannel = liveViewModel.hasPreviousChannel(),
+                    hasNextChannel = liveViewModel.hasNextChannel(),
+                    onChannelsClick = { navController.popBackStack() },
+                    onPreviousChannel = liveViewModel::selectPreviousChannel,
+                    onNextChannel = liveViewModel::selectNextChannel,
+                )
+                WatchioFullscreenPlayerScreen(
                     playerState = playerState,
                     playerSettings = playerSettings,
                     playerManager = container.playerManager,
-                    onPlayPause = {
-                        when (playerState) {
-                            is com.watchioiptv.nativeapp.core.player.WatchioPlayerState.Playing -> container.playerManager.pause()
-                            else -> container.playerManager.play()
-                        }
-                    },
+                    contentContext = contentContext,
+                    onPlayPause = liveViewModel::playPause,
+                    onSeek = { delta -> container.playerManager.seekBy(delta) },
+                    onRestart = container.playerManager::restart,
                     onRetry = container.playerManager::retry,
                     onClose = { navController.popBackStack() },
                 )
@@ -691,6 +762,7 @@ fun WatchioNativeApp(
                     PlayerSettingsContent(
                         state = state,
                         onAutoResume = settingsViewModel::setAutoResume,
+                        onAutoPlayNextEpisode = settingsViewModel::setAutoPlayNextEpisode,
                         onAutoPlayLive = settingsViewModel::setAutoPlayLiveChannel,
                         onRememberLastLive = settingsViewModel::setRememberLastLiveChannel,
                         onShowControls = settingsViewModel::setShowPlayerControls,
@@ -708,7 +780,16 @@ fun WatchioNativeApp(
                 SettingsPlaceholderScreen("Backup & Restore", "Backup and restore is not configured yet.", onBack = { navController.popBackStack() })
             }
             composable("settings/updates") {
-                SettingsPlaceholderScreen("Check for Updates", "Update system not configured yet.", onBack = { navController.popBackStack() })
+                val updatesViewModel: UpdatesViewModel = viewModel(factory = updatesFactory(container))
+                val state by updatesViewModel.state.collectAsStateWithLifecycle()
+                SettingsDetailScreen("Check for Updates", onBack = { navController.popBackStack() }) {
+                    UpdatesScreen(
+                        state = state,
+                        onCheck = updatesViewModel::checkForUpdates,
+                        onDownload = updatesViewModel::downloadUpdate,
+                        onPermissionRequired = updatesViewModel::installPermissionRequired,
+                    )
+                }
             }
             composable("settings/appearance") {
                 val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory(container))
@@ -1882,6 +1963,14 @@ private fun accountInformationFactory(container: AppContainer): ViewModelProvide
         }
     }
 
+private fun updatesFactory(container: AppContainer): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            return UpdatesViewModel(container.updateRepository) as T
+        }
+    }
+
 @Composable
 private fun SettingsRootScreen(
     onProviderManagement: () -> Unit,
@@ -2248,6 +2337,7 @@ private fun StreamFormatSettingsContent(
 private fun PlayerSettingsContent(
     state: SettingsUiState,
     onAutoResume: (Boolean) -> Unit,
+    onAutoPlayNextEpisode: (Boolean) -> Unit,
     onAutoPlayLive: (Boolean) -> Unit,
     onRememberLastLive: (Boolean) -> Unit,
     onShowControls: (Boolean) -> Unit,
@@ -2267,6 +2357,12 @@ private fun PlayerSettingsContent(
             description = "Use saved movie and episode progress for normal play.",
             checked = settings.autoResume,
             onClick = { onAutoResume(!settings.autoResume) },
+        )
+        BooleanSettingCard(
+            title = "Auto Play Next Episode",
+            description = "Automatically play the next episode when the current one ends.",
+            checked = settings.autoPlayNextEpisode,
+            onClick = { onAutoPlayNextEpisode(!settings.autoPlayNextEpisode) },
         )
         BooleanSettingCard(
             title = "Auto Play Live Channel",
@@ -2508,3 +2604,29 @@ private fun settingsFactory(container: AppContainer): ViewModelProvider.Factory 
             return SettingsViewModel(container.settingsRepository, container.epgRefreshCoordinator) as T
         }
     }
+
+private fun liveTvFactory(container: AppContainer): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            return LiveTvViewModel(
+                liveTvRepository = container.liveTvRepository,
+                favoritesRepository = container.favoritesRepository,
+                historyRepository = container.historyRepository,
+                settingsRepository = container.settingsRepository,
+                epgRefreshCoordinator = container.epgRefreshCoordinator,
+                playerManager = container.playerManager,
+                clock = SystemWatchioClock,
+            ) as T
+        }
+    }
+
+private fun formatEpochToTime(epochMs: Long?): String? {
+    if (epochMs == null || epochMs <= 0L) return null
+    return try {
+        DateTimeFormatter.ofPattern("HH:mm")
+            .format(Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()))
+    } catch (_: Exception) {
+        null
+    }
+}

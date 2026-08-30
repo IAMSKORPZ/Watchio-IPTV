@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import androidx.datastore.preferences.preferencesDataStore
 import android.net.Uri
 import androidx.room.Room
+import com.watchioiptv.nativeapp.BuildConfig
 import com.watchioiptv.nativeapp.core.database.WatchioDatabase
 import com.watchioiptv.nativeapp.core.database.WatchioMigrations
 import com.watchioiptv.nativeapp.core.datastore.WatchioSettingsRepository
@@ -28,6 +29,7 @@ import com.watchioiptv.nativeapp.data.library.SearchRepository
 import com.watchioiptv.nativeapp.data.m3u.M3uRepository
 import com.watchioiptv.nativeapp.data.movies.MoviesRepository
 import com.watchioiptv.nativeapp.data.series.SeriesRepository
+import com.watchioiptv.nativeapp.data.updates.UpdateRepository
 import com.watchioiptv.nativeapp.data.xtream.XtreamPlaybackUrlResolver
 import com.watchioiptv.nativeapp.data.xtream.XtreamRepository
 import com.watchioiptv.nativeapp.domain.playback.PlaybackUrlResolver
@@ -147,4 +149,16 @@ class AppContainer(context: Context) {
         favoritesRepository = favoritesRepository,
         historyRepository = historyRepository,
     )
+    val updateRepository = UpdateRepository(
+        context = appContext,
+        okHttpClient = networkModule.okHttpClient,
+        manifestUrl = if (BuildConfig.APPLICATION_ID.endsWith(".uitest")) UpdateRepository.UITEST_MANIFEST_URL else null,
+    )
+
+    init {
+        xtreamRepository.onMoviesUpdated = { moviesRepository.invalidateCache(it) }
+        m3uRepository.onMoviesUpdated = { moviesRepository.invalidateCache(it) }
+        xtreamRepository.onSeriesUpdated = { seriesRepository.invalidateCache(it) }
+        m3uRepository.onSeriesUpdated = { seriesRepository.invalidateCache(it) }
+    }
 }

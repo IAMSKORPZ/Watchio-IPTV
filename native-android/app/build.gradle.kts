@@ -14,8 +14,8 @@ android {
         applicationId = "com.watchioiptv.nativeapp"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-phase1"
+        versionCode = 4
+        versionName = "0.1.0-dev.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val tmdbApiKey = providers.gradleProperty("WATCHIO_TMDB_API_KEY")
             .orElse(providers.environmentVariable("WATCHIO_TMDB_API_KEY"))
@@ -26,6 +26,26 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    signingConfigs {
+        val devKeystorePath = providers.environmentVariable("WATCHIO_DEV_KEYSTORE_PATH")
+        val devKeystorePassword = providers.environmentVariable("WATCHIO_DEV_KEYSTORE_PASSWORD")
+        val devKeyAlias = providers.environmentVariable("WATCHIO_DEV_KEY_ALIAS")
+        val devKeyPassword = providers.environmentVariable("WATCHIO_DEV_KEY_PASSWORD")
+        if (
+            devKeystorePath.isPresent &&
+            devKeystorePassword.isPresent &&
+            devKeyAlias.isPresent &&
+            devKeyPassword.isPresent
+        ) {
+            getByName("debug") {
+                storeFile = file(devKeystorePath.get())
+                storePassword = devKeystorePassword.get()
+                keyAlias = devKeyAlias.get()
+                keyPassword = devKeyPassword.get()
+            }
+        }
     }
 
     sourceSets {

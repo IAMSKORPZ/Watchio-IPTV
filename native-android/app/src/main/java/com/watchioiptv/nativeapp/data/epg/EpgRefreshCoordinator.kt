@@ -10,12 +10,13 @@ data class EpgRefreshSummary(
     val failedProviders: Int,
 )
 
-class EpgRefreshCoordinator(
-    private val database: WatchioDatabase,
-    private val epgRepository: EpgRepository,
+open class EpgRefreshCoordinator(
+    private val database: WatchioDatabase? = null,
+    private val epgRepository: EpgRepository? = null,
 ) {
-    suspend fun refreshAllEnabledProviders(): EpgRefreshSummary {
-        val providers = database.providerDao().getAll().filter { it.enabled }
+    open suspend fun refreshAllEnabledProviders(): EpgRefreshSummary {
+        val db = database ?: return EpgRefreshSummary(0, 0)
+        val providers = db.providerDao().getAll().filter { it.enabled }
         var success = 0
         var failure = 0
         providers.forEach { provider ->
@@ -25,13 +26,13 @@ class EpgRefreshCoordinator(
         return EpgRefreshSummary(success, failure)
     }
 
-    suspend fun refreshProvider(providerId: String): EpgImportResult =
+    open suspend fun refreshProvider(providerId: String): EpgImportResult =
         lockFor(providerId).withLock {
-            epgRepository.refresh(providerId)
+            epgRepository?.refresh(providerId) ?: EpgImportResult(providerId, 0, 0)
         }
 
-    suspend fun latestSuccessForProvider(providerId: String?): Long? =
-        providerId?.let { database.epgDao().latestSuccess(it) }
+    open suspend fun latestSuccessForProvider(providerId: String?): Long? =
+        providerId?.let { database?.epgDao()?.latestSuccess(it) }
 
     companion object {
         private val locks = ConcurrentHashMap<String, Mutex>()

@@ -30,6 +30,8 @@ class XtreamRepository(
     private val retrofitFactory: (String) -> Retrofit,
     private val clock: WatchioClock,
 ) {
+    var onMoviesUpdated: ((ProviderId) -> Unit)? = null
+    var onSeriesUpdated: ((ProviderId) -> Unit)? = null
     private val _state = MutableStateFlow<XtreamImportState>(XtreamImportState.Idle)
     val state: Flow<XtreamImportState> = _state
 
@@ -115,6 +117,7 @@ class XtreamRepository(
                     database.vodDao().replaceMovies(providerId.value, movies.map { it.toEntity(now) })
                     database.providerDao().upsert(provider.copy(updatedAtEpochMs = now).toDomain().toEntity())
                 }
+                onMoviesUpdated?.invoke(providerId)
                 settingsRepository.setSectionRefreshEpochMs(providerId, ContentType.Movie, now)
                 return XtreamImportState.Success(providerId, 0, movies.size, 0)
             }
@@ -128,6 +131,7 @@ class XtreamRepository(
                     database.seriesDao().replaceSeries(providerId.value, series.map { it.toEntity(now) })
                     database.providerDao().upsert(provider.copy(updatedAtEpochMs = now).toDomain().toEntity())
                 }
+                onSeriesUpdated?.invoke(providerId)
                 settingsRepository.setSectionRefreshEpochMs(providerId, ContentType.Series, now)
                 return XtreamImportState.Success(providerId, 0, 0, series.size)
             }
@@ -209,6 +213,8 @@ class XtreamRepository(
                 database.vodDao().replaceMovies(providerId.value, movies.map { it.toEntity(now) })
                 database.seriesDao().replaceSeries(providerId.value, series.map { it.toEntity(now) })
             }
+            onMoviesUpdated?.invoke(providerId)
+            onSeriesUpdated?.invoke(providerId)
             settingsRepository.setSelectedProviderId(providerId)
             settingsRepository.setProviderExpiryEpochMs(providerId, auth.expiration?.toLongOrNull()?.let { it * 1_000L })
             settingsRepository.persistAccountMetadata(providerId, auth)
