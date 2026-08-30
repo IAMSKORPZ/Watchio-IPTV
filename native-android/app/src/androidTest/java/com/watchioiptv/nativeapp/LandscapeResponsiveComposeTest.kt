@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -16,11 +17,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
@@ -3499,9 +3502,29 @@ class LandscapeResponsiveComposeTest {
 
         composeRule.waitForIdle()
 
-        // Season selector button is visible
+        // Season selector button is visible and there is exactly ONE selector on screen
+        assertEquals(
+            "There must be exactly one season selector on screen",
+            1,
+            composeRule.onAllNodesWithTag("series-season-selector-button").fetchSemanticsNodes().size,
+        )
         composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithText("Season 1 ▼").assertIsDisplayed()
+
+        // Verify Season selector sits directly under Episodes / Cast tabs in left column
+        val tabsBounds = composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val seasonBounds = composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        assertTrue("Season selector must sit below Episodes tab", seasonBounds.top >= tabsBounds.bottom)
+        assertTrue("Season selector must align horizontally with left column", seasonBounds.left <= tabsBounds.left)
+
+        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.RequestFocus)
+        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).assertIsFocused()
+        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).performKeyInput {
+            pressKey(Key.DirectionDown)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).assertIsFocused()
 
         // Click Season selector button to open dialog
         composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).performClick()

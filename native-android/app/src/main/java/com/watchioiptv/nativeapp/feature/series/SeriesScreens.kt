@@ -676,8 +676,8 @@ fun SeriesDetailsScreen(
                 item(key = "series_hero") {
                     BoxWithConstraints(Modifier.fillMaxWidth()) {
                         val compactLandscape = maxWidth < 980.dp
-                        val posterWidth = if (compactLandscape) 140.dp else 165.dp
-                        val gap = if (compactLandscape) 20.dp else 28.dp
+                        val posterWidth = if (compactLandscape) 120.dp else 150.dp
+                        val gap = if (compactLandscape) 18.dp else 26.dp
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -725,9 +725,22 @@ fun SeriesDetailsScreen(
                                         modifier = Modifier.weight(1f).testTag("series-tab-cast"),
                                     )
                                 }
+                                if (details.seasons.isNotEmpty()) {
+                                    val currentSeason = details.seasons.firstOrNull { it.seasonNumber == state.selectedSeasonNumber }
+                                        ?: details.seasons.firstOrNull()
+                                    val seasonBtnText = currentSeason?.name ?: "Season ${state.selectedSeasonNumber ?: 1}"
+                                    SeasonSelectorButton(
+                                        title = "$seasonBtnText ▼",
+                                        accent = colors.seriesAccent,
+                                        onClick = { showSeasonDialog = true },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("series-season-selector-button"),
+                                    )
+                                }
                             }
 
-                            // Right column: Title, Meta, Actions, Details, Plot, Season Selector
+                            // Right column: Title, Meta, Actions, Details, Plot
                             Column(
                                 modifier = Modifier.weight(1f),
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -826,17 +839,6 @@ fun SeriesDetailsScreen(
                                         modifier = Modifier
                                             .fillMaxWidth(0.95f)
                                             .testTag("series-plot-text"),
-                                    )
-                                }
-                                if (state.activeTab == "episodes" && details.seasons.isNotEmpty()) {
-                                    val currentSeason = details.seasons.firstOrNull { it.seasonNumber == state.selectedSeasonNumber }
-                                        ?: details.seasons.firstOrNull()
-                                    val seasonBtnText = currentSeason?.name ?: "Season ${state.selectedSeasonNumber ?: 1}"
-                                    SeasonSelectorButton(
-                                        title = "$seasonBtnText ▼",
-                                        accent = colors.seriesAccent,
-                                        onClick = { showSeasonDialog = true },
-                                        modifier = Modifier.testTag("series-season-selector-button"),
                                     )
                                 }
                             }
