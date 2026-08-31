@@ -20,7 +20,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: watchio-dev-release
+  group: watchio-dev-release-dispatch
   cancel-in-progress: false
 
 jobs:
