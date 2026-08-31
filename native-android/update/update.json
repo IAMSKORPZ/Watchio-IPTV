@@ -1,24 +1,18 @@
 {
   "schemaVersion": 1,
   "channel": "dev",
-  "versionCode": 4,
-  "versionName": "0.1.0-dev.3-debug",
+  "versionCode": 5,
+  "versionName": "0.1.0-dev.4-debug",
   "minimumSupportedVersionCode": 1,
   "mandatory": false,
-  "publishedAt": "2026-08-28T22:09:19.358937Z",
+  "publishedAt": "2026-08-31T16:25:01.599915Z",
   "releaseNotes": [
-    "Automated development release pipeline is now active.",
-    "- Polished the Updates experience.",
-    "- Improved update download progress and status information.",
-    "- Improved update verification and installation states.",
-    "- Added secure automated GitHub development releases.",
-    "- Added development signing certificate verification.",
-    "- Improved Android TV and remote-friendly update UX."
+    "Watchio v0.1.0-dev.4 development checkpoint Improved Movies and TV Shows performance with 150-item paged catalog loading Prevented full Movies and TV Shows catalog hydration during startup Kept TV Shows startup at zero provider-wide episode loading Improved TV performance for large IPTV libraries Added Movies Continue Watching with resume progress Added TV Shows Continue Watching with exact episode resume support Added VOD resume playback and completion tracking Added Next Episode countdown and autoplay support Improved Movie Details layout and navigation Improved TV Show Details and season selection layout Improved season selector D-pad focus and focus restoration Added persistent Live TV browsing position Improved rapid Live TV channel surfing behaviour Added TV remote shortcuts for previous and next Live TV channels Added double-Back-to-exit behaviour for Android TV, Google TV and Fire TV Improved fullscreen Media3 player controls for Live TV, Movies and Episodes Preserved shared Live TV preview and fullsc"
   ],
-  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.3",
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.4",
   "apk": {
-    "fileName": "watchio-dev-0.1.0-dev.3-debug.apk",
-    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.3/watchio-dev-0.1.0-dev.3-debug.apk",
-    "sha256": "3fd107cb8077ca40d49e0acf7d3676893e6429253ce069bba690b322b86c139b"
+    "fileName": "watchio-dev-0.1.0-dev.4-debug.apk",
+    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.4/watchio-dev-0.1.0-dev.4-debug.apk",
+    "sha256": "95062c261002e19a7d2547abb42d91042df95a942c2efa3f82896c9c22014e14"
   }
 }
