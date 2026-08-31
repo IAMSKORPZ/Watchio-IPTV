@@ -833,14 +833,13 @@ fun WatchioNativeApp(
             composable("settings/updates") {
                 val updatesViewModel: UpdatesViewModel = viewModel(factory = updatesFactory(container))
                 val state by updatesViewModel.state.collectAsStateWithLifecycle()
-                SettingsDetailScreen("Check for Updates", onBack = { navController.popBackStack() }) {
-                    UpdatesScreen(
-                        state = state,
-                        onCheck = updatesViewModel::checkForUpdates,
-                        onDownload = updatesViewModel::downloadUpdate,
-                        onPermissionRequired = updatesViewModel::installPermissionRequired,
-                    )
-                }
+                UpdatesScreen(
+                    state = state,
+                    onBack = { navController.popBackStack() },
+                    onCheck = updatesViewModel::checkForUpdates,
+                    onDownload = updatesViewModel::downloadUpdate,
+                    onPermissionRequired = updatesViewModel::installPermissionRequired,
+                )
             }
             composable("settings/appearance") {
                 val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory(container))

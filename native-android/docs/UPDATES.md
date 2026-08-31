@@ -71,7 +71,7 @@ Remote release notes are rendered as plain text, not HTML.
 
 ## Updates Screen UX
 
-The screen is user-driven:
+Updates is a standalone Watchio page with a shared `WatchioPageHeader` titled `UPDATES`. TV uses a two-column status/action layout; smaller screens stack the same content. The screen is user-driven:
 
 - opening the screen may check the manifest
 - it never downloads automatically
@@ -80,6 +80,7 @@ The screen is user-driven:
 - verifying shows a short integrity-check message
 - release notes are plain text and capped for readability
 - only buttons are focusable; status and release-note cards are display-only
+- default TV focus lands on the active primary action when one is available
 
 ## Development Signing Limits
 

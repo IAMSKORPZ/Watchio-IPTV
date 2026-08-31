@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Redesigns Updates as a dedicated Watchio screen with TV remote focus, responsive layouts, and preserved secure update flow.
 - Adds the Watchio Announcements inbox with an unread header badge and cached offline announcements.
 - Supports read and archive state, polished detail views, and full TV remote navigation.
 - Integrates the authoritative `UpdateRepository` with announcements to generate in-memory update notices with release notes and `UPDATE NOW` actions.

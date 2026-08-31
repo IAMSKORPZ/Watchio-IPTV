@@ -17,7 +17,7 @@ Watchio supports Android phones and tablets, Android TV, Google TV, Sony BRAVIA,
 - Android TV icon-only header actions and stable remote focus
 - Announcements inbox with a remote GitHub feed, persistent read/unread state, and cached offline viewing
 - TV/Fire TV double-Back exit: first Back shows a toast; second Back within two seconds exits
-- In-app development update checks with APK SHA-256 verification and secure installer handoff
+- Full-screen Watchio updater with responsive TV/mobile layouts, SHA-256 verification, and secure installer handoff
 
 Movies and Series catalogs use Room-backed `LIMIT`/`OFFSET` windows (page size 150). Watchio does not hydrate full provider catalogs or provider-wide episode lists when opening those tabs.
 
