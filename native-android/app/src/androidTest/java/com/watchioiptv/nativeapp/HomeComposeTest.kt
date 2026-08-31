@@ -1,6 +1,7 @@
 package com.watchioiptv.nativeapp
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -115,6 +116,24 @@ class HomeComposeTest {
         composeRule.onNodeWithTag("global-search-panel").assertIsDisplayed()
         composeRule.onNodeWithTag("global-search-field").assertIsDisplayed()
         composeRule.onNodeWithTag("global-search-close").performClick()
+    }
+
+    @Test
+    fun announcementsBellOpensListDetailsAndBackReturnsHome() {
+        enterConfiguredOrProviderSetup()
+        if (composeRule.onAllNodes(hasText("XTREAM CODES")).fetchSemanticsNodes().isNotEmpty()) return
+
+        composeRule.onNodeWithContentDescription("Announcements").assertIsDisplayed().performClick()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithTag("announcements-list").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("announcement-uitest-update").assertIsFocused()
+        composeRule.onNodeWithTag("announcement-uitest-update").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("announcement-details").assertIsDisplayed()
+        composeRule.onNodeWithTag("announcement-detail-back-icon").performClick()
+        composeRule.onNodeWithTag("announcements-list").assertIsDisplayed()
+        composeRule.onNodeWithTag("announcements-back-icon").performClick()
+        composeRule.onNodeWithTag("home-screen").assertIsDisplayed()
     }
 
     private fun enterConfiguredOrProviderSetup() {

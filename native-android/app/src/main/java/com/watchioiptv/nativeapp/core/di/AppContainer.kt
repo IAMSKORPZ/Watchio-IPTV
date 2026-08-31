@@ -20,6 +20,10 @@ import com.watchioiptv.nativeapp.data.RoomCatalogRepository
 import com.watchioiptv.nativeapp.data.RoomFavoritesRepository
 import com.watchioiptv.nativeapp.data.RoomHistoryRepository
 import com.watchioiptv.nativeapp.data.RoomProviderRepository
+import com.watchioiptv.nativeapp.data.announcements.AnnouncementRepository
+import com.watchioiptv.nativeapp.data.announcements.DataStoreAnnouncementLocalStore
+import com.watchioiptv.nativeapp.data.announcements.GitHubAnnouncementRemoteDataSource
+import com.watchioiptv.nativeapp.data.announcements.StaticAnnouncementRemoteDataSource
 import com.watchioiptv.nativeapp.data.epg.EpgRepository
 import com.watchioiptv.nativeapp.data.epg.EpgRefreshCoordinator
 import com.watchioiptv.nativeapp.data.epg.EpgAutoRefreshScheduler
@@ -59,6 +63,15 @@ class AppContainer(context: Context) {
     val secretStore: SecretStore = AndroidSecretStore(appContext)
     val providerCredentialStore = ProviderCredentialStore(secretStore)
     val networkModule = NetworkModule()
+    private val announcementRemote = if (BuildConfig.APPLICATION_ID.endsWith(".uitest")) {
+        StaticAnnouncementRemoteDataSource(UITEST_ANNOUNCEMENT_FEED)
+    } else {
+        GitHubAnnouncementRemoteDataSource(networkModule.okHttpClient)
+    }
+    val announcementRepository = AnnouncementRepository(
+        remote = announcementRemote,
+        local = DataStoreAnnouncementLocalStore(appContext.watchioDataStore),
+    )
     @SuppressLint("UnsafeOptInUsageError")
     val playerManager: WatchioPlayerManager = Media3WatchioPlayerManager(appContext, settingsRepository)
     val providerRepository: ProviderRepository = RoomProviderRepository(
@@ -160,5 +173,9 @@ class AppContainer(context: Context) {
         m3uRepository.onMoviesUpdated = { moviesRepository.invalidateCache(it) }
         xtreamRepository.onSeriesUpdated = { seriesRepository.invalidateCache(it) }
         m3uRepository.onSeriesUpdated = { seriesRepository.invalidateCache(it) }
+    }
+
+    private companion object {
+        const val UITEST_ANNOUNCEMENT_FEED = """{"version":1,"announcements":[{"id":"uitest-welcome","title":"Welcome to Announcements","body":"Deterministic Watchio test announcement.","publishedAt":"2026-08-31T16:00:00Z","type":"GENERAL","priority":"NORMAL","dismissible":true,"action":null},{"id":"uitest-update","title":"Watchio Update","body":"Update action test.","publishedAt":"2026-08-31T17:00:00Z","type":"UPDATE","priority":"IMPORTANT","dismissible":true,"action":{"type":"OPEN_UPDATER","label":"UPDATE NOW"}}]}"""
     }
 }

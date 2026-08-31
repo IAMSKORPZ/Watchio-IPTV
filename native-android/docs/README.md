@@ -9,6 +9,7 @@ This directory is the authoritative documentation set for the current Watchio na
 - `TESTING.md` - unit, lint, build, and isolated connected testing
 - `TEST_ISOLATION.md` - package isolation and real-device data safety
 - `UPDATES.md` - GitHub Releases update manifest and APK distribution flow
+- `ANNOUNCEMENTS.md` - remote feed format, local state, caching, and actions
 
 ## Architecture
 
@@ -29,6 +30,7 @@ This directory is the authoritative documentation set for the current Watchio na
 - `SETTINGS.md`
 - `SETTINGS_MENU.md`
 - `ONBOARDING.md`
+- `ANNOUNCEMENTS.md`
 
 ## Playback
 

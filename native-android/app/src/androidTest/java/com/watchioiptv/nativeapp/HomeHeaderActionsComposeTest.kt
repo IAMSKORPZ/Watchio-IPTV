@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.watchioiptv.nativeapp.ui.HomeTopBar
@@ -46,6 +47,7 @@ class HomeHeaderActionsComposeTest {
                         onSports = { sportsClicked = true },
                         onAnnouncements = { announcementsClicked = true },
                         onProviders = { playlistClicked = true },
+                        announcementUnreadCount = 12,
                     )
                 }
             }
@@ -74,5 +76,7 @@ class HomeHeaderActionsComposeTest {
         }
         assertTrue(searchClicked && sportsClicked && announcementsClicked && playlistClicked)
         assertTrue("header actions must preserve left-to-right DPAD order", leftEdges == leftEdges.sorted())
+        composeRule.onNodeWithTag("home-announcements-badge").assertIsDisplayed()
+        composeRule.onNodeWithText("9+").assertIsDisplayed()
     }
 }

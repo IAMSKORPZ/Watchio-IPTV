@@ -15,6 +15,7 @@ Watchio supports Android phones and tablets, Android TV, Google TV, Sony BRAVIA,
 - Continue Watching for resumable movies and episodes
 - Media3 / ExoPlayer playback with subtitle, audio-track, aspect-ratio, speed, overlay, and error controls
 - Android TV icon-only header actions and stable remote focus
+- Announcements inbox with a remote GitHub feed, persistent read/unread state, and cached offline viewing
 - TV/Fire TV double-Back exit: first Back shows a toast; second Back within two seconds exits
 - In-app development update checks with APK SHA-256 verification and secure installer handoff
 
@@ -75,6 +76,7 @@ Test `dev` first, then fast-forward `main` to that exact commit. Development APK
 - `native-android/docs/README.md`: documentation index
 - `native-android/docs/ARCHITECTURE.md`: package map and boundaries
 - `native-android/docs/TESTING.md`: local and connected test guidance
+- `native-android/docs/ANNOUNCEMENTS.md`: feed format, caching, and announcement actions
 - `native-android/docs/SECURITY.md`: credentials and URL-masking rules
 - `CHANGELOG.md`: checkpoint history
 

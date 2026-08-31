@@ -2,6 +2,7 @@ package com.watchioiptv.nativeapp.ui
 
 import android.content.Intent
 import android.app.Activity
+import android.net.Uri
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -102,6 +103,8 @@ import com.watchioiptv.nativeapp.data.m3u.M3uImportState
 import com.watchioiptv.nativeapp.data.xtream.XtreamImportState
 import com.watchioiptv.nativeapp.BuildConfig
 import com.watchioiptv.nativeapp.feature.home.HomeViewModel
+import com.watchioiptv.nativeapp.feature.announcements.AnnouncementsScreen
+import com.watchioiptv.nativeapp.feature.announcements.AnnouncementsViewModel
 import com.watchioiptv.nativeapp.feature.bootstrap.BootstrapDestination
 import com.watchioiptv.nativeapp.feature.bootstrap.BootstrapViewModel
 import com.watchioiptv.nativeapp.feature.live.FullscreenPlayerScreen
@@ -137,6 +140,7 @@ import com.watchioiptv.nativeapp.feature.tvguide.TvGuideScreen
 import com.watchioiptv.nativeapp.feature.tvguide.TvGuideViewModel
 import com.watchioiptv.nativeapp.core.util.SystemWatchioClock
 import com.watchioiptv.nativeapp.domain.model.InputMode
+import com.watchioiptv.nativeapp.domain.model.AnnouncementAction
 import com.watchioiptv.nativeapp.domain.model.ProviderType
 import com.watchioiptv.nativeapp.domain.model.StreamFormat
 import com.watchioiptv.nativeapp.domain.repository.ControlAutoHideDelay
@@ -174,6 +178,15 @@ fun WatchioNativeApp(
     val inputMode by container.settingsRepository.inputMode.collectAsStateWithLifecycle(initialValue = InputMode.Auto)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val context = LocalContext.current
+    val announcementsViewModel: AnnouncementsViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T =
+                AnnouncementsViewModel(container.announcementRepository) as T
+        },
+    )
+    val announcementsState by announcementsViewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { announcementsViewModel.refresh() }
     var backgroundPlaybackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     AppBackgroundPlaybackEffect(
         onBackground = { (backgroundPlaybackHandler ?: container.playerManager::pause).invoke() },
@@ -280,7 +293,8 @@ fun WatchioNativeApp(
                     onSeries = { navController.navigate("series") },
                     onSearch = { navController.navigate("search") },
                     onSports = { navController.navigate("sports-placeholder") },
-                    onAnnouncements = { navController.navigate("announcements-placeholder") },
+                    onAnnouncements = { navController.navigate("announcements") },
+                    announcementUnreadCount = announcementsState.snapshot.unreadCount,
                     onRefreshLive = homeViewModel::refreshLive,
                     onRefreshMovies = homeViewModel::refreshMovies,
                     onRefreshSeries = homeViewModel::refreshSeries,
@@ -289,8 +303,28 @@ fun WatchioNativeApp(
             composable("sports-placeholder") {
                 HomePlaceholderScreen("Sports", "Sports will be added in a later Watchio phase.", onBack = { navController.popBackStack() })
             }
-            composable("announcements-placeholder") {
-                HomePlaceholderScreen("Announcements", "Announcements will be added in a later Watchio phase.", onBack = { navController.popBackStack() })
+            composable("announcements") {
+                LaunchedEffect(Unit) { announcementsViewModel.refresh() }
+                AnnouncementsScreen(
+                    state = announcementsState,
+                    onBack = { navController.popBackStack() },
+                    onRefresh = announcementsViewModel::refresh,
+                    onOpen = announcementsViewModel::open,
+                    onCloseDetails = announcementsViewModel::closeDetails,
+                    onDismiss = announcementsViewModel::dismiss,
+                    onToggleArchived = announcementsViewModel::toggleArchived,
+                    onAction = { action ->
+                        when (action) {
+                            is AnnouncementAction.OpenUpdater -> navController.navigate("settings/updates")
+                            is AnnouncementAction.OpenScreen -> navController.navigate(action.screen.route) { launchSingleTop = true }
+                            is AnnouncementAction.OpenUrl -> runCatching {
+                                val uri = Uri.parse(action.url)
+                                require(uri.scheme == "https" || uri.scheme == "http")
+                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                            }
+                        }
+                    },
+                )
             }
             composable("providers") {
                 val providersViewModel: ProviderManagementViewModel = viewModel(factory = providersFactory(container))
@@ -982,6 +1016,7 @@ private fun HomeScreen(
     onSearch: () -> Unit,
     onSports: () -> Unit,
     onAnnouncements: () -> Unit,
+    announcementUnreadCount: Int,
     onRefreshLive: () -> Unit,
     onRefreshMovies: () -> Unit,
     onRefreshSeries: () -> Unit,
@@ -1016,6 +1051,7 @@ private fun HomeScreen(
                 onSports = onSports,
                 onAnnouncements = onAnnouncements,
                 onProviders = onProviders,
+                announcementUnreadCount = announcementUnreadCount,
             )
             Spacer(Modifier.height(spacing.md))
             if (providerCount == 0) {
@@ -1520,6 +1556,7 @@ internal fun HomeTopBar(
     onSports: () -> Unit,
     onAnnouncements: () -> Unit,
     onProviders: () -> Unit,
+    announcementUnreadCount: Int = 0,
 ) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
@@ -1555,7 +1592,7 @@ internal fun HomeTopBar(
             ) {
                 HomeTopAction("Search", HomeIconKind.Search, colors.textPrimary, onSearch, contentDescription = "Search", testTag = "home-search")
                 HomeTopAction("Sports", HomeIconKind.Sports, colors.liveTvAccent, onSports)
-                HomeTopAction("Announcements", HomeIconKind.Announcement, colors.moviesAccent, onAnnouncements)
+                HomeTopAction("Announcements", HomeIconKind.Announcement, colors.moviesAccent, onAnnouncements, badgeCount = announcementUnreadCount)
                 HomeTopAction("Playlist", HomeIconKind.Provider, colors.seriesAccent, onProviders)
             }
         }
@@ -1625,22 +1662,43 @@ private fun HomeTopAction(
     onClick: () -> Unit,
     contentDescription: String = label,
     testTag: String = "home-action-${label.lowercase()}",
+    badgeCount: Int = 0,
 ) {
     val spacing = LocalWatchioSpacing.current
-    WatchioCard(
-        modifier = Modifier.size(52.dp).testTag(testTag),
-        accent = tint,
-        minWidth = 0.dp,
-        minHeight = 44.dp,
-        contentDescription = contentDescription,
-        onClick = onClick,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(horizontal = spacing.sm),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+    val colors = LocalWatchioColors.current
+    Box(Modifier.size(52.dp)) {
+        WatchioCard(
+            modifier = Modifier.fillMaxSize().testTag(testTag),
+            accent = tint,
+            minWidth = 0.dp,
+            minHeight = 44.dp,
+            contentDescription = contentDescription,
+            onClick = onClick,
         ) {
-            HomeVectorIcon(icon, tint, Modifier.size(24.dp))
+            Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = spacing.sm),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HomeVectorIcon(icon, tint, Modifier.size(24.dp))
+            }
+        }
+        if (badgeCount > 0) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(20.dp)
+                    .background(colors.moviesAccent, CircleShape)
+                    .testTag("home-announcements-badge"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = if (badgeCount > 9) "9+" else badgeCount.toString(),
+                    color = colors.surfaceBase,
+                    fontWeight = FontWeight.Bold,
+                    style = LocalWatchioTypography.current.label,
+                )
+            }
         }
     }
 }

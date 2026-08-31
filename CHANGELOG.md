@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Adds the Watchio Announcements inbox with an unread header badge and cached offline announcements.
+- Supports read and archive state, polished detail views, and full TV remote navigation.
+- Adds safe announcement actions and groundwork for future integration with the existing updater.
+
 ## 0.1.0-dev.3
 
 - Uses Room-backed 150-item windows for Movies and Series catalog browsing, while keeping full-catalog search in SQL.
