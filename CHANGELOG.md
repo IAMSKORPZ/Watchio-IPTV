@@ -4,7 +4,7 @@
 
 - Adds the Watchio Announcements inbox with an unread header badge and cached offline announcements.
 - Supports read and archive state, polished detail views, and full TV remote navigation.
-- Adds safe announcement actions and groundwork for future integration with the existing updater.
+- Integrates the authoritative `UpdateRepository` with announcements to generate in-memory update notices with release notes and `UPDATE NOW` actions.
 
 ## 0.1.0-dev.3
 

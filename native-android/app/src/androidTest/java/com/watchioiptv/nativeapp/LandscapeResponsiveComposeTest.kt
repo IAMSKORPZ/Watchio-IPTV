@@ -2124,7 +2124,9 @@ class LandscapeResponsiveComposeTest {
 
     private fun setLandscapeContent(content: @androidx.compose.runtime.Composable () -> Unit) {
         composeRule.runOnUiThread {
-            composeRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            if (composeRule.activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+                composeRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            }
         }
         composeRule.waitForIdle()
         composeRule.setContent(content)

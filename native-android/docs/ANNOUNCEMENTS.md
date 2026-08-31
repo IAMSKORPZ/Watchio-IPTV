@@ -32,3 +32,7 @@ Supported action objects:
 - `{"type":"OPEN_UPDATER","label":"UPDATE NOW"}` opens the existing updater screen without changing updater behavior.
 
 Unknown fields are ignored. A malformed announcement is skipped without discarding valid entries. A fetched feed replaces the cache only after successful feed parsing.
+
+## Updater Integration
+
+`UpdateRepository` is the authoritative source of truth for software updates. When a newer version is detected, `AnnouncementRepository` dynamically generates an in-memory `UPDATE` announcement with ID `update-<versionName>-<versionCode>`. It participates in read/unread and exact-version dismiss state, and contributes to the Home bell unread badge. Selecting `UPDATE NOW` triggers `AnnouncementAction.OpenUpdater` to route into the existing updater flow with full SHA-256 and signing validation.

@@ -12,16 +12,6 @@
       "action": null
     },
     {
-      "id": "watchio-v0.1.0-dev.4",
-      "title": "Watchio v0.1.0-dev.4",
-      "body": "A signed development checkpoint is available through Watchio's existing update system.",
-      "publishedAt": "2026-08-31T17:00:00Z",
-      "type": "UPDATE",
-      "priority": "IMPORTANT",
-      "dismissible": true,
-      "action": { "type": "OPEN_UPDATER", "label": "UPDATE NOW" }
-    },
-    {
       "id": "watchio-tv-performance-2026-08",
       "title": "TV Performance Improvements",
       "body": "Movies and Series now load progressively for faster browsing on Android TV and Fire TV devices.",

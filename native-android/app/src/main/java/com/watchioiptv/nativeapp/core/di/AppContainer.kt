@@ -30,6 +30,7 @@ import com.watchioiptv.nativeapp.data.epg.EpgAutoRefreshScheduler
 import com.watchioiptv.nativeapp.data.live.LiveTvRepository
 import com.watchioiptv.nativeapp.data.library.MyListRepository
 import com.watchioiptv.nativeapp.data.library.SearchRepository
+
 import com.watchioiptv.nativeapp.data.m3u.M3uRepository
 import com.watchioiptv.nativeapp.data.movies.MoviesRepository
 import com.watchioiptv.nativeapp.data.series.SeriesRepository
@@ -63,6 +64,7 @@ class AppContainer(context: Context) {
     val secretStore: SecretStore = AndroidSecretStore(appContext)
     val providerCredentialStore = ProviderCredentialStore(secretStore)
     val networkModule = NetworkModule()
+
     private val announcementRemote = if (BuildConfig.APPLICATION_ID.endsWith(".uitest")) {
         StaticAnnouncementRemoteDataSource(UITEST_ANNOUNCEMENT_FEED)
     } else {
@@ -71,6 +73,7 @@ class AppContainer(context: Context) {
     val announcementRepository = AnnouncementRepository(
         remote = announcementRemote,
         local = DataStoreAnnouncementLocalStore(appContext.watchioDataStore),
+        updateChecker = { updateRepository.checkForUpdates() },
     )
     @SuppressLint("UnsafeOptInUsageError")
     val playerManager: WatchioPlayerManager = Media3WatchioPlayerManager(appContext, settingsRepository)

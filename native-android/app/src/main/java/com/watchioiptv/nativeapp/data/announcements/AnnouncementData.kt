@@ -13,10 +13,13 @@ import com.watchioiptv.nativeapp.domain.model.AnnouncementPriority
 import com.watchioiptv.nativeapp.domain.model.AnnouncementScreen
 import com.watchioiptv.nativeapp.domain.model.AnnouncementSnapshot
 import com.watchioiptv.nativeapp.domain.model.AnnouncementType
+import com.watchioiptv.nativeapp.data.updates.UpdateAvailability
+import com.watchioiptv.nativeapp.data.updates.UpdateCheckResult
 import java.time.Clock
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -147,32 +150,75 @@ class DataStoreAnnouncementLocalStore(
 class AnnouncementRepository(
     private val remote: AnnouncementRemoteDataSource,
     private val local: AnnouncementLocalStore,
+    private val updateChecker: (suspend () -> UpdateCheckResult?)? = null,
     private val parser: AnnouncementFeedParser = AnnouncementFeedParser(),
     private val clock: Clock = Clock.systemUTC(),
 ) {
     private val refreshMutex = Mutex()
+    private val latestUpdate = MutableStateFlow<UpdateCheckResult?>(null)
 
-    val snapshot: Flow<AnnouncementSnapshot> = combine(local.cachedFeed, local.seenIds, local.dismissedIds) { raw, seen, dismissed ->
+    val snapshot: Flow<AnnouncementSnapshot> = combine(
+        local.cachedFeed,
+        local.seenIds,
+        local.dismissedIds,
+        latestUpdate,
+    ) { raw, seen, dismissed, updateResult ->
         val parsed = raw?.let { runCatching { parser.parse(it) }.getOrNull() }
-        val announcements = parsed.orEmpty()
+        val generatedUpdate = generateUpdateAnnouncement(updateResult)
+        val remoteList = parsed.orEmpty()
+        val allAnnouncements = if (generatedUpdate != null) {
+            listOf(generatedUpdate) + remoteList.filterNot {
+                it.id == generatedUpdate.id ||
+                    (it.type == AnnouncementType.UPDATE && it.title.contains(updateResult?.manifest?.versionName.orEmpty(), ignoreCase = true))
+            }
+        } else {
+            remoteList
+        }
+        val announcements = allAnnouncements
             .filterNot(::isExpired)
             .sortedByDescending { runCatching { Instant.parse(it.publishedAt) }.getOrNull() ?: Instant.MIN }
         AnnouncementSnapshot(
             items = announcements.map { AnnouncementItem(it, it.id in seen, it.id in dismissed) },
-            hasCachedFeed = parsed != null,
+            hasCachedFeed = parsed != null || generatedUpdate != null,
         )
     }
 
     suspend fun refresh(): Result<Unit> = refreshMutex.withLock {
-        runCatching {
+        val feedResult = runCatching {
             val raw = remote.fetch()
             parser.parse(raw)
             local.saveFeed(raw)
         }
+        val checker = updateChecker
+        if (checker != null) {
+            val update = runCatching { checker() }.getOrNull()
+            latestUpdate.value = update
+        }
+        feedResult
     }
 
     suspend fun markRead(id: String) = local.markSeen(id)
     suspend fun dismiss(id: String) = local.dismiss(id)
+
+    private fun generateUpdateAnnouncement(result: UpdateCheckResult?): Announcement? {
+        if (result == null || result.status != UpdateAvailability.UpdateAvailable) return null
+        val manifest = result.manifest
+        val bodyText = if (manifest.releaseNotes.isNotEmpty()) {
+            manifest.releaseNotes.joinToString("\n• ", prefix = "• ")
+        } else {
+            "A newer development build of Watchio is available."
+        }
+        return Announcement(
+            id = "update-${manifest.versionName}-${manifest.versionCode}",
+            title = "Watchio ${manifest.versionName} is available",
+            body = bodyText,
+            publishedAt = manifest.publishedAt.takeIf(String::isNotBlank) ?: "2026-08-31T00:00:00Z",
+            type = AnnouncementType.UPDATE,
+            priority = if (manifest.mandatory) AnnouncementPriority.CRITICAL else AnnouncementPriority.IMPORTANT,
+            action = AnnouncementAction.OpenUpdater(label = "UPDATE NOW"),
+            dismissible = !manifest.mandatory,
+        )
+    }
 
     private fun isExpired(announcement: Announcement): Boolean {
         val expiry = announcement.expiresAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return false
