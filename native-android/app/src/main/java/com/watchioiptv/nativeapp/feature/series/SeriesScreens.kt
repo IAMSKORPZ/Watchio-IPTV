@@ -46,6 +46,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +65,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -629,6 +631,7 @@ fun SeriesDetailsScreen(
     val details = state.details ?: return
     val resumeEpisode = state.resumeEpisode
     val firstFocus = remember { FocusRequester() }
+    val seasonSelectorFocus = remember { FocusRequester() }
     var resumeDialogRequest by remember { mutableStateOf<ResumePlaybackRequest?>(null) }
     var showSeasonDialog by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -745,9 +748,12 @@ fun SeriesDetailsScreen(
                                     SeasonSelectorButton(
                                         title = "$seasonBtnText ▼",
                                         accent = colors.seriesAccent,
-                                        onClick = { showSeasonDialog = true },
+                                        onClick = {
+                                            showSeasonDialog = true
+                                        },
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .focusRequester(seasonSelectorFocus)
                                             .testTag("series-season-selector-button"),
                                     )
                                 }
@@ -944,6 +950,7 @@ fun SeriesDetailsScreen(
                     onSeason(seasonNum)
                 },
                 onDismiss = { showSeasonDialog = false },
+                onDisposed = { seasonSelectorFocus.requestFocus() },
             )
         }
 
@@ -1125,14 +1132,15 @@ private fun SeasonSelectionDialog(
     selectedSeasonNumber: Int,
     onSelectSeason: (Int) -> Unit,
     onDismiss: () -> Unit,
+    onDisposed: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current
     val borders = LocalWatchioBorders.current
     val selectedFocus = remember { FocusRequester() }
-
-    LaunchedEffect(selectedSeasonNumber) {
-        selectedFocus.requestFocus()
+    LaunchedEffect(selectedSeasonNumber) { selectedFocus.requestFocus() }
+    DisposableEffect(Unit) {
+        onDispose(onDisposed)
     }
 
     AlertDialog(
@@ -1184,6 +1192,7 @@ private fun SeasonSelectionDialog(
                                 onClick = { onSelectSeason(season.seasonNumber) },
                             )
                             .focusable(interactionSource = interactionSource)
+                            .semantics { selected = isSelected }
                             .testTag("series-season-option-${season.seasonNumber}"),
                         color = if (focused) colors.seriesAccent.copy(alpha = 0.28f)
                         else if (isSelected) colors.seriesAccent.copy(alpha = 0.16f)

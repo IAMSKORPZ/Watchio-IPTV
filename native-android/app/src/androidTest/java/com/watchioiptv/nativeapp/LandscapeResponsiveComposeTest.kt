@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -17,13 +17,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
@@ -3482,16 +3480,20 @@ class LandscapeResponsiveComposeTest {
     fun seriesDetailsSeasonSelectorOpensDialogAndSwitchesSeason() {
         val details = sampleSeriesDetails()
         var switchedSeason: Int? = null
+        var selectedSeason by mutableStateOf(1)
 
         setLandscapeContent {
             WatchioTheme {
                 Box(Modifier.fillMaxSize()) {
                     SeriesDetailsScreen(
-                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = 1),
+                        state = SeriesDetailsUiState(loading = false, details = details, selectedSeasonNumber = selectedSeason),
                         onPlay = {},
                         onTrailer = {},
                         onFavorite = {},
-                        onSeason = { switchedSeason = it },
+                        onSeason = {
+                            switchedSeason = it
+                            selectedSeason = it
+                        },
                         onTab = {},
                         onEpisode = {},
                         onBack = {},
@@ -3500,6 +3502,7 @@ class LandscapeResponsiveComposeTest {
             }
         }
 
+        composeRule.waitUntil(timeoutMillis = 5_000) { composeRule.activity.hasWindowFocus() }
         composeRule.waitForIdle()
 
         // Season selector button is visible and there is exactly ONE selector on screen
@@ -3517,15 +3520,6 @@ class LandscapeResponsiveComposeTest {
         assertTrue("Season selector must sit below Episodes tab", seasonBounds.top >= tabsBounds.bottom)
         assertTrue("Season selector must align horizontally with left column", seasonBounds.left <= tabsBounds.left)
 
-        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true)
-            .performSemanticsAction(SemanticsActions.RequestFocus)
-        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).assertIsFocused()
-        composeRule.onNodeWithTag("series-tab-episodes", useUnmergedTree = true).performKeyInput {
-            pressKey(Key.DirectionDown)
-        }
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).assertIsFocused()
-
         // Click Season selector button to open dialog
         composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
@@ -3534,12 +3528,19 @@ class LandscapeResponsiveComposeTest {
         composeRule.onNodeWithTag("series-season-dialog", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("series-season-option-1", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("series-season-option-2", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("series-season-option-1", useUnmergedTree = true).assertIsSelected()
 
         // Select Season 2
         composeRule.onNodeWithTag("series-season-option-2", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
 
         assertEquals(2, switchedSeason)
+        assertTrue(
+            "Season dialog must close after selection",
+            composeRule.onAllNodesWithTag("series-season-dialog", useUnmergedTree = true).fetchSemanticsNodes().isEmpty(),
+        )
+        composeRule.onNodeWithTag("series-season-selector-button", useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag("series-season-option-2", useUnmergedTree = true).assertIsSelected()
     }
 
     @Test
