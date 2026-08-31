@@ -1,44 +1,28 @@
 # Watchio Native Android
 
-Kotlin-first Android implementation of Watchio IPTV.
+Current Watchio application: Kotlin-first IPTV player for phones, tablets, Android TV, Google TV, BRAVIA, Fire TV, and Firestick-compatible Android devices.
 
-This is the current active application. Playback is foreground-only, the Activity is landscape-oriented, and Media3 / ExoPlayer is the only player engine.
+## Architecture
 
-## Stack
+Jetpack Compose UI calls ViewModels, which coordinate repositories, Room v6, DataStore, secure credential storage, and provider APIs through AppContainer manual DI. Media3 / ExoPlayer is the only playback engine.
 
-- Kotlin
-- Jetpack Compose
-- AndroidX Media3 / ExoPlayer
-- Room v6
-- DataStore
-- WorkManager
-- OkHttp / Retrofit
-- SecretStore-backed provider credentials
+Supported providers and features include Xtream Codes, M3U/M3U8, XMLTV/EPG, Live TV, Movies, TV Shows, search, favourites, history, Continue Watching, resume playback, Next Episode, and autoplay.
 
-## Features
+Movies and Series use Room-backed `LIMIT`/`OFFSET` catalog windows of 150 items. Search remains SQL-backed, and opening Series does not load provider-wide episodes.
 
-- First-run device mode selection
-- Xtream login gate before Home
-- Xtream provider import, refresh, metadata, and playback URL resolution
-- M3U URL and local file providers
-- XMLTV / EPG import, cache, matching, current/next, TV Guide, and WorkManager refresh
-- Live TV preview/fullscreen, favourites, history, search, and EPG
-- Movies playback, details, resume, search, favourites, and history
-- Series, seasons, episodes, playback, resume, search, favourites, and history
-- My List, Continue Watching, Settings, themes, input mode, stream format, account info, and player settings
-- Android TV / BRAVIA / Fire TV remote navigation and phone/tablet touch support
+## TV behavior
+
+Remote/D-pad navigation and visible focus are first-class. Header actions use compact icons. TV and Fire TV require a second Back press within two seconds to exit; first Back shows confirmation. Nested screens and fullscreen playback keep their own Back behavior.
 
 ## Build
+
+Run from this directory:
 
 ```powershell
 .\gradlew.bat assembleDebug
 ```
 
-Debug APK:
-
-```text
-app\build\outputs\apk\debug\app-debug.apk
-```
+Debug APK: `app\build\outputs\apk\debug\app-debug.apk`
 
 ## Test
 
@@ -47,36 +31,18 @@ app\build\outputs\apk\debug\app-debug.apk
 .\gradlew.bat lintDebug
 .\gradlew.bat assembleDebug
 .\gradlew.bat assembleUitest
+.\gradlew.bat assembleUitestAndroidTest
 .\gradlew.bat connectedUitestAndroidTest
 ```
 
-Connected automation uses isolated packages:
+Use only isolated connected testing:
 
-- real manual app: `com.watchioiptv.nativeapp.debug`
-- isolated test app: `com.watchioiptv.nativeapp.uitest`
-- test runner: `com.watchioiptv.nativeapp.uitest.test`
+- Manual app: `com.watchioiptv.nativeapp.debug`
+- UI-test app: `com.watchioiptv.nativeapp.uitest`
+- Test runner: `com.watchioiptv.nativeapp.uitest.test`
 
-Do not run `connectedDebugAndroidTest` for normal automation. Do not uninstall or clear the real debug package on devices containing private provider data.
+Never run `connectedDebugAndroidTest` for normal automation. Do not uninstall or clear manual-app data. Install manual builds with `adb install -r` only. Do not modify BRAVIA through ADB; use its in-app updater.
 
-## Manual Device Install
+## Updates and docs
 
-```powershell
-adb devices -l
-adb -s <SERIAL> install -r app\build\outputs\apk\debug\app-debug.apk
-```
-
-Use scoped ADB when multiple devices are connected.
-
-Development releases are distributed through Settings -> Check for Updates and the manual GitHub Actions workflow `.github/workflows/dev-release.yml`. See `docs/UPDATES.md` before publishing a new dev update. Do not direct-install over the BRAVIA development app unless explicitly approved; use in-app updates there.
-
-## Documentation
-
-Start with:
-
-- `docs/README.md`
-- `docs/AI_HANDOFF.md`
-- `docs/ARCHITECTURE.md`
-- `docs/TESTING.md`
-- `docs/SECURITY.md`
-
-Historical migration context is archived under `docs/historical/`.
+Development releases use GitHub Actions and `update/update.json`; see `docs/UPDATES.md`. Start broader documentation at `docs/README.md`.

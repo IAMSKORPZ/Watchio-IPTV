@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0-dev.3
+
+- Uses Room-backed 150-item windows for Movies and Series catalog browsing, while keeping full-catalog search in SQL.
+- Avoids provider-wide episode loading when opening Series; seasons and episodes load only for selected content.
+- Refreshes Movie Details and Series Details, including clearer season selection and episode presentation.
+- Stabilizes season-selector focus after changing seasons on remote-driven devices.
+- Uses icon-only shared header actions for compact Android TV layouts.
+- Adds TV and Fire TV double-Back exit: first Back shows a two-second confirmation, second Back exits.
+- Adds resume playback, Continue Watching, Next Episode countdown, and autoplay improvements.
+
 ## 0.1.0-dev.2
 
 - Adds the in-app GitHub update system in Settings.
@@ -14,9 +24,7 @@
 
 ## Native Android baseline
 
-- Native Android app is the active Watchio implementation.
+- Native Android app is active Watchio implementation.
 - Root Flutter-era app/platform folders removed from active repository.
-- Root README rewritten around Kotlin, Compose, Media3, Room, DataStore, WorkManager, Xtream, M3U, and XMLTV/EPG.
 - Native docs indexed under `native-android/docs/README.md`.
 - Historical Flutter-to-native migration note archived under `native-android/docs/historical/`.
-- CI simplified to native Android Gradle validation.

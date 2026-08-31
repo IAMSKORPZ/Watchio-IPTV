@@ -1,5 +1,14 @@
 # Watchio Update Changelog
 
+## 0.1.0-dev.3-debug
+
+- Improves Movies and TV Shows browsing with progressive 150-item catalog windows.
+- Refreshes Movie Details and Series Details with clearer season and episode controls.
+- Keeps focus on the season selector after selecting another season on TV remotes.
+- Uses compact icon-only header actions for TV layouts.
+- Adds double-Back exit confirmation for Android TV and Fire TV.
+- Improves resume playback, Continue Watching, Next Episode countdown, and autoplay.
+
 ## 0.1.0-dev.2-debug
 
 - Adds Settings -> Check for Updates.

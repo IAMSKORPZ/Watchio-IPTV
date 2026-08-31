@@ -1,135 +1,83 @@
 # Watchio IPTV
 
-Watchio is now a native Android IPTV player application.
+Watchio is a native Android IPTV player. It does not provide channels, playlists, subscriptions, or media. Add only legal provider details and content sources.
 
-The active application lives in:
+## Platforms
 
-```text
-native-android/
-```
+Watchio supports Android phones and tablets, Android TV, Google TV, Sony BRAVIA, Fire TV, and Firestick-compatible Android devices. Touch, keyboard, and remote/D-pad navigation are supported.
 
-The older Flutter application has been removed from the active repository. Historical migration notes are kept under `native-android/docs/historical/` only.
+## Features
 
-Watchio does not provide channels, playlists, streams, subscriptions, or IPTV content. Users must add their own legal provider details.
+- Xtream Codes and M3U/M3U8 URL or local-file providers
+- Live TV, XMLTV/EPG import, TV Guide, preview, and fullscreen playback
+- Movies and TV Shows with categories, SQL-backed search, details, favourites, history, and resume playback
+- Series seasons and episodes, Next Episode countdown, and autoplay
+- Continue Watching for resumable movies and episodes
+- Media3 / ExoPlayer playback with subtitle, audio-track, aspect-ratio, speed, overlay, and error controls
+- Android TV icon-only header actions and stable remote focus
+- TV/Fire TV double-Back exit: first Back shows a toast; second Back within two seconds exits
+- In-app development update checks with APK SHA-256 verification and secure installer handoff
 
-## Current Status
+Movies and Series catalogs use Room-backed `LIMIT`/`OFFSET` windows (page size 150). Watchio does not hydrate full provider catalogs or provider-wide episode lists when opening those tabs.
 
-Native Android is the current source of truth.
+## Architecture
 
-Supported targets:
-
-- Android phones
-- Android tablets
-- Android TV / Google TV
-- Sony BRAVIA
-- Fire TV / Firestick-compatible Android devices
-
-## Tech Stack
-
-- Kotlin
-- Jetpack Compose
-- AndroidX Media3 / ExoPlayer
-- Room schema v6
-- DataStore
-- WorkManager
-- OkHttp / Retrofit
-- Android SecretStore / encrypted credential storage
-- Xtream Codes
-- M3U / M3U8
-- XMLTV / EPG
-
-## Current Features
-
-- First-run device mode flow
-- Strict Xtream login gate before Home
-- Xtream provider import and refresh
-- M3U URL and local M3U file import
-- XMLTV / EPG import, cache, matching, and auto refresh
-- Home dashboard
-- Live TV preview and fullscreen playback
-- Movies playback and resume
-- Series, seasons, episodes, playback, and resume
-- Global Search plus scoped Live / Movies / Series search
-- My List, favourites, history, and continue watching
-- TV Guide with cached EPG
-- Settings, Account Information, Player Settings, EPG Settings, Appearance, Input Mode, Stream Format
-- Android TV / remote / keyboard / touch navigation
-
-## Project Structure
+Active app: `native-android/`
 
 ```text
-Watchio/
-├── README.md
-├── native-android/
-│   ├── app/
-│   ├── docs/
-│   ├── gradle/
-│   ├── test-fixtures/
-│   ├── build.gradle.kts
-│   ├── settings.gradle.kts
-│   └── README.md
-└── .github/
+Compose UI -> ViewModel -> Repository -> Room / DataStore / provider APIs
 ```
+
+Kotlin, Jetpack Compose, AppContainer manual DI, Room schema v6, DataStore, secure credential storage, WorkManager, OkHttp/Retrofit, and Media3/ExoPlayer are current architecture. Historical Flutter migration notes are archived under `native-android/docs/historical/`; they are not current implementation guidance.
 
 ## Build
 
-Run from `native-android/`:
+From repository root:
 
 ```powershell
+cd native-android
 .\gradlew.bat assembleDebug
 ```
 
-APK:
+Debug APK: `app\build\outputs\apk\debug\app-debug.apk`
 
-```text
-native-android\app\build\outputs\apk\debug\app-debug.apk
-```
+## Test
 
-## Testing
-
-Run from `native-android/`:
+From `native-android/`:
 
 ```powershell
 .\gradlew.bat test
 .\gradlew.bat lintDebug
 .\gradlew.bat assembleDebug
 .\gradlew.bat assembleUitest
+.\gradlew.bat assembleUitestAndroidTest
 .\gradlew.bat connectedUitestAndroidTest
 ```
 
-Connected tests must use the isolated UI-test package:
+Connected automation uses isolated packages:
 
-- real manual app: `com.watchioiptv.nativeapp.debug`
-- isolated test app: `com.watchioiptv.nativeapp.uitest`
-- test runner: `com.watchioiptv.nativeapp.uitest.test`
+- Manual app: `com.watchioiptv.nativeapp.debug`
+- UI-test app: `com.watchioiptv.nativeapp.uitest`
+- Test runner: `com.watchioiptv.nativeapp.uitest.test`
 
-Never uninstall or clear the real debug package for instrumentation testing. Install manual builds with `adb install -r` only so private provider data stays intact.
+Do not use `connectedDebugAndroidTest` for normal automation. Do not uninstall or clear manual-app data. Install manual debug builds with `adb install -r` only. BRAVIA updates stay in-app-updater only.
 
-## Branches
+## Branches and updates
 
-- `dev`: active development baseline
-- `main`: stable verified baseline
+- `dev`: active development and development-update source
+- `main`: stable, verified checkpoint
 
-After repository modernization, both branches should point at the same verified native Android state.
-
-## Security
-
-- Provider passwords stay out of Room and DataStore.
-- Xtream credentials live in SecretStore.
-- Credential-bearing playback and EPG URLs are generated ephemerally.
-- Logs must pass through `SensitiveUrlMasker`.
-- Tests and docs use fake providers such as `example.invalid`.
+Test `dev` first, then fast-forward `main` to that exact commit. Development APK releases use GitHub Actions and `native-android/update/update.json`; see `native-android/docs/UPDATES.md`.
 
 ## Documentation
 
-Start here:
-
-- `native-android/docs/README.md`
-- `native-android/docs/AI_HANDOFF.md`
-- `native-android/docs/ARCHITECTURE.md`
-- `native-android/docs/TESTING.md`
-- `native-android/docs/SECURITY.md`
+- `native-android/README.md`: module build and testing reference
+- `native-android/docs/README.md`: documentation index
+- `native-android/docs/ARCHITECTURE.md`: package map and boundaries
+- `native-android/docs/TESTING.md`: local and connected test guidance
+- `native-android/docs/SECURITY.md`: credentials and URL-masking rules
+- `CHANGELOG.md`: checkpoint history
 
 ## Legal
 
-Watchio is a media player app only. It does not host, sell, provide, promote, or distribute IPTV content. Users are responsible for using their own legal content sources and following local laws.
+Watchio is a media player only. Users are responsible for their own legal content sources and local compliance.
