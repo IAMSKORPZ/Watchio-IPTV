@@ -2,11 +2,15 @@ package com.watchioiptv.nativeapp
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import com.watchioiptv.nativeapp.domain.model.Announcement
 import com.watchioiptv.nativeapp.domain.model.AnnouncementAction
 import com.watchioiptv.nativeapp.domain.model.AnnouncementItem
@@ -31,6 +35,63 @@ class AnnouncementsComposeTest {
 
         composeRule.onNodeWithTag("announcement-first").assertIsDisplayed().performClick()
         assertEquals("first", opened)
+    }
+
+    @Test
+    fun headerDisplaysAnnouncementsTitleAndNoInboxText() {
+        setContent()
+        composeRule.onNodeWithTag("announcements-header").assertIsDisplayed()
+        composeRule.onNodeWithTag("announcements-title").assertIsDisplayed()
+        composeRule.onNodeWithText("ANNOUNCEMENTS").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("INBOX").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun headerBackAndArchiveToggleButtonsArePresentAndAccessible() {
+        var backCalled = false
+        var archiveToggled = false
+        composeRule.setContent {
+            WatchioTheme {
+                AnnouncementsScreen(
+                    state = AnnouncementsUiState(
+                        snapshot = AnnouncementSnapshot(listOf(AnnouncementItem(announcement, false, false)), true),
+                    ),
+                    onBack = { backCalled = true },
+                    onRefresh = {},
+                    onOpen = {},
+                    onCloseDetails = {},
+                    onDismiss = {},
+                    onToggleArchived = { archiveToggled = true },
+                    onAction = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("announcements-back-icon").assertIsDisplayed().performClick()
+        assertTrue(backCalled)
+        composeRule.onNodeWithTag("announcements-archive-toggle").assertIsDisplayed().performClick()
+        assertTrue(archiveToggled)
+    }
+
+    @Test
+    fun headerElementsDoNotOverlap() {
+        setContent()
+        val brandingBounds = composeRule.onNodeWithTag("announcements-branding").getUnclippedBoundsInRoot()
+        val titleBounds = composeRule.onNodeWithTag("announcements-title").getUnclippedBoundsInRoot()
+        val clockBounds = composeRule.onNodeWithTag("announcements-clock").getUnclippedBoundsInRoot()
+        val toggleBounds = composeRule.onNodeWithTag("announcements-archive-toggle").getUnclippedBoundsInRoot()
+
+        assertTrue(
+            "branding should sit to the left of the title (branding.right <= title.left + 8.dp)",
+            brandingBounds.right <= titleBounds.left + 8.dp,
+        )
+        assertTrue(
+            "title should sit to the left of the clock/actions (title.right <= clockBounds.left + 8.dp)",
+            titleBounds.right <= clockBounds.left + 8.dp,
+        )
+        assertTrue(
+            "clock should sit to the left of archive toggle",
+            clockBounds.right <= toggleBounds.left + 8.dp,
+        )
     }
 
     @Test

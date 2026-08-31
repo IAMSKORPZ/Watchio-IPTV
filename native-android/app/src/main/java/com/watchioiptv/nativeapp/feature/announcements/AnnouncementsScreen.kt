@@ -48,6 +48,13 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Size
+
 @Composable
 fun AnnouncementsScreen(
     state: AnnouncementsUiState,
@@ -71,25 +78,27 @@ fun AnnouncementsScreen(
     }
 
     val colors = LocalWatchioColors.current
-    val spacing = LocalWatchioSpacing.current
     BackHandler(onBack = onBack)
     Column(
-        Modifier.fillMaxSize().background(colors.surfaceBase).padding(horizontal = 32.dp, vertical = 20.dp).testTag("announcements-screen"),
+        Modifier
+            .fillMaxSize()
+            .background(colors.surfaceBase)
+            .padding(horizontal = 18.dp, vertical = 14.dp)
+            .testTag("announcements-screen"),
     ) {
         WatchioPageHeader(
             title = "ANNOUNCEMENTS",
             onBack = onBack,
             testTagPrefix = "announcements",
             actions = {
-                WatchioButton(
-                    text = if (state.showArchived) "INBOX" else "ARCHIVED",
+                AnnouncementArchiveIconButton(
+                    showArchived = state.showArchived,
                     onClick = onToggleArchived,
-                    variant = WatchioButtonVariant.CompactAction,
-                    modifier = Modifier.widthIn(min = 112.dp).testTag("announcements-archive-toggle"),
+                    modifier = Modifier.testTag("announcements-archive-toggle"),
                 )
             },
         )
-        Spacer(Modifier.height(spacing.md))
+        Spacer(Modifier.height(12.dp))
         when {
             state.loading && state.visibleItems.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = colors.liveTvAccent, modifier = Modifier.testTag("announcements-loading"))
@@ -107,6 +116,59 @@ fun AnnouncementsScreen(
                 testTag = "announcements-empty",
             )
             else -> AnnouncementList(state.visibleItems, onOpen)
+        }
+    }
+}
+
+@Composable
+private fun AnnouncementArchiveIconButton(
+    showArchived: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalWatchioColors.current
+    WatchioCard(
+        modifier = modifier
+            .size(44.dp)
+            .semantics {
+                onClick(label = if (showArchived) "Show active announcements" else "Show archived announcements") {
+                    onClick()
+                    true
+                }
+            },
+        accent = if (showArchived) colors.moviesAccent else colors.seriesAccent,
+        minWidth = 44.dp,
+        minHeight = 44.dp,
+        contentDescription = if (showArchived) "Show active announcements" else "Show archived announcements",
+        onClick = onClick,
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.size(20.dp)) {
+                val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                val w = size.width
+                val h = size.height
+                drawRoundRect(
+                    color = colors.textPrimary,
+                    topLeft = Offset(w * 0.12f, h * 0.18f),
+                    size = Size(w * 0.76f, h * 0.28f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
+                    style = stroke,
+                )
+                val bodyPath = Path().apply {
+                    moveTo(w * 0.20f, h * 0.46f)
+                    lineTo(w * 0.20f, h * 0.82f)
+                    lineTo(w * 0.80f, h * 0.82f)
+                    lineTo(w * 0.80f, h * 0.46f)
+                }
+                drawPath(bodyPath, colors.textPrimary, style = stroke)
+                drawLine(
+                    color = if (showArchived) colors.moviesAccent else colors.seriesAccent,
+                    start = Offset(w * 0.38f, h * 0.64f),
+                    end = Offset(w * 0.62f, h * 0.64f),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
         }
     }
 }
@@ -184,10 +246,14 @@ private fun AnnouncementDetails(
     val accent = announcementAccent(announcement.priority, announcement.type)
     BackHandler(onBack = onBack)
     Column(
-        Modifier.fillMaxSize().background(colors.surfaceBase).padding(horizontal = 32.dp, vertical = 20.dp).testTag("announcement-details"),
+        Modifier
+            .fillMaxSize()
+            .background(colors.surfaceBase)
+            .padding(horizontal = 18.dp, vertical = 14.dp)
+            .testTag("announcement-details"),
     ) {
         WatchioPageHeader(title = "ANNOUNCEMENT", onBack = onBack, testTagPrefix = "announcement-detail")
-        Spacer(Modifier.height(spacing.lg))
+        Spacer(Modifier.height(12.dp))
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val contentWidth = if (maxWidth < 900.dp) maxWidth else 900.dp
             WatchioCard(

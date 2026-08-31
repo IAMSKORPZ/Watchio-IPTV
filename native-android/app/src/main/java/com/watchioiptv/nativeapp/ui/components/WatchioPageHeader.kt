@@ -58,28 +58,69 @@ fun WatchioPageHeader(
         }
     }
     BoxWithConstraints(modifier.fillMaxWidth().height(58.dp).testTag("$testTagPrefix-header")) {
-        val compact = maxWidth < 900.dp
-        val brandMaxWidth = if (compact) 230.dp else 360.dp
-        val clockWidth = if (compact) 112.dp else 150.dp
-        val actionGap = if (compact) 6.dp else spacing.sm
+        val isMobile = maxWidth < 700.dp
+        val isMedium = maxWidth in 700.dp..980.dp
+        val actionGap = if (isMobile) 6.dp else spacing.sm
+
         Row(
-            modifier = Modifier.align(Alignment.CenterStart).widthIn(max = brandMaxWidth).testTag("$testTagPrefix-branding"),
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .testTag("$testTagPrefix-branding"),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(if (isMobile) spacing.xs else spacing.sm),
         ) {
             WatchioHeaderBackButton(onClick = onBack, testTag = "$testTagPrefix-back-icon")
-            WatchioLogoMark()
-            Text("Watchio", color = colors.textPrimary, style = type.cardTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!isMobile) {
+                WatchioLogoMark()
+                if (!isMedium) {
+                    Text(
+                        "Watchio",
+                        color = colors.textPrimary,
+                        style = type.cardTitle,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
-        Text(title, color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center).testTag("$testTagPrefix-title"), maxLines = 1)
+        Text(
+            title,
+            color = colors.textPrimary,
+            style = if (isMobile) type.cardTitle else type.screenTitle,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .testTag("$testTagPrefix-title"),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
         Row(
-            modifier = Modifier.align(Alignment.CenterEnd).zIndex(2f),
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .zIndex(2f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(actionGap),
         ) {
-            Column(modifier = Modifier.width(clockWidth).testTag("$testTagPrefix-clock"), horizontalAlignment = Alignment.End) {
-                Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), color = colors.textPrimary, style = type.cardTitle, fontWeight = FontWeight.Bold)
-                Text(now.format(DateTimeFormatter.ofPattern("MMM d, yyyy")), color = colors.liveTvAccent, style = type.label)
+            Column(
+                modifier = Modifier.testTag("$testTagPrefix-clock"),
+                horizontalAlignment = Alignment.End,
+            ) {
+                Text(
+                    now.format(DateTimeFormatter.ofPattern("HH:mm")),
+                    color = colors.textPrimary,
+                    style = if (isMobile) type.body else type.cardTitle,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+                if (!isMobile) {
+                    Text(
+                        now.format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
+                        color = colors.liveTvAccent,
+                        style = type.label,
+                        maxLines = 1,
+                    )
+                }
             }
             actions()
         }
@@ -90,18 +131,18 @@ fun WatchioPageHeader(
 fun WatchioHeaderBackButton(onClick: () -> Unit, testTag: String) {
     val colors = LocalWatchioColors.current
     WatchioCard(
-        modifier = Modifier.size(48.dp).testTag(testTag),
+        modifier = Modifier.size(44.dp).testTag(testTag),
         accent = colors.liveTvAccent,
-        minWidth = 48.dp,
-        minHeight = 48.dp,
+        minWidth = 44.dp,
+        minHeight = 44.dp,
         contentDescription = "Back",
         onClick = onClick,
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.size(24.dp)) {
-                val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                drawLine(colors.textPrimary, Offset(size.width * 0.72f, size.height * 0.18f), Offset(size.width * 0.28f, size.height * 0.50f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(colors.textPrimary, Offset(size.width * 0.28f, size.height * 0.50f), Offset(size.width * 0.72f, size.height * 0.82f), strokeWidth = stroke.width, cap = StrokeCap.Round)
+            Canvas(Modifier.size(20.dp)) {
+                val stroke = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
+                drawLine(colors.textPrimary, Offset(size.width * 0.70f, size.height * 0.20f), Offset(size.width * 0.30f, size.height * 0.50f), strokeWidth = stroke.width, cap = StrokeCap.Round)
+                drawLine(colors.textPrimary, Offset(size.width * 0.30f, size.height * 0.50f), Offset(size.width * 0.70f, size.height * 0.80f), strokeWidth = stroke.width, cap = StrokeCap.Round)
             }
         }
     }
