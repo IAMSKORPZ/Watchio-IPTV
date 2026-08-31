@@ -1,6 +1,9 @@
 package com.watchioiptv.nativeapp.ui
 
 import android.content.Intent
+import android.app.Activity
+import android.os.SystemClock
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -91,6 +94,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.watchioiptv.nativeapp.core.di.AppContainer
 import com.watchioiptv.nativeapp.data.epg.EpgRefreshInterval
@@ -167,9 +171,20 @@ fun WatchioNativeApp(
     navController: NavHostController = rememberNavController(),
 ) {
     val themeState by container.settingsRepository.theme.collectAsStateWithLifecycle(initialValue = com.watchioiptv.nativeapp.ui.theme.WatchioThemeState())
+    val inputMode by container.settingsRepository.inputMode.collectAsStateWithLifecycle(initialValue = InputMode.Auto)
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val context = LocalContext.current
     var backgroundPlaybackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     AppBackgroundPlaybackEffect(
         onBackground = { (backgroundPlaybackHandler ?: container.playerManager::pause).invoke() },
+    )
+    TvRootExitBackHandler(
+        enabled = shouldRequireTvDoubleBackExit(
+            inputMode = inputMode,
+            route = currentBackStackEntry?.destination?.route,
+            hasPreviousBackStackEntry = navController.previousBackStackEntry != null,
+        ),
+        onExit = { (context as? Activity)?.finish() },
     )
     WatchioTheme(themeState = themeState) {
         NavHost(
@@ -1626,6 +1641,32 @@ private fun HomeTopAction(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             HomeVectorIcon(icon, tint, Modifier.size(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun TvRootExitBackHandler(
+    enabled: Boolean,
+    onExit: () -> Unit,
+) {
+    val gate = remember { TvDoubleBackExitGate() }
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(enabled) { gate.reset() }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) gate.reset()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    BackHandler(enabled = enabled) {
+        if (gate.onBack(SystemClock.elapsedRealtime())) {
+            onExit()
+        } else {
+            Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
         }
     }
 }
