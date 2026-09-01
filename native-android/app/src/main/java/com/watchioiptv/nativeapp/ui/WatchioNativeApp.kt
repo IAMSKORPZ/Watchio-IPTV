@@ -1153,8 +1153,8 @@ private fun ProviderManagementScreen(
         modifier = Modifier.fillMaxSize().background(colors.surfaceBase).padding(32.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Providers", color = colors.textPrimary, fontWeight = FontWeight.Bold)
-        Text(state.message ?: "Select, refresh, or remove saved providers.", color = colors.textSecondary)
+        WatchioPageHeader(title = "PROVIDER MANAGEMENT", onBack = onBack, testTagPrefix = "providers")
+        Text(state.message ?: "Select, switch, refresh, or remove saved providers.", color = colors.textSecondary)
         Spacer(Modifier.height(20.dp))
         if (state.providers.isEmpty()) {
             Text("No providers configured", color = colors.textMuted)
@@ -1191,7 +1191,7 @@ private fun ProviderManagementScreen(
     pendingDelete?.let { row ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("Remove provider?") },
+            title = { Text("REMOVE PROVIDER?") },
             text = { Text("Remove ${row.provider.displayName}? Provider library, EPG, favorites, history, resume data, and secrets for this provider will be deleted.") },
             confirmButton = {
                 TextButton(onClick = {
@@ -1218,7 +1218,7 @@ private fun ProviderCard(
 ) {
     val colors = LocalWatchioColors.current
     val title = buildString {
-        if (selected) append("Selected\n")
+        if (selected) append("ACTIVE\n")
         append(row.provider.displayName)
         append("\n")
         append(row.typeLabel)

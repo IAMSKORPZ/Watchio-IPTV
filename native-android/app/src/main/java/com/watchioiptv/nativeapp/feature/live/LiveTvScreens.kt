@@ -70,6 +70,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerManager
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerState
+import com.watchioiptv.nativeapp.core.player.shouldKeepScreenOn
 import com.watchioiptv.nativeapp.data.live.LiveTvCategory
 import com.watchioiptv.nativeapp.data.live.LiveTvChannel
 import com.watchioiptv.nativeapp.data.live.LiveTvNowNext
@@ -935,10 +936,19 @@ private fun PlayerSurface(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
-                FrameLayout(context).also { playerManager.attachSurface(it) }
+                FrameLayout(context).also { view ->
+                    view.keepScreenOn = shouldKeepScreenOn(playerState)
+                    playerManager.attachSurface(view)
+                }
             },
-            update = { playerManager.attachSurface(it) },
-            onRelease = { playerManager.detachSurface(it) },
+            update = { view ->
+                view.keepScreenOn = shouldKeepScreenOn(playerState)
+                playerManager.attachSurface(view)
+            },
+            onRelease = { view ->
+                view.keepScreenOn = false
+                playerManager.detachSurface(view)
+            },
         )
         when (playerState) {
             is WatchioPlayerState.Connecting -> Text("Connecting...", color = Color.White)

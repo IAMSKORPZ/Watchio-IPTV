@@ -86,6 +86,7 @@ import com.watchioiptv.nativeapp.core.player.WatchioAudioTrack
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerManager
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerMetadata
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerState
+import com.watchioiptv.nativeapp.core.player.shouldKeepScreenOn
 import com.watchioiptv.nativeapp.core.player.WatchioSubtitleTrack
 import com.watchioiptv.nativeapp.data.series.NextEpisodeState
 import com.watchioiptv.nativeapp.domain.repository.ControlAutoHideDelay
@@ -687,9 +688,18 @@ fun WatchioFullscreenPlayerScreen(
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> FrameLayout(ctx).also { playerManager.attachSurface(it) } },
-            update = { playerManager.attachSurface(it) },
-            onRelease = { playerManager.detachSurface(it) },
+            factory = { ctx -> FrameLayout(ctx).also { view ->
+                view.keepScreenOn = shouldKeepScreenOn(playerState)
+                playerManager.attachSurface(view)
+            } },
+            update = { view ->
+                view.keepScreenOn = shouldKeepScreenOn(playerState)
+                playerManager.attachSurface(view)
+            },
+            onRelease = { view ->
+                view.keepScreenOn = false
+                playerManager.detachSurface(view)
+            },
         )
 
         // Top-left Lightweight Transient Channel Switch HUD (Surfing mode)

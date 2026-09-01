@@ -85,6 +85,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerManager
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerState
+import com.watchioiptv.nativeapp.core.player.shouldKeepScreenOn
 import com.watchioiptv.nativeapp.data.movies.MovieCategory
 import com.watchioiptv.nativeapp.data.movies.MovieCategoryKind
 import com.watchioiptv.nativeapp.data.movies.MovieDetails
@@ -770,9 +771,18 @@ fun MoviePlayerScreen(
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { context -> FrameLayout(context).also { playerManager.attachSurface(it) } },
-            update = { playerManager.attachSurface(it) },
-            onRelease = { playerManager.detachSurface(it) },
+            factory = { context -> FrameLayout(context).also { view ->
+                view.keepScreenOn = shouldKeepScreenOn(playerState)
+                playerManager.attachSurface(view)
+            } },
+            update = { view ->
+                view.keepScreenOn = shouldKeepScreenOn(playerState)
+                playerManager.attachSurface(view)
+            },
+            onRelease = { view ->
+                view.keepScreenOn = false
+                playerManager.detachSurface(view)
+            },
         )
         val snapshot = playerManager.snapshot()
         if (controlsVisible && playerSettings.showPlayerControls) {
