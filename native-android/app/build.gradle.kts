@@ -128,6 +128,8 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.work.runtime.ktx)
     implementation(libs.security.crypto)
+    implementation(libs.zxing.core)
+    implementation(libs.play.services.code.scanner)
     implementation(libs.brotli.dec)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 

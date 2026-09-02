@@ -40,6 +40,7 @@ class SettingsMenuComposeTest {
         composeRule.onNodeWithTag("settings-provider-management").assertIsFocused()
         composeRule.onNodeWithText("Provider Management").assertIsDisplayed()
         composeRule.onNodeWithText("Account Information").assertIsDisplayed()
+        composeRule.onNodeWithTag("settings-quick-login").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Player Settings").assertIsDisplayed()
         composeRule.onNodeWithText("EPG Settings").assertIsDisplayed()
         composeRule.onNodeWithText("Parental Controls").assertIsDisplayed()
@@ -108,6 +109,18 @@ class SettingsMenuComposeTest {
             composeRule.onAllNodesWithTag("home-screen").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag("home-screen").assertIsDisplayed()
+    }
+
+    @Test
+    @OptIn(ExperimentalTestApi::class)
+    fun quickLoginShowsTvPairingQr() {
+        openSettingsOrSkip()
+        if (composeRule.onAllNodesWithTag("settings-root").fetchSemanticsNodes().isEmpty()) return
+
+        composeRule.onNodeWithTag("settings-quick-login").performScrollTo().performClick()
+        composeRule.waitUntilAtLeastOneExists(hasText("QUICK LOGIN"), 5_000)
+        composeRule.onNodeWithContentDescription("Watchio Quick Login QR code").assertIsDisplayed()
+        composeRule.onNodeWithText("Scan this code using Watchio on your phone.").assertIsDisplayed()
     }
 
     @Test

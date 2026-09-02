@@ -50,9 +50,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -130,6 +132,8 @@ import com.watchioiptv.nativeapp.feature.provider.ProviderManagementUiState
 import com.watchioiptv.nativeapp.feature.provider.ProviderManagementViewModel
 import com.watchioiptv.nativeapp.feature.provider.ProviderRowUiState
 import com.watchioiptv.nativeapp.feature.provider.XtreamProviderViewModel
+import com.watchioiptv.nativeapp.feature.provider.QuickLoginUiState
+import com.watchioiptv.nativeapp.feature.provider.QuickLoginViewModel
 import com.watchioiptv.nativeapp.feature.settings.AccountInformationUiState
 import com.watchioiptv.nativeapp.feature.settings.AccountInformationViewModel
 import com.watchioiptv.nativeapp.feature.settings.SettingsUiState
@@ -145,6 +149,11 @@ import com.watchioiptv.nativeapp.domain.model.ProviderType
 import com.watchioiptv.nativeapp.domain.model.StreamFormat
 import com.watchioiptv.nativeapp.domain.repository.ControlAutoHideDelay
 import com.watchioiptv.nativeapp.domain.repository.VideoScalingMode
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import com.watchioiptv.nativeapp.ui.components.WatchioButton
@@ -732,7 +741,35 @@ fun WatchioNativeApp(
                             }
                         }
                     },
+                    onQuickLogin = { navController.navigate("quick-login") },
                     onBack = { navController.popBackStack() },
+                )
+            }
+            composable("quick-login") {
+                val quickLoginViewModel: QuickLoginViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return QuickLoginViewModel(
+                                providerRepository = container.providerRepository,
+                                settingsRepository = container.settingsRepository,
+                                credentialStore = container.providerCredentialStore,
+                                xtreamRepository = container.xtreamRepository,
+                            ) as T
+                        }
+                    },
+                )
+                val state by quickLoginViewModel.state.collectAsStateWithLifecycle()
+                QuickLoginScreen(
+                    state = state,
+                    onStartTvPairing = quickLoginViewModel::startTvPairing,
+                    onScannedCode = quickLoginViewModel::sendScannedCode,
+                    onBack = { navController.popBackStack() },
+                    onComplete = {
+                        navController.navigate("home") {
+                            popUpTo("quick-login") { inclusive = true }
+                        }
+                    },
                 )
             }
             composable("providers/m3u/url/add") {
@@ -788,6 +825,7 @@ fun WatchioNativeApp(
                 SettingsRootScreen(
                     onProviderManagement = { navController.navigate("providers/settings") },
                     onAccount = { navController.navigate("settings/account") },
+                    onQuickLogin = { navController.navigate("quick-login") },
                     onPlayer = { navController.navigate("settings/player") },
                     onEpg = { navController.navigate("settings/epg") },
                     onParental = { navController.navigate("settings/parental") },
@@ -1244,6 +1282,7 @@ private fun XtreamProviderScreen(
     onUsername: (String) -> Unit,
     onPassword: (String) -> Unit,
     onConnect: () -> Unit,
+    onQuickLogin: () -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
@@ -1333,9 +1372,112 @@ private fun XtreamProviderScreen(
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.bringIntoViewOnFocus())
+            WatchioFocusableCard("Quick Login", accent = colors.liveTvAccent, onClick = onQuickLogin, modifier = Modifier.bringIntoViewOnFocus())
             WatchioFocusableCard("Cancel", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.bringIntoViewOnFocus())
         }
     }
+}
+
+@Composable
+private fun QuickLoginScreen(
+    state: QuickLoginUiState,
+    onStartTvPairing: () -> Unit,
+    onScannedCode: (String) -> Unit,
+    onBack: () -> Unit,
+    onComplete: () -> Unit,
+) {
+    val colors = LocalWatchioColors.current
+    val context = LocalContext.current
+    val isPhone = state.inputMode == InputMode.Touch
+    var nowEpochMs by remember(state.expiresAtEpochMs) { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(isPhone) {
+        if (!isPhone) onStartTvPairing()
+    }
+    LaunchedEffect(state.received) {
+        if (state.received) onComplete()
+    }
+    LaunchedEffect(state.expiresAtEpochMs) {
+        while (state.expiresAtEpochMs != null && nowEpochMs < state.expiresAtEpochMs) {
+            delay(1_000)
+            nowEpochMs = System.currentTimeMillis()
+        }
+    }
+    ProviderFormContainer {
+        Text("QUICK LOGIN", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+        Text(
+            if (isPhone) "Scan QR code shown on your TV." else "Use Watchio on your phone to scan this code.",
+            color = colors.textSecondary,
+        )
+        Spacer(Modifier.height(20.dp))
+        if (isPhone) {
+            Text("Your password never appears in QR code.", color = colors.textMuted)
+            Spacer(Modifier.height(20.dp))
+            WatchioFocusableCard(
+                title = if (state.isBusy) "Sending login..." else "Scan TV QR Code",
+                accent = colors.seriesAccent,
+                onClick = {
+                    if (!state.isBusy) {
+                        val options = GmsBarcodeScannerOptions.Builder()
+                            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                            .enableAutoZoom()
+                            .build()
+                        GmsBarcodeScanning.getClient(context, options).startScan()
+                            .addOnSuccessListener { barcode -> barcode.rawValue?.let(onScannedCode) }
+                    }
+                },
+                modifier = Modifier.bringIntoViewOnFocus(),
+            )
+        } else {
+            state.invitation?.let { invitation ->
+                QuickLoginQrCode(invitation, modifier = Modifier.align(Alignment.CenterHorizontally).size(260.dp).background(Color.White).padding(12.dp))
+                Spacer(Modifier.height(16.dp))
+            }
+            state.expiresAtEpochMs?.let { expiresAtEpochMs ->
+                Text("QR expires in ${formatQuickLoginRemaining(expiresAtEpochMs - nowEpochMs)}", color = colors.textMuted)
+            }
+            if (state.isBusy) CircularProgressIndicator(color = colors.seriesAccent)
+            if (state.invitation == null && state.errorMessage != null) {
+                Spacer(Modifier.height(16.dp))
+                WatchioFocusableCard("Start New Code", accent = colors.seriesAccent, onClick = onStartTvPairing, modifier = Modifier.bringIntoViewOnFocus())
+            }
+        }
+        if (state.status.isNotBlank()) {
+            Spacer(Modifier.height(16.dp))
+            Text(state.status, color = colors.textSecondary)
+        }
+        state.errorMessage?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(it, color = colors.liveTvAccent)
+        }
+        Spacer(Modifier.height(24.dp))
+        WatchioFocusableCard("Back", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.bringIntoViewOnFocus())
+    }
+}
+
+@Composable
+private fun QuickLoginQrCode(value: String, modifier: Modifier = Modifier) {
+    val matrix = remember(value) { QRCodeWriter().encode(value, BarcodeFormat.QR_CODE, 0, 0) }
+    Canvas(modifier = modifier.semantics { contentDescription = "Watchio Quick Login QR code" }) {
+        val moduleSize = minOf(size.width / matrix.width, size.height / matrix.height)
+        val left = (size.width - (matrix.width * moduleSize)) / 2f
+        val top = (size.height - (matrix.height * moduleSize)) / 2f
+        for (x in 0 until matrix.width) {
+            for (y in 0 until matrix.height) {
+                if (matrix[x, y]) {
+                    drawRect(
+                        color = Color.Black,
+                        topLeft = Offset(left + (x * moduleSize), top + (y * moduleSize)),
+                        size = Size(moduleSize, moduleSize),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatQuickLoginRemaining(remainingMs: Long): String {
+    val totalSeconds = (remainingMs.coerceAtLeast(0) / 1_000).toInt()
+    return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
 
 @Composable
@@ -2064,6 +2206,7 @@ private fun updatesFactory(container: AppContainer): ViewModelProvider.Factory =
 private fun SettingsRootScreen(
     onProviderManagement: () -> Unit,
     onAccount: () -> Unit,
+    onQuickLogin: () -> Unit,
     onPlayer: () -> Unit,
     onEpg: () -> Unit,
     onParental: () -> Unit,
@@ -2081,6 +2224,7 @@ private fun SettingsRootScreen(
         listOf(
             SettingsCategory("Provider Management", "Manage IPTV providers", HomeIconKind.Provider, colors.liveTvAccent, onProviderManagement, "settings-provider-management"),
             SettingsCategory("Account Information", "View your account details", HomeIconKind.Provider, colors.moviesAccent, onAccount, "settings-account-information"),
+            SettingsCategory("Quick Login", "Move your login from phone to TV", HomeIconKind.Provider, colors.seriesAccent, onQuickLogin, "settings-quick-login"),
             SettingsCategory("Player Settings", "Playback and video settings", HomeIconKind.Movie, colors.seriesAccent, onPlayer, "settings-player-settings"),
             SettingsCategory("EPG Settings", "Guide and programme settings", HomeIconKind.Guide, colors.liveTvAccent, onEpg, "settings-epg-settings"),
             SettingsCategory("Parental Controls", "Restrict content and settings", HomeIconKind.Settings, colors.moviesAccent, onParental, "settings-parental-controls"),
