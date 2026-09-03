@@ -1,1 +1,1 @@
-56f6410c51fbb83e6f48fab97f81d51ddd12ed18ef9123da402e29b60e1776b2  watchio-dev-0.1.0-dev.7-debug.apk
+9e25a73dd0a8bfb62a34d0801abcc07bcff158064029ee8de55a9fa78af62bc2  watchio-dev-0.1.0-dev.8-debug.apk

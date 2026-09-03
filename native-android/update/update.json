@@ -1,23 +1,22 @@
 {
   "schemaVersion": 1,
   "channel": "dev",
-  "versionCode": 8,
-  "versionName": "0.1.0-dev.7-debug",
+  "versionCode": 9,
+  "versionName": "0.1.0-dev.8-debug",
   "minimumSupportedVersionCode": 1,
   "mandatory": false,
-  "publishedAt": "2026-09-03T20:33:21.018149Z",
+  "publishedAt": "2026-09-03T21:28:49.256421Z",
   "releaseNotes": [
-    "Watchio Quick Login device detection fix",
-    "- Fixed Quick Login incorrectly treating phones as TV devices in Auto input mode",
-    "- Phones now launch the Quick Login scanner correctly",
-    "- TVs continue to display the secure Quick Login QR",
-    "- Improved Quick Login device-role detection",
+    "Watchio Quick Login transport fix",
+    "- Fixed Quick Login transfer framing and flush behavior",
+    "- Added bounded pairing socket timeouts",
+    "- Improved safe transport diagnostics and failure recovery",
     "- General stability improvements"
   ],
-  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.7",
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.8",
   "apk": {
-    "fileName": "watchio-dev-0.1.0-dev.7-debug.apk",
-    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.7/watchio-dev-0.1.0-dev.7-debug.apk",
-    "sha256": "56f6410c51fbb83e6f48fab97f81d51ddd12ed18ef9123da402e29b60e1776b2"
+    "fileName": "watchio-dev-0.1.0-dev.8-debug.apk",
+    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.8/watchio-dev-0.1.0-dev.8-debug.apk",
+    "sha256": "9e25a73dd0a8bfb62a34d0801abcc07bcff158064029ee8de55a9fa78af62bc2"
   }
 }
