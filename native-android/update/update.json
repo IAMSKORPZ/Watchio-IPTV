@@ -1,22 +1,20 @@
 {
   "schemaVersion": 1,
   "channel": "dev",
-  "versionCode": 9,
-  "versionName": "0.1.0-dev.8-debug",
+  "versionCode": 10,
+  "versionName": "0.1.0-dev.9-debug",
   "minimumSupportedVersionCode": 1,
   "mandatory": false,
-  "publishedAt": "2026-09-03T21:28:49.256421Z",
+  "publishedAt": "2026-09-03T22:16:57.865202Z",
   "releaseNotes": [
-    "Watchio Quick Login transport fix",
-    "- Fixed Quick Login transfer framing and flush behavior",
-    "- Added bounded pairing socket timeouts",
-    "- Improved safe transport diagnostics and failure recovery",
-    "- General stability improvements"
+    "Watchio Quick Login diagnostics",
+    "- Added safe sender stage diagnostics",
+    "- No credentials or QR contents logged"
   ],
-  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.8",
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.9",
   "apk": {
-    "fileName": "watchio-dev-0.1.0-dev.8-debug.apk",
-    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.8/watchio-dev-0.1.0-dev.8-debug.apk",
-    "sha256": "9e25a73dd0a8bfb62a34d0801abcc07bcff158064029ee8de55a9fa78af62bc2"
+    "fileName": "watchio-dev-0.1.0-dev.9-debug.apk",
+    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.9/watchio-dev-0.1.0-dev.9-debug.apk",
+    "sha256": "09460dc50ef6fb18d26550c0a818623d63671a298bd5ed01829a4d9b8b1b280d"
   }
 }
