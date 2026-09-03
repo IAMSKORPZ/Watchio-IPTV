@@ -3,8 +3,9 @@ package com.watchioiptv.nativeapp.feature.provider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.watchioiptv.nativeapp.core.pairing.QuickLoginCredentials
-import com.watchioiptv.nativeapp.core.pairing.QuickLoginInvitation
 import com.watchioiptv.nativeapp.core.pairing.QuickLoginReceiver
+import com.watchioiptv.nativeapp.core.pairing.QuickLoginScanParser
+import com.watchioiptv.nativeapp.core.pairing.QuickLoginScanResult
 import com.watchioiptv.nativeapp.core.pairing.QuickLoginSender
 import com.watchioiptv.nativeapp.core.security.ProviderCredentialStore
 import com.watchioiptv.nativeapp.data.xtream.XtreamCredentialsInput
@@ -67,11 +68,23 @@ class QuickLoginViewModel(
             }
     }
 
-    fun sendScannedCode(rawValue: String) {
-        val invitation = QuickLoginInvitation.parse(rawValue)
-        if (invitation == null) {
-            _state.value = _state.value.copy(errorMessage = "This is not a Watchio Quick Login QR code.")
-            return
+    fun sendScannedCode(rawValue: String?) {
+        val invitation = when (val result = QuickLoginScanParser.parse(rawValue, System.currentTimeMillis())) {
+            is QuickLoginScanResult.Valid -> result.invitation
+            QuickLoginScanResult.Empty -> {
+                _state.value = _state.value.copy(errorMessage = "Couldn't scan the QR code. Try again.")
+                return
+            }
+            QuickLoginScanResult.Invalid -> {
+                _state.value = _state.value.copy(errorMessage = "That isn't a Watchio Quick Login code.")
+                return
+            }
+            QuickLoginScanResult.Expired -> {
+                _state.value = _state.value.copy(errorMessage = "This Quick Login code has expired.")
+                return
+            }
+            QuickLoginScanResult.Cancelled,
+            QuickLoginScanResult.ScannerUnavailable -> error("Unexpected scanner result")
         }
         viewModelScope.launch {
             _state.value = _state.value.copy(isBusy = true, errorMessage = null, status = "Sending login to TV…")
@@ -97,6 +110,20 @@ class QuickLoginViewModel(
             }.onFailure { error ->
                 _state.value = _state.value.copy(isBusy = false, errorMessage = error.message ?: "Unable to send Quick Login.")
             }
+        }
+    }
+
+    fun onScannerCancelled() {
+        when (QuickLoginScanParser.cancelled()) {
+            QuickLoginScanResult.Cancelled -> _state.value = _state.value.copy(errorMessage = "Scan cancelled. Try again.")
+            else -> error("Unexpected scanner state")
+        }
+    }
+
+    fun onScannerFailed() {
+        when (QuickLoginScanParser.scannerUnavailable()) {
+            QuickLoginScanResult.ScannerUnavailable -> _state.value = _state.value.copy(errorMessage = "Couldn't scan the QR code. Try again.")
+            else -> error("Unexpected scanner state")
         }
     }
 

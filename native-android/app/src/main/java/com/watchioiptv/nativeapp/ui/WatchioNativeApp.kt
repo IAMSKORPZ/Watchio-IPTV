@@ -2,6 +2,10 @@ package com.watchioiptv.nativeapp.ui
 
 import android.content.Intent
 import android.app.Activity
+import android.app.UiModeManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.SystemClock
 import android.widget.Toast
@@ -764,6 +768,8 @@ fun WatchioNativeApp(
                     state = state,
                     onStartTvPairing = quickLoginViewModel::startTvPairing,
                     onScannedCode = quickLoginViewModel::sendScannedCode,
+                    onScannerCancelled = quickLoginViewModel::onScannerCancelled,
+                    onScannerFailed = quickLoginViewModel::onScannerFailed,
                     onBack = { navController.popBackStack() },
                     onComplete = {
                         navController.navigate("home") {
@@ -1382,13 +1388,21 @@ private fun XtreamProviderScreen(
 private fun QuickLoginScreen(
     state: QuickLoginUiState,
     onStartTvPairing: () -> Unit,
-    onScannedCode: (String) -> Unit,
+    onScannedCode: (String?) -> Unit,
+    onScannerCancelled: () -> Unit,
+    onScannerFailed: () -> Unit,
     onBack: () -> Unit,
     onComplete: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
     val context = LocalContext.current
-    val isPhone = state.inputMode == InputMode.Touch
+    val isPhone = remember(context, state.inputMode) {
+        when (state.inputMode) {
+            InputMode.Touch -> true
+            InputMode.TvRemote -> false
+            InputMode.Auto -> !context.isTelevisionDevice()
+        }
+    }
     var nowEpochMs by remember(state.expiresAtEpochMs) { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(isPhone) {
         if (!isPhone) onStartTvPairing()
@@ -1422,7 +1436,9 @@ private fun QuickLoginScreen(
                             .enableAutoZoom()
                             .build()
                         GmsBarcodeScanning.getClient(context, options).startScan()
-                            .addOnSuccessListener { barcode -> barcode.rawValue?.let(onScannedCode) }
+                            .addOnSuccessListener { barcode -> onScannedCode(barcode.rawValue) }
+                            .addOnCanceledListener(onScannerCancelled)
+                            .addOnFailureListener { onScannerFailed() }
                     }
                 },
                 modifier = Modifier.bringIntoViewOnFocus(),
@@ -1452,6 +1468,12 @@ private fun QuickLoginScreen(
         Spacer(Modifier.height(24.dp))
         WatchioFocusableCard("Back", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.bringIntoViewOnFocus())
     }
+}
+
+private fun Context.isTelevisionDevice(): Boolean {
+    val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+    return uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
+        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 }
 
 @Composable

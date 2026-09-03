@@ -86,6 +86,33 @@ data class QuickLoginInvitation(
     }
 }
 
+sealed interface QuickLoginScanResult {
+    data class Valid(val invitation: QuickLoginInvitation) : QuickLoginScanResult
+    data object Empty : QuickLoginScanResult
+    data object Invalid : QuickLoginScanResult
+    data object Expired : QuickLoginScanResult
+    data object Cancelled : QuickLoginScanResult
+    data object ScannerUnavailable : QuickLoginScanResult
+}
+
+/** Consumes Google Code Scanner text inside Watchio; it never resolves this value as an Android intent. */
+object QuickLoginScanParser {
+    fun parse(rawValue: String?, nowEpochMs: Long): QuickLoginScanResult {
+        val value = rawValue?.trim().orEmpty()
+        if (value.isEmpty()) return QuickLoginScanResult.Empty
+        val invitation = QuickLoginInvitation.parse(value) ?: return QuickLoginScanResult.Invalid
+        return if (invitation.expiresAtEpochMs <= nowEpochMs) {
+            QuickLoginScanResult.Expired
+        } else {
+            QuickLoginScanResult.Valid(invitation)
+        }
+    }
+
+    fun cancelled(): QuickLoginScanResult = QuickLoginScanResult.Cancelled
+
+    fun scannerUnavailable(): QuickLoginScanResult = QuickLoginScanResult.ScannerUnavailable
+}
+
 class QuickLoginReceiverKeys private constructor(val keyPair: KeyPair) {
     val publicKey: String = keyPair.public.encoded.toBase64Url()
 

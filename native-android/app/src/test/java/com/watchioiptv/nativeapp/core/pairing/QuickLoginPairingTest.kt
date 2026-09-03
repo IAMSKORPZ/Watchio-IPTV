@@ -31,6 +31,36 @@ class QuickLoginPairingTest {
     }
 
     @Test
+    fun scannerRawValueIsConsumedInsideWatchio() {
+        val invitation = session().invitation
+
+        assertEquals(
+            QuickLoginScanResult.Valid(invitation),
+            QuickLoginScanParser.parse(invitation.encode(), now),
+        )
+    }
+
+    @Test
+    fun scannerRejectsNullBlankAndMalformedValues() {
+        assertEquals(QuickLoginScanResult.Empty, QuickLoginScanParser.parse(null, now))
+        assertEquals(QuickLoginScanResult.Empty, QuickLoginScanParser.parse("   ", now))
+        assertEquals(QuickLoginScanResult.Invalid, QuickLoginScanParser.parse("https://example.com/not-watchio", now))
+    }
+
+    @Test
+    fun scannerRejectsExpiredInvitation() {
+        val invitation = session().invitation.copy(expiresAtEpochMs = now)
+
+        assertEquals(QuickLoginScanResult.Expired, QuickLoginScanParser.parse(invitation.encode(), now))
+    }
+
+    @Test
+    fun scannerCancellationAndServiceFailureStayInternal() {
+        assertEquals(QuickLoginScanResult.Cancelled, QuickLoginScanParser.cancelled())
+        assertEquals(QuickLoginScanResult.ScannerUnavailable, QuickLoginScanParser.scannerUnavailable())
+    }
+
+    @Test
     fun freshSessionsUseFreshSessionAndEphemeralKey() {
         val first = session()
         val second = session()
