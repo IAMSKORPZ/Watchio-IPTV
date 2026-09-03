@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.util.Base64
 
 class QuickLoginPairingTest {
     private val now = 1_700_000_000_000L
@@ -47,20 +48,49 @@ class QuickLoginPairingTest {
     }
 
     @Test
-    fun tamperedCiphertextNonceTagWrongKeyAndSessionFailClosed() {
-        assertFails { session().accept(QuickLoginCrypto.encrypt(session().invitation, credentials), now) }
+    fun tamperedCiphertextFailsClosed() {
+        repeatCryptoCheck {
+            val session = session()
+            val envelope = QuickLoginCrypto.encrypt(session.invitation, credentials)
+            assertFails { session.accept(envelope.copy(payload = envelope.payload.mutateByte(0)), now) }
+        }
+    }
 
-        val validSession = session()
-        val valid = QuickLoginCrypto.encrypt(validSession.invitation, credentials)
-        assertFails { validSession.accept(valid.copy(payload = valid.payload.dropLast(1) + "A"), now) }
+    @Test
+    fun tamperedNonceFailsClosed() {
+        repeatCryptoCheck {
+            val session = session()
+            val envelope = QuickLoginCrypto.encrypt(session.invitation, credentials)
+            assertFails { session.accept(envelope.copy(iv = envelope.iv.mutateByte(0)), now) }
+        }
+    }
 
-        val nonceSession = session()
-        val nonce = QuickLoginCrypto.encrypt(nonceSession.invitation, credentials)
-        assertFails { nonceSession.accept(nonce.copy(iv = nonce.iv.dropLast(1) + "A"), now) }
+    @Test
+    fun tamperedTagFailsClosed() {
+        repeatCryptoCheck {
+            val session = session()
+            val envelope = QuickLoginCrypto.encrypt(session.invitation, credentials)
+            assertFails { session.accept(envelope.copy(payload = envelope.payload.mutateByteAtEnd()), now) }
+        }
+    }
 
-        val sessionIdSession = session()
-        val sessionId = QuickLoginCrypto.encrypt(sessionIdSession.invitation, credentials)
-        assertFails { sessionIdSession.accept(sessionId.copy(session = "b".repeat(32)), now) }
+    @Test
+    fun wrongKeyFailsClosed() {
+        repeatCryptoCheck {
+            val session = session()
+            val invitationWithWrongKey = session.invitation.copy(receiverPublicKey = QuickLoginReceiverKeys.create().publicKey)
+            val envelope = QuickLoginCrypto.encrypt(invitationWithWrongKey, credentials)
+            assertFails { session.accept(envelope, now) }
+        }
+    }
+
+    @Test
+    fun wrongSessionFailsClosed() {
+        repeatCryptoCheck {
+            val session = session()
+            val envelope = QuickLoginCrypto.encrypt(session.invitation, credentials)
+            assertFails { session.accept(envelope.copy(session = "b".repeat(32)), now) }
+        }
     }
 
     @Test
@@ -82,4 +112,16 @@ class QuickLoginPairingTest {
     private fun assertFails(action: () -> Unit) {
         runCatching(action).onSuccess { throw AssertionError("Expected operation to fail") }
     }
+
+    private inline fun repeatCryptoCheck(action: () -> Unit) {
+        repeat(20) { action() }
+    }
+
+    private fun String.mutateByte(index: Int): String = Base64.getUrlDecoder().decode(this)
+        .also { bytes -> bytes[index] = (bytes[index].toInt() xor 1).toByte() }
+        .let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
+
+    private fun String.mutateByteAtEnd(): String = Base64.getUrlDecoder().decode(this)
+        .also { bytes -> bytes[bytes.lastIndex] = (bytes.last().toInt() xor 1).toByte() }
+        .let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
 }
