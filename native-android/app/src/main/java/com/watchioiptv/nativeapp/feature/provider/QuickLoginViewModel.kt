@@ -87,15 +87,21 @@ class QuickLoginViewModel(
             QuickLoginScanResult.ScannerUnavailable -> error("Unexpected scanner result")
         }
         viewModelScope.launch {
+            stage("qr_parsed")
             _state.value = _state.value.copy(isBusy = true, errorMessage = null, status = "Sending login to TV…")
             runCatching {
+                stage("provider_lookup_started")
                 val providerId = settingsRepository.selectedProviderId.first()
                     ?: throw IllegalArgumentException("Sign in to an Xtream provider first.")
+                stage("provider_selected")
                 val provider = providerRepository.getProvider(providerId)
                     ?: throw IllegalArgumentException("Active provider is unavailable.")
                 require(provider.type == ProviderType.Xtream) { "Quick Login currently supports Xtream Codes providers." }
+                stage("credentials_lookup_started")
                 val credentials = credentialStore.getXtreamCredentials(providerId.value)
                     ?: throw IllegalArgumentException("Active provider credentials are unavailable.")
+                stage("credentials_loaded")
+                stage("transport_started")
                 QuickLoginSender.send(
                     invitation = invitation,
                     credentials = QuickLoginCredentials(
@@ -149,5 +155,9 @@ class QuickLoginViewModel(
 
     override fun onCleared() {
         receiver.close()
+    }
+
+    private fun stage(name: String) {
+        println("QuickLogin:$name")
     }
 }
