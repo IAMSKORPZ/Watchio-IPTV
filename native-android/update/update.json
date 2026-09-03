@@ -1,18 +1,26 @@
 {
   "schemaVersion": 1,
   "channel": "dev",
-  "versionCode": 6,
-  "versionName": "0.1.0-dev.5-debug",
+  "versionCode": 7,
+  "versionName": "0.1.0-dev.6-debug",
   "minimumSupportedVersionCode": 1,
   "mandatory": false,
-  "publishedAt": "2026-08-31T22:06:08.462461Z",
+  "publishedAt": "2026-09-03T18:53:14.387397Z",
   "releaseNotes": [
-    "Watchio v0.1.0-dev.5 development test updateRedesigned the Watchio updater into a full-screen experienceAdded the new UPDATES page with Watchio stylingImproved TV and mobile updater layoutsAdded dedicated update available, downloading, verifying and install statesImproved updater D-pad focus behaviourIntegrated updates with the Announcements systemAdded dynamic UPDATE announcements from the authoritative updaterFixed Home Announcements navigationImproved the Announcements header layoutAdded unified unread update badge supportPreserved secure APK SHA-256 and signing certificate verificationGeneral UI, stability and testing improvements"
+    "Watchio Quick Login test release",
+    "Added secure Quick Login pairing between Watchio TV and phone",
+    "Added QR-based same-Wi-Fi login transfer",
+    "Added encrypted ECDH + HKDF-SHA256 + AES-GCM credential transfer",
+    "Added Google Code Scanner support on mobile",
+    "Added 2-minute pairing expiry and replay protection",
+    "Added listener/session cleanup for success, timeout and cancellation",
+    "Improved Provider Management integration",
+    "General stability and security improvements"
   ],
-  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.5",
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.6",
   "apk": {
-    "fileName": "watchio-dev-0.1.0-dev.5-debug.apk",
-    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.5/watchio-dev-0.1.0-dev.5-debug.apk",
-    "sha256": "ff57231d565ace20df20936875f0843d87166a0752c40e4b6aac6e294d553480"
+    "fileName": "watchio-dev-0.1.0-dev.6-debug.apk",
+    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.6/watchio-dev-0.1.0-dev.6-debug.apk",
+    "sha256": "ca470f99843076563ed5bc67e91bbf7b3beabe181aa08da354f6d8be39494cde"
   }
 }
