@@ -57,7 +57,9 @@ android {
         buildConfig = true
     }
 
-    val requestedTasks = gradle.startParameter.taskNames.joinToString(" ").lowercase()
+    val requestedTasks = gradle.startParameter.taskNames.map {
+        it.substringAfterLast(':').lowercase()
+    }
     val requestsAllBuilds = gradle.startParameter.taskNames.any {
         it.substringAfterLast(':').lowercase() in setOf("assemble", "build")
     }
@@ -66,8 +68,10 @@ android {
         WatchioSigningIdentity("PUBLIC", "WATCHIO_PUBLIC"),
     )
     val required = mapOf(
-        "WATCHIO_DEV" to (requestsAllBuilds || ("debug" in requestedTasks && "uitest" !in requestedTasks)),
-        "WATCHIO_PUBLIC" to (requestsAllBuilds || "release" in requestedTasks),
+        "WATCHIO_DEV" to (requestsAllBuilds || requestedTasks.any {
+            it in setOf("assembledebug", "packagedebug", "bundledebug", "installdebug")
+        }),
+        "WATCHIO_PUBLIC" to (requestsAllBuilds || requestedTasks.any { "release" in it }),
     )
     val signingValues = identities.associate { identity ->
         val names = listOf(

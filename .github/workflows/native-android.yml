@@ -9,6 +9,12 @@ on:
 jobs:
   build-test:
     runs-on: windows-latest
+    env:
+      WATCHIO_DEV_CERT_SHA256: ${{ github.event_name == 'push' && vars.WATCHIO_DEV_CERT_SHA256 || '' }}
+      WATCHIO_DEV_KEYSTORE_BASE64: ${{ github.event_name == 'push' && secrets.WATCHIO_DEV_KEYSTORE_BASE64 || '' }}
+      WATCHIO_DEV_KEYSTORE_PASSWORD: ${{ github.event_name == 'push' && secrets.WATCHIO_DEV_KEYSTORE_PASSWORD || '' }}
+      WATCHIO_DEV_KEY_ALIAS: ${{ github.event_name == 'push' && secrets.WATCHIO_DEV_KEY_ALIAS || '' }}
+      WATCHIO_DEV_KEY_PASSWORD: ${{ github.event_name == 'push' && secrets.WATCHIO_DEV_KEY_PASSWORD || '' }}
 
     steps:
       - name: Checkout
@@ -20,6 +26,36 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Validate native Android app
+      - name: Prepare DEV signing when available
+        id: dev-signing
+        shell: pwsh
+        run: |
+          $values = @(
+            $env:WATCHIO_DEV_CERT_SHA256,
+            $env:WATCHIO_DEV_KEYSTORE_BASE64,
+            $env:WATCHIO_DEV_KEYSTORE_PASSWORD,
+            $env:WATCHIO_DEV_KEY_ALIAS,
+            $env:WATCHIO_DEV_KEY_PASSWORD
+          )
+          $present = @($values | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+          if ($present -eq 0) {
+            "available=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+          if ($present -ne $values.Count) {
+            throw "Incomplete DEV signing configuration"
+          }
+          $keystore = Join-Path $env:RUNNER_TEMP "watchio-dev.jks"
+          [IO.File]::WriteAllBytes($keystore, [Convert]::FromBase64String($env:WATCHIO_DEV_KEYSTORE_BASE64))
+          "WATCHIO_DEV_KEYSTORE_PATH=$keystore" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "available=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Validate native Android app with signed DEV APK
+        if: steps.dev-signing.outputs.available == 'true'
         working-directory: native-android
         run: .\gradlew.bat test lintDebug assembleDebug assembleUitest
+
+      - name: Validate native Android app without DEV APK packaging
+        if: steps.dev-signing.outputs.available != 'true'
+        working-directory: native-android
+        run: .\gradlew.bat test lintDebug assembleUitest
