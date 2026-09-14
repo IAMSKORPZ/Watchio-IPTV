@@ -67,12 +67,14 @@ enum class WatchioButtonVariant {
 @Composable
 fun WatchioCard(
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
     accent: Color = LocalWatchioColors.current.focusGlow,
     selected: Boolean = false,
     enabled: Boolean = true,
     minWidth: Dp = LocalWatchioComponentSizes.current.cardMinWidth,
     minHeight: Dp = LocalWatchioComponentSizes.current.cardMinHeight,
     contentDescription: String? = null,
+    focusedBackgroundAlpha: Float = 0.16f,
     onClick: (() -> Unit)? = null,
     content: @Composable (focused: Boolean) -> Unit,
 ) {
@@ -110,11 +112,17 @@ fun WatchioCard(
                 shape,
             )
             .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .then(clickableModifier),
         color = if (enabled) colors.surfaceCard else colors.surfaceElevated,
         shape = shape,
     ) {
-        Box(Modifier.background(if (active) accent.copy(alpha = 0.16f) else colors.surfaceCard)) {
+        val background = when {
+            selected -> accent.copy(alpha = 0.16f)
+            focused -> accent.copy(alpha = focusedBackgroundAlpha)
+            else -> colors.surfaceCard
+        }
+        Box(Modifier.background(background)) {
             content(focused)
         }
     }

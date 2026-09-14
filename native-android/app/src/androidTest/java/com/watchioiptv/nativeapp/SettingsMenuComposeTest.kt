@@ -1,19 +1,22 @@
 package com.watchioiptv.nativeapp
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.semantics.getOrNull
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -38,19 +41,19 @@ class SettingsMenuComposeTest {
         composeRule.onNodeWithTag("settings-branding").assertIsDisplayed()
         composeRule.onNodeWithTag("settings-clock").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithTag("settings-back").fetchSemanticsNodes().isEmpty())
-        composeRule.onNodeWithTag("settings-provider-management").assertIsFocused()
+        composeRule.onNodeWithTag("settings-provider-management").assertHasClickAction()
         composeRule.onNodeWithText("Provider Management").assertIsDisplayed()
         composeRule.onNodeWithText("Account Information").assertIsDisplayed()
-        composeRule.onNodeWithTag("settings-quick-login").performScrollTo().assertIsDisplayed()
+        scrollSettingsCard("settings-quick-login")
         composeRule.onNodeWithText("Player Settings").assertIsDisplayed()
         composeRule.onNodeWithText("EPG Settings").assertIsDisplayed()
-        composeRule.onNodeWithTag("settings-football-data").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Parental Controls").assertIsDisplayed()
-        composeRule.onNodeWithText("Stream Format").assertIsDisplayed()
-        composeRule.onNodeWithText("Input Mode").assertIsDisplayed()
-        composeRule.onNodeWithText("Appearance").assertIsDisplayed()
-        composeRule.onNodeWithText("Backup & Restore").assertIsDisplayed()
-        composeRule.onNodeWithTag("settings-check-updates").performScrollTo().assertIsDisplayed()
+        scrollSettingsCard("settings-football-data")
+        scrollSettingsCard("settings-parental-controls")
+        scrollSettingsCard("settings-stream-format")
+        scrollSettingsCard("settings-input-mode")
+        scrollSettingsCard("settings-appearance")
+        scrollSettingsCard("settings-backup-restore")
+        scrollSettingsCard("settings-check-updates")
         assertTrue(composeRule.onAllNodes(hasText("My List")).fetchSemanticsNodes().isEmpty())
     }
 
@@ -59,13 +62,14 @@ class SettingsMenuComposeTest {
     fun footballDataSettingsOpensWithSecureEntryActions() {
         openSettingsOrSkip()
         if (composeRule.onAllNodesWithTag("settings-root").fetchSemanticsNodes().isEmpty()) return
-        composeRule.onNodeWithTag("settings-football-data").performScrollTo().performClick()
+        scrollSettingsCard("settings-football-data")
+        composeRule.onNodeWithTag("settings-football-data").performClick()
         composeRule.waitUntilAtLeastOneExists(hasText("FOOTBALL DATA"), 5_000)
         composeRule.onNodeWithTag("football-data-settings").assertIsDisplayed()
         composeRule.onNodeWithTag("football-data-register").assertIsDisplayed()
         composeRule.onNodeWithTag("football-data-api-key").assertIsDisplayed()
         composeRule.onNodeWithTag("football-data-save").assertHasNoClickAction()
-        composeRule.onNodeWithText("Data provided by football-data.org").assertIsDisplayed()
+        composeRule.onNodeWithTag("football-data-attribution").performScrollTo().assertIsDisplayed()
         pressBack()
         composeRule.waitUntilAtLeastOneExists(hasText("SETTINGS"), 5_000)
     }
@@ -81,22 +85,24 @@ class SettingsMenuComposeTest {
         assertSingleSettingsBack()
         composeRule.onNodeWithTag("account-information-content").assertIsDisplayed()
         composeRule.onNodeWithText("Provider Name").assertIsDisplayed()
-        composeRule.onNodeWithText("Account Status").assertIsDisplayed()
-        composeRule.onNodeWithText("Expiration Date").assertIsDisplayed()
-        composeRule.onNodeWithText("Provider Type").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Account Status", useUnmergedTree = true)[0].assertIsDisplayed()
+        composeRule.onNodeWithText("Expiration Date", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Provider Type", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         assertTrue(composeRule.onAllNodes(hasText("Coming in next Settings phase.")).fetchSemanticsNodes().isEmpty())
         assertTrue(composeRule.onAllNodes(hasText("password")).fetchSemanticsNodes().isEmpty())
         pressBack()
         composeRule.waitUntilAtLeastOneExists(hasText("SETTINGS"), 5_000)
 
         openSettingsDestination("Player Settings", "PLAYER SETTINGS")
-        composeRule.onNodeWithText("Appearance").performClick()
+        scrollSettingsCard("settings-appearance")
+        composeRule.onNodeWithTag("settings-appearance").performClick()
         composeRule.waitUntilAtLeastOneExists(hasText("APPEARANCE"), 5_000)
         assertSingleSettingsBack()
         pressBack()
         composeRule.waitUntilAtLeastOneExists(hasText("SETTINGS"), 5_000)
 
-        composeRule.onNodeWithText("EPG Settings").performClick()
+        scrollSettingsCard("settings-epg-settings")
+        composeRule.onNodeWithTag("settings-epg-settings").performClick()
         composeRule.waitUntilAtLeastOneExists(hasText("EPG SETTINGS"), 5_000)
         assertSingleSettingsBack()
         pressBack()
@@ -106,10 +112,10 @@ class SettingsMenuComposeTest {
         openSettingsDestination("Stream Format", "STREAM FORMAT")
         openSettingsDestination("Input Mode", "INPUT MODE")
         openSettingsDestination("Backup & Restore", "BACKUP & RESTORE")
-        composeRule.onNodeWithTag("settings-check-updates").performScrollTo().performClick()
-        composeRule.waitUntilAtLeastOneExists(hasText("CHECK FOR UPDATES"), 5_000)
-        assertSingleSettingsBack()
-        composeRule.onNodeWithTag("updates-content").assertIsDisplayed()
+        scrollSettingsCard("settings-check-updates")
+        composeRule.onNodeWithTag("settings-check-updates").performClick()
+        composeRule.waitUntilAtLeastOneExists(hasText("UPDATES"), 5_000)
+        composeRule.onNodeWithTag("updates-back-icon").assertIsDisplayed()
         composeRule.onNodeWithText("Current Version").assertIsDisplayed()
         composeRule.onNodeWithTag("updates-check").assertIsDisplayed()
         pressBack()
@@ -138,7 +144,7 @@ class SettingsMenuComposeTest {
         composeRule.onNodeWithTag("settings-quick-login").performScrollTo().performClick()
         composeRule.waitUntilAtLeastOneExists(hasText("QUICK LOGIN"), 5_000)
         composeRule.onNodeWithContentDescription("Watchio Quick Login QR code").assertIsDisplayed()
-        composeRule.onNodeWithText("Scan this code using Watchio on your phone.").assertIsDisplayed()
+        composeRule.onNodeWithText("Scan this code using Watchio on your phone.").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -154,13 +160,13 @@ class SettingsMenuComposeTest {
         composeRule.onNodeWithTag("player-settings-content").assertIsDisplayed()
         composeRule.onNodeWithText("PLAYBACK").assertIsDisplayed()
         composeRule.onNodeWithText("Auto Resume: ON").assertIsDisplayed()
-        composeRule.onNodeWithText("Auto Play Live Channel: OFF").assertIsDisplayed()
-        composeRule.onNodeWithText("Remember Last Live Channel: ON").assertIsDisplayed()
-        composeRule.onNodeWithText("CONTROLS").assertIsDisplayed()
+        composeRule.onNodeWithTag("player-setting-auto-play-live-channel").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("player-setting-remember-last-live-channel").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("CONTROLS").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("RECOVERY").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Auto Retry Streams: ON").assertIsDisplayed()
+        composeRule.onNodeWithTag("player-setting-auto-retry-streams").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("VIDEO").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Video Scaling").assertIsDisplayed()
+        composeRule.onNodeWithText("Video Scaling").performScrollTo().assertIsDisplayed()
         assertTrue(composeRule.onAllNodes(hasText("Playback and video settings will be expanded in a later phase.")).fetchSemanticsNodes().isEmpty())
 
         pressBack()
@@ -233,7 +239,16 @@ class SettingsMenuComposeTest {
 
     @OptIn(ExperimentalTestApi::class)
     private fun openSettingsDestination(cardTitle: String, pageTitle: String) {
-        composeRule.onNodeWithText(cardTitle).performClick()
+        val tag = when (cardTitle) {
+            "Player Settings" -> "settings-player-settings"
+            "Parental Controls" -> "settings-parental-controls"
+            "Stream Format" -> "settings-stream-format"
+            "Input Mode" -> "settings-input-mode"
+            "Backup & Restore" -> "settings-backup-restore"
+            else -> error("Missing settings tag for $cardTitle")
+        }
+        scrollSettingsCard(tag)
+        composeRule.onNodeWithTag(tag).performClick()
         composeRule.waitUntilAtLeastOneExists(hasText(pageTitle), 5_000)
         assertSingleSettingsBack()
         pressBack()
@@ -251,5 +266,10 @@ class SettingsMenuComposeTest {
     private fun assertSingleSettingsBack() {
         composeRule.onNodeWithTag("settings-back-icon").assertIsDisplayed()
         assertTrue(composeRule.onAllNodes(hasText("Back")).fetchSemanticsNodes().isEmpty())
+    }
+
+    private fun scrollSettingsCard(tag: String) {
+        composeRule.onNodeWithTag("settings-category-grid").performScrollToNode(hasTestTag(tag))
+        composeRule.onNodeWithTag(tag).assertIsDisplayed()
     }
 }

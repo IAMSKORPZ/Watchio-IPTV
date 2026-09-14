@@ -31,11 +31,12 @@ private const val HkdfInfoPrefix = "Watchio Quick Login AES-GCM v1"
 @Serializable
 data class QuickLoginCredentials(
     val providerName: String,
-    val serverUrl: String,
+    val serverUrl: String? = null,
     val username: String,
     val password: String,
+    val mode: String = "legacy",
 ) {
-    override fun toString(): String = "QuickLoginCredentials(providerName=***, serverUrl=***, username=***, password=***)"
+    override fun toString(): String = "QuickLoginCredentials(providerName=***, serverUrl=***, username=***, password=***, mode=$mode)"
 }
 
 @Serializable

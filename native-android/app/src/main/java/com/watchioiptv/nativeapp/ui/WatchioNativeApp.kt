@@ -18,6 +18,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -47,6 +49,7 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -62,6 +65,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.LaunchedEffect
@@ -84,15 +88,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardActions
@@ -208,6 +221,13 @@ internal fun closeLiveFullscreen(
     }
 }
 
+internal fun navigateHomeAsRoot(navController: NavHostController) {
+    navController.navigate("home") {
+        popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+        launchSingleTop = true
+    }
+}
+
 @Composable
 fun WatchioNativeApp(
     container: AppContainer,
@@ -258,9 +278,7 @@ fun WatchioNativeApp(
                 val destination by bootstrapViewModel.destination.collectAsStateWithLifecycle()
                 LaunchedEffect(destination) {
                     when (destination) {
-                        BootstrapDestination.Ready -> navController.navigate("home") {
-                            popUpTo("bootstrap") { inclusive = true }
-                        }
+                        BootstrapDestination.Ready -> navigateHomeAsRoot(navController)
                         BootstrapDestination.NeedsXtreamLogin -> navController.navigate("providers/xtream/add") {
                             popUpTo("bootstrap") { inclusive = true }
                         }
@@ -295,6 +313,7 @@ fun WatchioNativeApp(
                                 container.settingsRepository,
                                 container.xtreamRepository,
                                 container.m3uRepository,
+                                container.endpointManager,
                             ) as T
                         }
                     },
@@ -314,6 +333,8 @@ fun WatchioNativeApp(
                     BootstrapLoadingScreen()
                 } else HomeScreen(
                     providerSummary = state.providerSummary,
+                    activeServerLabel = state.activeServerLabel,
+                    activeServerOnline = state.activeServerOnline,
                     providerCount = state.providerCount,
                     liveCount = state.liveCount,
                     movieCount = state.movieCount,
@@ -325,6 +346,9 @@ fun WatchioNativeApp(
                     liveRefreshing = state.liveRefreshing,
                     moviesRefreshing = state.moviesRefreshing,
                     seriesRefreshing = state.seriesRefreshing,
+                    liveRefreshProgress = state.liveRefreshProgress,
+                    moviesRefreshProgress = state.moviesRefreshProgress,
+                    seriesRefreshProgress = state.seriesRefreshProgress,
                     refreshMessage = state.refreshMessage,
                     onAddXtreamProvider = { navController.navigate("providers/xtream/add") },
                     onAddM3uUrlProvider = { navController.navigate("providers/m3u/url/add") },
@@ -405,6 +429,7 @@ fun WatchioNativeApp(
                     state = state,
                     onSelect = providersViewModel::select,
                     onRefresh = providersViewModel::refresh,
+                    onSwitchServer = providersViewModel::switchServer,
                     onDelete = providersViewModel::delete,
                     onAddXtreamProvider = { navController.navigate("providers/xtream/add") },
                     onAddM3uUrlProvider = { navController.navigate("providers/m3u/url/add") },
@@ -428,6 +453,7 @@ fun WatchioNativeApp(
                     state = state,
                     onSelect = providersViewModel::select,
                     onRefresh = providersViewModel::refresh,
+                    onSwitchServer = providersViewModel::switchServer,
                     onDelete = providersViewModel::delete,
                     onAddXtreamProvider = { navController.navigate("providers/xtream/add") },
                     onAddM3uUrlProvider = { navController.navigate("providers/m3u/url/add") },
@@ -447,6 +473,7 @@ fun WatchioNativeApp(
                     state = state,
                     onSelect = providersViewModel::select,
                     onRefresh = providersViewModel::refresh,
+                    onSwitchServer = providersViewModel::switchServer,
                     onDelete = providersViewModel::delete,
                     onAddXtreamProvider = { navController.navigate("providers/xtream/add") },
                     onAddM3uUrlProvider = { navController.navigate("providers/m3u/url/add") },
@@ -688,6 +715,7 @@ fun WatchioNativeApp(
                     onCategorySearch = liveViewModel::updateCategorySearch,
                     onLiveSearch = liveViewModel::updateLiveSearch,
                     onChannel = liveViewModel::selectChannel,
+                    onChannelBrowsed = liveViewModel::browseChannel,
                     onFavorite = liveViewModel::toggleFavorite,
                     onRetry = liveViewModel::retry,
                     onRefreshEpg = liveViewModel::refreshEpg,
@@ -782,14 +810,11 @@ fun WatchioNativeApp(
                 XtreamProviderScreen(
                     state = state,
                     onProviderName = providerViewModel::updateProviderName,
-                    onServerUrl = providerViewModel::updateServerUrl,
                     onUsername = providerViewModel::updateUsername,
                     onPassword = providerViewModel::updatePassword,
                     onConnect = {
                         providerViewModel.connect {
-                            navController.navigate("home") {
-                                popUpTo("providers") { inclusive = true }
-                            }
+                            navigateHomeAsRoot(navController)
                         }
                     },
                     onQuickLogin = { navController.navigate("quick-login") },
@@ -819,9 +844,7 @@ fun WatchioNativeApp(
                     onScannerFailed = quickLoginViewModel::onScannerFailed,
                     onBack = { navController.popBackStack() },
                     onComplete = {
-                        navController.navigate("home") {
-                            popUpTo("quick-login") { inclusive = true }
-                        }
+                        navigateHomeAsRoot(navController)
                     },
                 )
             }
@@ -842,9 +865,7 @@ fun WatchioNativeApp(
                     onUserAgent = providerViewModel::updateUserAgent,
                     onConnect = {
                         providerViewModel.connectUrl {
-                            navController.navigate("home") {
-                                popUpTo("providers") { inclusive = true }
-                            }
+                            navigateHomeAsRoot(navController)
                         }
                     },
                     onBack = { navController.popBackStack() },
@@ -866,9 +887,7 @@ fun WatchioNativeApp(
                     onFileUri = providerViewModel::updateFileUri,
                     onConnect = {
                         providerViewModel.connectFile {
-                            navController.navigate("home") {
-                                popUpTo("providers") { inclusive = true }
-                            }
+                            navigateHomeAsRoot(navController)
                         }
                     },
                     onBack = { navController.popBackStack() },
@@ -983,7 +1002,7 @@ fun WatchioNativeApp(
                 }
             }
         }
-    }
+}
 }
 
 @Composable
@@ -1099,6 +1118,8 @@ private fun ProviderTypeSetupScreen(
 @Composable
 private fun HomeScreen(
     providerSummary: String,
+    activeServerLabel: String?,
+    activeServerOnline: Boolean,
     providerCount: Int,
     liveCount: Int,
     movieCount: Int,
@@ -1110,6 +1131,9 @@ private fun HomeScreen(
     liveRefreshing: Boolean,
     moviesRefreshing: Boolean,
     seriesRefreshing: Boolean,
+    liveRefreshProgress: Float?,
+    moviesRefreshProgress: Float?,
+    seriesRefreshProgress: Float?,
     refreshMessage: String?,
     onAddXtreamProvider: () -> Unit,
     onAddM3uUrlProvider: () -> Unit,
@@ -1154,6 +1178,8 @@ private fun HomeScreen(
         ) {
             HomeTopBar(
                 now = now,
+                activeServerLabel = activeServerLabel,
+                activeServerOnline = activeServerOnline,
                 onSearch = onSearch,
                 onSports = onSports,
                 onAnnouncements = onAnnouncements,
@@ -1182,6 +1208,7 @@ private fun HomeScreen(
                     HomePrimaryCard(
                         action = liveAction,
                         refreshing = liveRefreshing,
+                        refreshProgress = liveRefreshProgress,
                         onRefresh = onRefreshLive,
                         modifier = Modifier
                             .weight(1f)
@@ -1196,6 +1223,7 @@ private fun HomeScreen(
                         HomePrimaryCard(
                             action = movieAction,
                             refreshing = moviesRefreshing,
+                            refreshProgress = moviesRefreshProgress,
                             onRefresh = onRefreshMovies,
                             modifier = Modifier
                                 .weight(0.72f)
@@ -1217,6 +1245,7 @@ private fun HomeScreen(
                         HomePrimaryCard(
                             action = seriesAction,
                             refreshing = seriesRefreshing,
+                            refreshProgress = seriesRefreshProgress,
                             onRefresh = onRefreshSeries,
                             modifier = Modifier
                                 .weight(0.72f)
@@ -1240,10 +1269,11 @@ private fun HomeScreen(
 }
 
 @Composable
-private fun ProviderManagementScreen(
+internal fun ProviderManagementScreen(
     state: ProviderManagementUiState,
     onSelect: (com.watchioiptv.nativeapp.core.model.ProviderId) -> Unit,
     onRefresh: (com.watchioiptv.nativeapp.core.model.ProviderId) -> Unit,
+    onSwitchServer: (com.watchioiptv.nativeapp.core.model.ProviderId, String) -> Unit,
     onDelete: (com.watchioiptv.nativeapp.core.model.ProviderId) -> Unit,
     onAddXtreamProvider: () -> Unit,
     onAddM3uUrlProvider: () -> Unit,
@@ -1252,48 +1282,73 @@ private fun ProviderManagementScreen(
 ) {
     val colors = LocalWatchioColors.current
     var pendingDelete by remember { mutableStateOf<ProviderRowUiState?>(null) }
+    var pendingSwitch by remember { mutableStateOf<ProviderRowUiState?>(null) }
     val firstFocus = remember { FocusRequester() }
     BackHandler(onBack = onBack)
-    LaunchedEffect(state.providers.firstOrNull()?.provider?.id) {
-        if (state.providers.isNotEmpty()) firstFocus.requestFocus()
-    }
     Column(
         modifier = Modifier.fillMaxSize().background(colors.surfaceBase).padding(32.dp),
-        verticalArrangement = Arrangement.Center,
     ) {
         WatchioPageHeader(title = "PROVIDER MANAGEMENT", onBack = onBack, testTagPrefix = "providers")
-        Text(state.message ?: "Select, switch, refresh, or remove saved providers.", color = colors.textSecondary)
-        Spacer(Modifier.height(20.dp))
-        if (state.providers.isEmpty()) {
-            Text("No providers configured", color = colors.textMuted)
-            Spacer(Modifier.height(16.dp))
-        }
-        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f, fill = false)) {
-            val columns = if (maxWidth < 720.dp) 1 else 2
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            val compact = maxWidth < 600.dp
+            val columns = if (compact) 1 else 2
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.widthIn(max = 1050.dp).fillMaxSize().align(Alignment.TopCenter).testTag("provider-management-content"),
             ) {
-                items(state.providers) { row ->
-                    ProviderCard(
-                        row = row,
-                        selected = row.provider.id == state.selectedProviderId,
-                        refreshing = row.provider.id == state.refreshingProviderId,
-                        onSelect = { onSelect(row.provider.id) },
-                        onRefresh = { onRefresh(row.provider.id) },
-                        onDelete = { pendingDelete = row },
-                        modifier = if (row == state.providers.first()) Modifier.focusRequester(firstFocus) else Modifier,
-                    )
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column {
+                        Text(state.message ?: "Manage your providers", color = colors.textSecondary)
+                        Spacer(Modifier.height(20.dp))
+                        Text("SAVED PROVIDERS", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (state.providers.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Text("No providers added yet.", color = colors.textMuted)
+                    }
+                } else {
+                    items(state.providers) { row ->
+                        ProviderCard(
+                            row = row,
+                            selected = row.provider.id == state.selectedProviderId,
+                            activeServerLabel = if (row.provider.id == state.selectedProviderId) {
+                                state.serverChoices.firstOrNull { it.active }?.name
+                            } else {
+                                null
+                            },
+                            refreshing = row.provider.id == state.refreshingProviderId,
+                            switching = row.provider.id == state.switchingProviderId,
+                            compact = compact,
+                            onSelect = { onSelect(row.provider.id) },
+                            onRefresh = { onRefresh(row.provider.id) },
+                            onSwitchServer = { pendingSwitch = row },
+                            onDelete = { pendingDelete = row },
+                            focusRequester = if (row == state.providers.first()) firstFocus else null,
+                        )
+                    }
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column {
+                        Spacer(Modifier.height(4.dp))
+                        Text("ADD PROVIDER", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(10.dp))
+                        if (compact) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ProviderAddOption("Xtream", "Account login", colors.seriesAccent, onAddXtreamProvider, Modifier.testTag("providers-add-xtream"))
+                                ProviderAddOption("M3U URL", "Playlist link", colors.liveTvAccent, onAddM3uUrlProvider, Modifier.testTag("providers-add-m3u-url"))
+                                ProviderAddOption("Local M3U", "Device file", colors.moviesAccent, onAddM3uFileProvider, Modifier.testTag("providers-add-m3u-file"))
+                            }
+                        } else Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            ProviderAddOption("Xtream", "Account login", colors.seriesAccent, onAddXtreamProvider, Modifier.weight(1f).testTag("providers-add-xtream"))
+                            ProviderAddOption("M3U URL", "Playlist link", colors.liveTvAccent, onAddM3uUrlProvider, Modifier.weight(1f).testTag("providers-add-m3u-url"))
+                            ProviderAddOption("Local M3U", "Device file", colors.moviesAccent, onAddM3uFileProvider, Modifier.weight(1f).testTag("providers-add-m3u-file"))
+                        }
+                    }
                 }
             }
-        }
-        Spacer(Modifier.height(20.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            WatchioFocusableCard("Add Xtream", accent = colors.seriesAccent, onClick = onAddXtreamProvider)
-            WatchioFocusableCard("Add M3U URL", accent = colors.liveTvAccent, onClick = onAddM3uUrlProvider)
-            WatchioFocusableCard("Add Local M3U", accent = colors.moviesAccent, onClick = onAddM3uFileProvider)
-            WatchioFocusableCard("Back", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.testTag("providers-back"))
         }
     }
     pendingDelete?.let { row ->
@@ -1302,14 +1357,39 @@ private fun ProviderManagementScreen(
             title = { Text("REMOVE PROVIDER?") },
             text = { Text("Remove ${row.provider.displayName}? Provider library, EPG, favorites, history, resume data, and secrets for this provider will be deleted.") },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(
+                    modifier = Modifier.testTag("provider-remove-confirm"),
+                    onClick = {
                     pendingDelete = null
                     onDelete(row.provider.id)
-                }) { Text("Remove") }
+                    },
+                ) { Text("Remove") }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) { Text("Cancel") }
             },
+        )
+    }
+    pendingSwitch?.let { row ->
+        AlertDialog(
+            onDismissRequest = { pendingSwitch = null },
+            title = { Text("SWITCH SERVER") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.serverChoices.forEach { server ->
+                        TextButton(
+                            onClick = {
+                                pendingSwitch = null
+                                onSwitchServer(row.provider.id, server.id)
+                            },
+                            enabled = !server.active,
+                        ) { Text(if (server.active) "${server.name} (Active)" else server.name) }
+                    }
+                    if (state.serverChoices.isEmpty()) Text("No servers available", color = colors.textMuted)
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { pendingSwitch = null }) { Text("Cancel") } },
         )
     }
 }
@@ -1318,37 +1398,73 @@ private fun ProviderManagementScreen(
 private fun ProviderCard(
     row: ProviderRowUiState,
     selected: Boolean,
+    activeServerLabel: String?,
     refreshing: Boolean,
+    switching: Boolean,
+    compact: Boolean,
     onSelect: () -> Unit,
     onRefresh: () -> Unit,
+    onSwitchServer: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
 ) {
     val colors = LocalWatchioColors.current
-    val title = buildString {
-        if (selected) append("ACTIVE\n")
-        append(row.provider.displayName)
-        append("\n")
-        append(row.typeLabel)
-        append("\nLive ${row.liveCount}  Movies ${row.movieCount}  Series ${row.seriesCount}")
-        append("\n")
-        append(row.refreshState)
+    LaunchedEffect(focusRequester) {
+        focusRequester?.requestFocus()
     }
-    Column {
-        WatchioFocusableCard(title = title, accent = if (selected) colors.focusGlow else colors.seriesAccent, onClick = onSelect, modifier = modifier)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            WatchioFocusableCard(title = if (refreshing) "Refreshing..." else "Refresh", accent = colors.liveTvAccent, onClick = onRefresh)
-            WatchioFocusableCard(title = "Remove", accent = colors.moviesAccent, onClick = onDelete)
+    Column(Modifier.clip(RoundedCornerShape(16.dp)).background(colors.surfaceCard).border(1.dp, if (selected) colors.focusGlow else colors.surfaceElevated, RoundedCornerShape(16.dp)).padding(12.dp)) {
+        WatchioCard(
+            modifier = Modifier.fillMaxWidth().testTag("provider-select-${row.provider.id.value}"),
+            focusRequester = focusRequester,
+            selected = selected,
+            minWidth = 0.dp,
+            minHeight = 0.dp,
+            contentDescription = "Select ${row.provider.displayName}",
+            onClick = onSelect,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(row.provider.displayName, color = colors.textPrimary, style = LocalWatchioTypography.current.cardTitle, fontWeight = FontWeight.Bold)
+                if (selected) Text("Selected", color = colors.seriesAccent, style = LocalWatchioTypography.current.label)
+            }
+            Text(row.typeLabel, color = colors.textMuted)
+            if (row.provider.id.value.startsWith("xtream-managed-") && activeServerLabel != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(activeServerLabel, color = colors.textSecondary)
+                    Text("Active", color = Color(0xFF22C55E))
+                }
+            }
+            Text("Live ${row.liveCount}  Movies ${row.movieCount}  Series ${row.seriesCount}", color = colors.textSecondary)
+            Text(row.refreshState, color = colors.textMuted)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        val managed = row.provider.id.value.startsWith("xtream-managed-")
+        if (compact) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                WatchioButton(if (refreshing) "Refreshing..." else "Refresh", onRefresh, variant = WatchioButtonVariant.CompactAction, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("provider-refresh-${row.provider.id.value}"), loading = refreshing)
+                if (managed) WatchioButton(if (switching) "Switching..." else "Switch Server", onSwitchServer, variant = WatchioButtonVariant.Secondary, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("provider-switch-${row.provider.id.value}"), loading = switching)
+                WatchioButton("Remove", onDelete, variant = WatchioButtonVariant.Danger, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("provider-remove-${row.provider.id.value}"))
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                WatchioButton(if (refreshing) "Refreshing..." else "Refresh", onRefresh, variant = WatchioButtonVariant.CompactAction, modifier = Modifier.weight(1f).height(48.dp).testTag("provider-refresh-${row.provider.id.value}"), loading = refreshing)
+                if (managed) WatchioButton(if (switching) "Switching..." else "Switch Server", onSwitchServer, variant = WatchioButtonVariant.Secondary, modifier = Modifier.weight(1f).height(48.dp).testTag("provider-switch-${row.provider.id.value}"), loading = switching)
+                WatchioButton("Remove", onDelete, variant = WatchioButtonVariant.Danger, modifier = Modifier.weight(1f).height(48.dp).testTag("provider-remove-${row.provider.id.value}"))
+            }
         }
     }
 }
 
 @Composable
-private fun XtreamProviderScreen(
+private fun ProviderAddOption(title: String, subtitle: String, accent: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    WatchioFocusableCard("$title\n$subtitle", accent = accent, onClick = onClick, modifier = modifier.height(88.dp))
+}
+
+@Composable
+internal fun XtreamProviderScreen(
     state: com.watchioiptv.nativeapp.feature.provider.XtreamProviderFormState,
     onProviderName: (String) -> Unit,
-    onServerUrl: (String) -> Unit,
     onUsername: (String) -> Unit,
     onPassword: (String) -> Unit,
     onConnect: () -> Unit,
@@ -1356,96 +1472,216 @@ private fun XtreamProviderScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
+    val type = LocalWatchioTypography.current
+    val radii = LocalWatchioRadii.current
     val firstFocus = remember { FocusRequester() }
-    val serverFocus = remember { FocusRequester() }
     val usernameFocus = remember { FocusRequester() }
     val passwordFocus = remember { FocusRequester() }
+    val connectFocus = remember { FocusRequester() }
+    val quickLoginFocus = remember { FocusRequester() }
+    val cancelFocus = remember { FocusRequester() }
+    val connectBringIntoView = remember { BringIntoViewRequester() }
+    val quickLoginBringIntoView = remember { BringIntoViewRequester() }
+    val cancelBringIntoView = remember { BringIntoViewRequester() }
+    val formScope = rememberCoroutineScope()
+    val busy = state.importState is XtreamImportState.Importing
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary,
         unfocusedTextColor = colors.textPrimary,
         disabledTextColor = colors.textMuted,
         cursorColor = colors.focusBorder,
         focusedBorderColor = colors.focusBorder,
-        unfocusedBorderColor = colors.surfaceElevated,
+        unfocusedBorderColor = colors.textMuted.copy(alpha = 0.55f),
         focusedLabelColor = colors.textPrimary,
         unfocusedLabelColor = colors.textSecondary,
+        focusedContainerColor = colors.surfaceElevated.copy(alpha = 0.92f),
+        unfocusedContainerColor = colors.surfaceElevated.copy(alpha = 0.72f),
     )
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
-    ProviderFormContainer {
-        Text("XTREAM CODES", color = colors.textPrimary, fontWeight = FontWeight.Bold)
-        Text("Add provider", color = colors.textSecondary)
-        Spacer(Modifier.height(20.dp))
-        OutlinedTextField(
-            value = state.providerName,
-            onValueChange = onProviderName,
-            label = { Text("Provider Name") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            keyboardActions = KeyboardActions(onNext = { serverFocus.requestFocus() }),
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth().focusRequester(firstFocus).bringIntoViewOnFocus().testTag("xtream-provider-name"),
-        )
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(
-            value = state.serverUrl,
-            onValueChange = onServerUrl,
-            label = { Text("Server URL") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
-            keyboardActions = KeyboardActions(onNext = { usernameFocus.requestFocus() }),
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth().focusRequester(serverFocus).bringIntoViewOnFocus().testTag("xtream-server-url"),
-        )
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(
-            value = state.username,
-            onValueChange = onUsername,
-            label = { Text("Username") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth().focusRequester(usernameFocus).bringIntoViewOnFocus().testTag("xtream-username"),
-        )
-        Spacer(Modifier.height(10.dp))
-        OutlinedTextField(
-            value = state.password,
-            onValueChange = onPassword,
-            label = { Text("Password") },
-            visualTransformation = PasswordVisualTransformation(),
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { onConnect() }),
-            colors = textFieldColors,
-            modifier = Modifier.fillMaxWidth().focusRequester(passwordFocus).bringIntoViewOnFocus().testTag("xtream-password"),
-        )
-        Spacer(Modifier.height(16.dp))
-        state.errorMessage?.let { Text(it, color = colors.liveTvAccent) }
-        when (val importState = state.importState) {
-            is XtreamImportState.Importing -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(color = colors.seriesAccent)
-                    Text(importState.stage.label, color = colors.textSecondary)
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize().background(colors.surfaceBase).testTag("xtream-login-screen"),
+    ) {
+        val compact = maxWidth < 600.dp
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .padding(horizontal = if (compact) 20.dp else 32.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 580.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(radii.lg))
+                    .background(colors.surfaceCard.copy(alpha = 0.76f))
+                    .border(1.dp, colors.surfaceElevated, RoundedCornerShape(radii.lg))
+                    .padding(if (compact) 18.dp else 22.dp)
+                    .testTag("xtream-login-panel"),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                WatchioLogoMark()
+                Spacer(Modifier.height(4.dp))
+                Text("WATCHIO", color = colors.seriesAccent, style = type.label, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(2.dp))
+                Text("Add Your Provider", color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                Text("Enter your account details to continue", color = colors.textSecondary, style = type.body, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = state.providerName,
+                    onValueChange = onProviderName,
+                    label = { Text("Provider Name") },
+                    placeholder = { Text("e.g. Living Room") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { usernameFocus.requestFocus() }),
+                    colors = textFieldColors,
+                    shape = RoundedCornerShape(radii.md),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).focusProperties { down = usernameFocus }.tvVerticalFocus(down = usernameFocus).focusRequester(firstFocus).bringIntoViewOnFocus().testTag("xtream-provider-name"),
+                )
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = state.username,
+                    onValueChange = onUsername,
+                    label = { Text("Username") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Text, imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
+                    colors = textFieldColors,
+                    shape = RoundedCornerShape(radii.md),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).focusProperties { up = firstFocus; down = passwordFocus }.tvVerticalFocus(up = firstFocus, down = passwordFocus).focusRequester(usernameFocus).bringIntoViewOnFocus().testTag("xtream-username"),
+                )
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = state.password,
+                    onValueChange = onPassword,
+                    label = { Text("Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onConnect() }),
+                    colors = textFieldColors,
+                    shape = RoundedCornerShape(radii.md),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).focusProperties { up = usernameFocus; down = connectFocus }.tvVerticalFocus(up = usernameFocus, down = connectFocus, downBringIntoView = connectBringIntoView, scope = formScope).focusRequester(passwordFocus).bringIntoViewOnFocus().testTag("xtream-password"),
+                )
+                state.errorMessage?.let {
+                    Spacer(Modifier.height(10.dp))
+                    Text(it, color = Color(0xFFFF6B7A), style = type.body, modifier = Modifier.fillMaxWidth().testTag("xtream-error"))
                 }
-                Text(
-                    "Live ${importState.liveCount}  Movies ${importState.movieCount}  Series ${importState.seriesCount}",
-                    color = colors.textMuted,
+                if (state.importState is XtreamImportState.Failure) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(state.importState.message, color = Color(0xFFFF6B7A), style = type.body, modifier = Modifier.fillMaxWidth())
+                }
+                Spacer(Modifier.height(10.dp))
+                XtreamLoginAction(
+                    text = if (busy) "SIGNING IN..." else "SIGN IN",
+                    onClick = onConnect,
+                    enabled = state.canSubmit,
+                    loading = busy,
+                    focusRequester = connectFocus,
+                    primary = true,
+                    modifier = Modifier.fillMaxWidth().height(56.dp).bringIntoViewRequester(connectBringIntoView).focusProperties { up = passwordFocus; down = quickLoginFocus }.tvVerticalFocus(up = passwordFocus, down = quickLoginFocus, downBringIntoView = quickLoginBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-connect"),
+                )
+                if (busy) {
+                    val importing = state.importState as XtreamImportState.Importing
+                    Spacer(Modifier.height(8.dp))
+                    Text(importing.stage.label, color = colors.textSecondary, style = type.body)
+                }
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f).height(1.dp).background(colors.surfaceElevated))
+                    Text("or", color = colors.textMuted, style = type.label, modifier = Modifier.padding(horizontal = 12.dp))
+                    Box(Modifier.weight(1f).height(1.dp).background(colors.surfaceElevated))
+                }
+                XtreamLoginAction(
+                    text = "QUICK LOGIN",
+                    onClick = onQuickLogin,
+                    focusRequester = quickLoginFocus,
+                    modifier = Modifier.fillMaxWidth().height(52.dp).bringIntoViewRequester(quickLoginBringIntoView).focusProperties { up = connectFocus; down = cancelFocus }.tvVerticalFocus(up = connectFocus, down = cancelFocus, upBringIntoView = connectBringIntoView, downBringIntoView = cancelBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-quick-login"),
+                )
+                Spacer(Modifier.height(6.dp))
+                XtreamLoginAction(
+                    text = "Cancel",
+                    onClick = onBack,
+                    focusRequester = cancelFocus,
+                    tertiary = true,
+                    modifier = Modifier.width(160.dp).bringIntoViewRequester(cancelBringIntoView).focusProperties { up = quickLoginFocus }.tvVerticalFocus(up = quickLoginFocus, upBringIntoView = quickLoginBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-cancel"),
                 )
             }
-            is XtreamImportState.Success -> Text(
-                "Imported ${importState.liveCount} live, ${importState.movieCount} movies, ${importState.seriesCount} series",
-                color = colors.textSecondary,
-            )
-            is XtreamImportState.Failure -> Text(importState.message, color = colors.liveTvAccent)
-            XtreamImportState.Idle -> Unit
-        }
-        Spacer(Modifier.height(20.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.bringIntoViewOnFocus())
-            WatchioFocusableCard("Quick Login", accent = colors.liveTvAccent, onClick = onQuickLogin, modifier = Modifier.bringIntoViewOnFocus())
-            WatchioFocusableCard("Cancel", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.bringIntoViewOnFocus())
         }
     }
+}
+
+@Composable
+private fun XtreamLoginAction(
+    text: String,
+    onClick: () -> Unit,
+    focusRequester: FocusRequester,
+    modifier: Modifier = Modifier,
+    primary: Boolean = false,
+    tertiary: Boolean = false,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+) {
+    val colors = LocalWatchioColors.current
+    val radii = LocalWatchioRadii.current
+    val type = LocalWatchioTypography.current
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(radii.md)
+    val accent = if (primary) colors.liveTvAccent else colors.seriesAccent
+    val background = when {
+        tertiary && !focused -> Color.Transparent
+        focused -> accent.copy(alpha = 0.28f)
+        primary -> accent.copy(alpha = 0.18f)
+        else -> colors.surfaceElevated.copy(alpha = 0.72f)
+    }
+    Box(
+        modifier = modifier
+            .focusRequester(focusRequester)
+            .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (enabled && !loading && event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.DirectionCenter)) {
+                    onClick()
+                    true
+                } else false
+            }
+            .focusable()
+            .clip(shape)
+            .background(background)
+            .border(if (focused) 3.dp else 1.dp, if (focused) colors.focusBorder else if (tertiary) Color.Transparent else accent.copy(alpha = 0.52f), shape)
+            .clickable(enabled = enabled && !loading, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = text; role = Role.Button },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (loading) CircularProgressIndicator(color = colors.textPrimary, modifier = Modifier.size(20.dp))
+        else Text(text, color = if (enabled) colors.textPrimary else colors.textMuted, style = type.cardTitle, fontWeight = if (primary) FontWeight.Bold else FontWeight.SemiBold)
+    }
+}
+
+private fun Modifier.tvVerticalFocus(
+    up: FocusRequester? = null,
+    down: FocusRequester? = null,
+    upBringIntoView: BringIntoViewRequester? = null,
+    downBringIntoView: BringIntoViewRequester? = null,
+    scope: kotlinx.coroutines.CoroutineScope? = null,
+): Modifier = onPreviewKeyEvent { event ->
+    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+    val target = when (event.key) {
+        Key.DirectionUp -> up to upBringIntoView
+        Key.DirectionDown -> down to downBringIntoView
+        else -> null to null
+    }
+    val focusRequester = target.first ?: return@onPreviewKeyEvent false
+    if (target.second != null && scope != null) {
+        scope.launch {
+            target.second?.bringIntoView()
+            focusRequester.requestFocus()
+        }
+    } else {
+        focusRequester.requestFocus()
+    }
+    true
 }
 
 @Composable
@@ -1662,17 +1898,21 @@ private fun M3uFileProviderScreen(
 }
 
 @Composable
-private fun ProviderFormContainer(content: @Composable ColumnScope.() -> Unit) {
+private fun ProviderFormContainer(
+    modifier: Modifier = Modifier,
+    verticalArrangement: Arrangement.Vertical = Arrangement.Center,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val colors = LocalWatchioColors.current
     val scrollState = rememberScrollState()
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(colors.surfaceBase)
             .verticalScroll(scrollState)
             .imePadding()
             .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = verticalArrangement,
         content = content,
     )
 }
@@ -1779,6 +2019,8 @@ private fun WatchioHomeBackground() {
 @Composable
 internal fun HomeTopBar(
     now: LocalDateTime,
+    activeServerLabel: String? = null,
+    activeServerOnline: Boolean = true,
     onSearch: () -> Unit,
     onSports: () -> Unit,
     onAnnouncements: () -> Unit,
@@ -1792,6 +2034,7 @@ internal fun HomeTopBar(
     val dateText = now.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
     BoxWithConstraints(modifier = Modifier.fillMaxWidth().testTag("home-header")) {
         val compact = maxWidth < 720.dp
+        Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1823,7 +2066,22 @@ internal fun HomeTopBar(
                 HomeTopAction("Playlist", HomeIconKind.Provider, colors.seriesAccent, onProviders)
             }
         }
+        if (activeServerLabel != null) {
+            Row(
+                modifier = Modifier.align(Alignment.CenterHorizontally).testTag("active-server-indicator"),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(activeServerLabel, color = colors.textSecondary, style = type.label, maxLines = 1)
+                Text(
+                    if (activeServerOnline) "Active" else "Inactive",
+                    color = if (activeServerOnline) Color(0xFF22C55E) else Color(0xFFEF4444),
+                    style = type.label,
+                    maxLines = 1,
+                )
+            }
+        }
     }
+}
 }
 
 @Composable
@@ -1960,6 +2218,7 @@ private fun TvRootExitBackHandler(
 private fun HomePrimaryCard(
     action: HomeAction,
     refreshing: Boolean,
+    refreshProgress: Float?,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -2005,26 +2264,43 @@ private fun HomePrimaryCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Box(
-                    modifier = Modifier
-                        .width(44.dp)
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(action.accent.copy(alpha = 0.28f))
-                        .border(1.dp, action.accent.copy(alpha = 0.70f), RoundedCornerShape(14.dp))
-                        .clickable(onClick = onRefresh)
-                        .semantics { contentDescription = "Refresh ${action.title}" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (refreshing) {
-                        CircularProgressIndicator(color = action.accent, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    } else {
-                        HomeRefreshIcon(action.accent)
-                    }
-                }
+                HomeRefreshControl(action.title, action.accent, refreshing, onRefresh)
+            }
+            refreshProgress?.let { progress ->
+                HomeRefreshProgress(action.title, action.accent, progress)
             }
         }
     }
+}
+
+@Composable
+internal fun HomeRefreshControl(
+    title: String,
+    accent: Color,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+) {
+    WatchioCard(
+        modifier = Modifier.width(44.dp).height(34.dp).testTag("home-${title.lowercase().replace(' ', '-')}-refresh"),
+        accent = accent,
+        enabled = !refreshing,
+        minWidth = 44.dp,
+        minHeight = 34.dp,
+        contentDescription = "Refresh $title",
+        onClick = onRefresh,
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { HomeRefreshIcon(accent) }
+    }
+}
+
+@Composable
+internal fun HomeRefreshProgress(title: String, accent: Color, progress: Float) {
+    LinearProgressIndicator(
+        progress = { progress },
+        color = accent,
+        trackColor = LocalWatchioColors.current.surfaceElevated,
+        modifier = Modifier.fillMaxWidth().height(4.dp).testTag("home-${title.lowercase().replace(' ', '-')}-refresh-progress"),
+    )
 }
 
 @Composable
@@ -3001,6 +3277,7 @@ private fun providersFactory(container: AppContainer): ViewModelProvider.Factory
                 settingsRepository = container.settingsRepository,
                 xtreamRepository = container.xtreamRepository,
                 m3uRepository = container.m3uRepository,
+                endpointManager = container.endpointManager,
             ) as T
         }
     }

@@ -21,10 +21,16 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -173,6 +179,13 @@ private fun DateControls(
     val previousFocus = remember { FocusRequester() }
     val todayFocus = remember { FocusRequester() }
     val nextFocus = remember { FocusRequester() }
+    val inputModeManager = LocalInputModeManager.current
+    var initialFocusRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(inputModeManager.inputMode) {
+        if (!initialFocusRequested && inputModeManager.inputMode == InputMode.Keyboard) {
+            initialFocusRequested = todayFocus.requestFocus()
+        }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         WatchioButton("‹", onPreviousDay, Modifier.width(52.dp).focusRequester(previousFocus).focusProperties { right = todayFocus }.testTag("sports-previous").semantics { contentDescription = "Previous day" }, WatchioButtonVariant.Ghost)
         if (date != null) Text(date.format(DateTimeFormatter.ofPattern("EEEE d MMMM")), color = colors.textPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.widthIn(min = 220.dp).testTag("sports-date"), textAlign = androidx.compose.ui.text.style.TextAlign.Center)

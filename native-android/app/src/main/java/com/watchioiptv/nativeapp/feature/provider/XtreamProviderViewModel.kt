@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.watchioiptv.nativeapp.data.xtream.XtreamCredentialsInput
 import com.watchioiptv.nativeapp.data.xtream.XtreamImportState
+import com.watchioiptv.nativeapp.data.xtream.XtreamImportStage
 import com.watchioiptv.nativeapp.data.xtream.XtreamRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,14 +14,13 @@ import kotlinx.coroutines.launch
 
 data class XtreamProviderFormState(
     val providerName: String = "",
-    val serverUrl: String = "",
     val username: String = "",
     val password: String = "",
     val importState: XtreamImportState = XtreamImportState.Idle,
     val errorMessage: String? = null,
 ) {
     val canSubmit: Boolean =
-        providerName.isNotBlank() && serverUrl.isNotBlank() && username.isNotBlank() && password.isNotBlank() &&
+        providerName.isNotBlank() && username.isNotBlank() && password.isNotBlank() &&
             importState !is XtreamImportState.Importing
 }
 
@@ -43,10 +43,6 @@ class XtreamProviderViewModel(
         _state.value = _state.value.copy(providerName = value, errorMessage = null)
     }
 
-    fun updateServerUrl(value: String) {
-        _state.value = _state.value.copy(serverUrl = value, errorMessage = null)
-    }
-
     fun updateUsername(value: String) {
         _state.value = _state.value.copy(username = value, errorMessage = null)
     }
@@ -56,26 +52,33 @@ class XtreamProviderViewModel(
     }
 
     fun connect(onSuccess: () -> Unit) {
+        if (importJob?.isActive == true) return
         val snapshot = _state.value
         if (!snapshot.canSubmit) {
             _state.value = snapshot.copy(errorMessage = "All fields are required.")
             return
         }
-        importJob?.cancel()
+        _state.value = snapshot.copy(
+            importState = XtreamImportState.Importing(XtreamImportStage.Authenticating, snapshot.providerName),
+            errorMessage = null,
+        )
         importJob = viewModelScope.launch {
             runCatching {
-                xtreamRepository.addProvider(
+                xtreamRepository.addProviderTwoPhase(
                     XtreamCredentialsInput(
                         displayName = snapshot.providerName,
-                        serverUrl = snapshot.serverUrl,
                         username = snapshot.username,
                         password = snapshot.password,
+                        managed = true,
                     ),
                 )
             }.onSuccess {
                 onSuccess()
             }.onFailure { throwable ->
-                _state.value = _state.value.copy(errorMessage = throwable.message ?: "Unable to connect to provider.")
+                _state.value = _state.value.copy(
+                    importState = XtreamImportState.Idle,
+                    errorMessage = throwable.message ?: "Unable to connect to provider.",
+                )
             }
         }
     }

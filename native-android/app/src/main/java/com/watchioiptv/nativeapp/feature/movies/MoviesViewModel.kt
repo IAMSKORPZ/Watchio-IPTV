@@ -6,6 +6,7 @@ import com.watchioiptv.nativeapp.core.player.PlaybackMedia
 import com.watchioiptv.nativeapp.core.player.PlayerReliability
 import com.watchioiptv.nativeapp.core.player.WatchioPlayerManager
 import com.watchioiptv.nativeapp.core.util.WatchioClock
+import com.watchioiptv.nativeapp.core.model.ProviderId
 import com.watchioiptv.nativeapp.data.movies.MovieCategory
 import com.watchioiptv.nativeapp.data.movies.MovieDetails
 import com.watchioiptv.nativeapp.data.movies.MoviesRepository
@@ -68,6 +69,10 @@ class MoviesViewModel(
     private var selectedMovie: WatchioMovieItem? = null
     private var progressJob: Job? = null
     private var categoryJob: Job? = null
+    private var categoryProviderId: ProviderId? = null
+    private var manualCategorySelected = false
+    private var manualCategoryId: String? = null
+    private var initialCategoryResolved = false
     private var initialResumePending = false
     private var initialResumeStartMs = 0L
 
@@ -130,8 +135,27 @@ class MoviesViewModel(
                 return@launch
             }
             val categories = moviesRepository.categories(providerId)
-            val selected = categories.firstOrNull()
-            val items = selected?.let { moviesRepository.moviePage(providerId, it, 0, MoviesRepository.PAGE_SIZE) }.orEmpty()
+            if (categoryProviderId != providerId) {
+                categoryProviderId = providerId
+                manualCategorySelected = false
+                manualCategoryId = null
+                initialCategoryResolved = false
+            }
+            val current = mutableMovies.value
+            val restored = current.selectedCategory?.let { selected ->
+                categories.firstOrNull { it.id == selected.id }
+            }
+            val preferred = preferredInitialMovieCategory(categories)
+            val load = resolveMovieCategoryLoad(categories, restored, manualCategoryId, manualCategorySelected) { category ->
+                moviesRepository.moviePage(providerId, category, 0, MoviesRepository.PAGE_SIZE)
+            }
+            val selected = load.selectedCategory.also {
+                if (preferred != null || manualCategorySelected) initialCategoryResolved = true
+                else if (!initialCategoryResolved) {
+                    if (current.catalogSyncState != CatalogSyncState.Syncing) initialCategoryResolved = true
+                }
+            }
+            val items = load.items
             mutableMovies.value = MoviesUiState(
                 loading = false,
                 errorMessage = if (mutableMovies.value.catalogSyncState == CatalogSyncState.Failed) "Movies couldn't finish syncing." else null,
@@ -146,6 +170,9 @@ class MoviesViewModel(
 
     fun selectCategory(category: MovieCategory) {
         categoryJob?.cancel()
+        manualCategorySelected = true
+        manualCategoryId = category.id
+        initialCategoryResolved = true
         val currentQuery = mutableMovies.value.searchQuery
         mutableMovies.value = mutableMovies.value.copy(selectedCategory = category, movies = emptyList(), loadingMore = false, hasMore = false)
         categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
@@ -353,5 +380,49 @@ class MoviesViewModel(
         super.onCleared()
     }
 }
+
+internal fun preferredInitialMovieCategory(categories: List<MovieCategory>): MovieCategory? {
+    val normalizedCategories = categories.associateBy { normalizeMovieCategoryName(it.name) }
+    return normalizedCategories["latest releases hollywood"]
+        ?: normalizedCategories["latest releases"]
+        ?: normalizedCategories["just released hollywood"]
+}
+
+internal fun resolveMovieCategory(
+    categories: List<MovieCategory>,
+    restored: MovieCategory?,
+    manualCategoryId: String?,
+    manualCategorySelected: Boolean,
+): MovieCategory? {
+    val manual = manualCategoryId?.let { id -> categories.firstOrNull { it.id == id } }
+    return when {
+        manualCategorySelected && manual != null -> manual
+        manualCategorySelected -> categories.firstOrNull()
+        preferredInitialMovieCategory(categories) != null -> preferredInitialMovieCategory(categories)
+        restored != null -> restored
+        else -> categories.firstOrNull()
+    }
+}
+
+internal data class MovieCategoryLoad<T>(
+    val selectedCategory: MovieCategory?,
+    val items: List<T>,
+)
+
+internal suspend fun <T> resolveMovieCategoryLoad(
+    categories: List<MovieCategory>,
+    restored: MovieCategory?,
+    manualCategoryId: String?,
+    manualCategorySelected: Boolean,
+    loadPage: suspend (MovieCategory) -> List<T>,
+): MovieCategoryLoad<T> {
+    val selected = resolveMovieCategory(categories, restored, manualCategoryId, manualCategorySelected)
+    return MovieCategoryLoad(selected, selected?.let { loadPage(it) }.orEmpty())
+}
+
+private fun normalizeMovieCategoryName(value: String): String =
+    value.trim().lowercase()
+        .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+        .trim()
 
 private fun CatalogSyncState?.orIdle(): CatalogSyncState = this ?: CatalogSyncState.Idle

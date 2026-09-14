@@ -18,11 +18,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.watchioiptv.nativeapp.ui.LivePlaybackOrigin
 import com.watchioiptv.nativeapp.ui.closeLiveFullscreen
+import com.watchioiptv.nativeapp.ui.navigateHomeAsRoot
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -76,6 +78,48 @@ class LivePlaybackNavigationComposeTest {
         pressBack()
 
         composeRule.onNodeWithTag("live-tv-screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun completedProviderFlowMakesHomeTheBackStackRoot() {
+        composeRule.setContent { HomeRootHarness() }
+
+        composeRule.onNodeWithTag("open-provider-form").performClick()
+        composeRule.onNodeWithTag("complete-provider-form").performClick()
+
+        composeRule.onNodeWithTag("home-without-previous-entry").assertIsDisplayed()
+    }
+
+    @Composable
+    private fun HomeRootHarness() {
+        val navController = rememberNavController()
+        val currentEntry by navController.currentBackStackEntryAsState()
+        NavHost(navController = navController, startDestination = "providers") {
+            composable("providers") {
+                Button(
+                    onClick = { navController.navigate("providers/add") },
+                    modifier = Modifier.testTag("open-provider-form"),
+                ) { Text("Add provider") }
+            }
+            composable("providers/add") {
+                Button(
+                    onClick = { navigateHomeAsRoot(navController) },
+                    modifier = Modifier.testTag("complete-provider-form"),
+                ) { Text("Connect") }
+            }
+            composable("home") {
+                Text(
+                    text = "Home",
+                    modifier = Modifier.testTag(
+                        if (currentEntry != null && navController.previousBackStackEntry == null) {
+                            "home-without-previous-entry"
+                        } else {
+                            "home-with-previous-entry"
+                        }
+                    ),
+                )
+            }
+        }
     }
 
     @Composable

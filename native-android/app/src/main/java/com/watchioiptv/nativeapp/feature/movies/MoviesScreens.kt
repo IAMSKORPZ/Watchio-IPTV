@@ -35,9 +35,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -56,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -74,6 +77,8 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -98,6 +103,8 @@ import com.watchioiptv.nativeapp.ui.components.ResumePlaybackRequest
 import com.watchioiptv.nativeapp.ui.components.WatchioCard
 import com.watchioiptv.nativeapp.ui.components.WatchioFocusableCard
 import com.watchioiptv.nativeapp.ui.components.WatchioPageHeader
+import com.watchioiptv.nativeapp.ui.focus.CategoryContentFocusTransferEffect
+import com.watchioiptv.nativeapp.ui.focus.rememberCategoryContentFocusTransferState
 import com.watchioiptv.nativeapp.ui.components.WatchioProgressBar
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioBorders
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioColors
@@ -119,6 +126,10 @@ fun MoviesScreen(
 ) {
     val colors = LocalWatchioColors.current
     val firstCategoryFocus = remember { FocusRequester() }
+    val firstMovieFocus = remember { FocusRequester() }
+    val inputModeManager = LocalInputModeManager.current
+    var initialFocusRequested by remember { mutableStateOf(false) }
+    val contentFocusTransfer = rememberCategoryContentFocusTransferState()
     var searchVisible by remember { mutableStateOf(initialSearchVisible) }
     var optionsMovie by remember { mutableStateOf<WatchioMovieItem?>(null) }
     val gridState = rememberLazyGridState()
@@ -143,9 +154,17 @@ fun MoviesScreen(
         }
         return
     }
-    LaunchedEffect(state.categories.firstOrNull()?.id) {
-        if (state.categories.isNotEmpty()) firstCategoryFocus.requestFocus()
+    LaunchedEffect(state.categories, state.selectedCategory?.id, inputModeManager.inputMode) {
+        if (!initialFocusRequested && state.categories.isNotEmpty() && inputModeManager.inputMode == InputMode.Keyboard) {
+            initialFocusRequested = firstCategoryFocus.requestFocus()
+        }
     }
+    CategoryContentFocusTransferEffect(
+        state = contentFocusTransfer,
+        selectedCategoryId = state.selectedCategory?.id,
+        targetContentId = state.movies.firstOrNull()?.id,
+        targetFocusRequester = firstMovieFocus,
+    )
     Box(Modifier.fillMaxSize().background(colors.surfaceBase).testTag("movies-screen")) {
         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)) {
             WatchioPageHeader(title = "MOVIES", onBack = onBack, testTagPrefix = "movies") {
@@ -180,7 +199,11 @@ fun MoviesScreen(
                     MovieCategoryRail(
                         state = state,
                         firstFocus = firstCategoryFocus,
-                        onCategory = onCategory,
+                        onCategory = { category, categoryWasFocused ->
+                            initialFocusRequested = true
+                            contentFocusTransfer.onCategoryActivated(category.id, categoryWasFocused)
+                            onCategory(category)
+                        },
                         modifier = Modifier.width(categoryWidth).fillMaxHeight(),
                     )
                     WatchioCard(modifier = Modifier.weight(1f).fillMaxHeight().testTag("movie-grid-panel"), accent = colors.moviesAccent, minWidth = 0.dp, minHeight = 0.dp) {
@@ -214,16 +237,17 @@ fun MoviesScreen(
                                     contentPadding = PaddingValues(bottom = 24.dp),
                                     modifier = Modifier.fillMaxSize().testTag("movie-grid"),
                                 ) {
-                                    items(
+                                    itemsIndexed(
                                         items = state.movies,
-                                        key = { "${it.providerId.value}:${it.id}" },
-                                        contentType = { "movie_card" },
-                                    ) { movie ->
+                                        key = { _, item -> "${item.providerId.value}:${item.id}" },
+                                        contentType = { _, _ -> "movie_card" },
+                                    ) { index, movie ->
                                         MovieCard(
                                             movie = movie,
                                             showProgress = isContinueWatching,
                                             onMovie = onMovie,
                                             onMovieOptions = { optionsMovie = it },
+                                            modifier = if (index == 0) Modifier.focusRequester(firstMovieFocus) else Modifier,
                                         )
                                     }
                                 }
@@ -356,24 +380,36 @@ private fun MoviesMoreButton(accent: Color, onClick: () -> Unit, modifier: Modif
 private fun MovieCategoryRail(
     state: MoviesUiState,
     firstFocus: FocusRequester,
-    onCategory: (MovieCategory) -> Unit,
+    onCategory: (MovieCategory, Boolean) -> Unit,
     modifier: Modifier,
 ) {
     val colors = LocalWatchioColors.current
     // No category search field — show all categories as returned by the repository.
     // Repository always prepends: ALL MOVIES, FAVOURITES, HISTORY, then provider categories.
     val visible = state.categories
+    val listState = rememberLazyListState()
+    LaunchedEffect(visible, state.selectedCategory?.id) {
+        val selectedIndex = visible.indexOfFirst { it.id == state.selectedCategory?.id }
+        if (selectedIndex >= 0) {
+            val layout = listState.layoutInfo
+            val selectedItem = layout.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
+            val fullyVisible = selectedItem != null &&
+                selectedItem.offset >= layout.viewportStartOffset &&
+                selectedItem.offset + selectedItem.size <= layout.viewportEndOffset
+            if (!fullyVisible) listState.scrollToItem(selectedIndex)
+        }
+    }
     WatchioCard(modifier = modifier.testTag("movie-category-panel"), accent = colors.moviesAccent, minWidth = 0.dp, minHeight = 0.dp) {
-        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp).testTag("movie-categories")) {
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp).testTag("movie-categories")) {
             itemsIndexed(visible, key = { _, item -> item.id }) { index, category ->
                 MovieCategoryRow(
                     category = category,
                     selected = category.id == state.selectedCategory?.id,
-                    onClick = { onCategory(category) },
+                    onClick = { categoryWasFocused -> onCategory(category, categoryWasFocused) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 6.dp)
-                        .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                        .then(if (category.id == state.selectedCategory?.id || (state.selectedCategory == null && index == 0)) Modifier.focusRequester(firstFocus) else Modifier)
                         .testTag("movie-category-${category.id}"),
                 )
             }
@@ -402,21 +438,23 @@ private fun MovieCategoryRail(
 private fun MovieCategoryRow(
     category: MovieCategory,
     selected: Boolean,
-    onClick: () -> Unit,
+    onClick: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
     val typography = LocalWatchioTypography.current
     var isOverflowing by remember(category.name) { mutableStateOf(false) }
+    var categoryHasFocus by remember(category.id) { mutableStateOf(false) }
 
     WatchioCard(
-        modifier = modifier.height(48.dp),
+        modifier = modifier.height(48.dp).onFocusChanged { categoryHasFocus = it.hasFocus },
         accent = if (selected) colors.moviesAccent else colors.focusGlow,
         selected = selected,
         minWidth = 0.dp,
         minHeight = 48.dp,
         contentDescription = category.name,
-        onClick = onClick,
+        focusedBackgroundAlpha = 0.04f,
+        onClick = { onClick(categoryHasFocus) },
     ) { focused ->
         val shouldMarquee = (focused || selected) && isOverflowing
         Box(
@@ -850,13 +888,14 @@ private fun MovieCard(
     showProgress: Boolean = false,
     onMovie: (WatchioMovieItem) -> Unit,
     onMovieOptions: (WatchioMovieItem) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val formattedRating = movie.formattedRating ?: formatRating(movie.rating)
     Column(
-        Modifier
+        modifier
             .border(if (focused) 3.dp else 1.dp, if (focused) colors.focusBorder else Color.Transparent)
             .background(if (focused) colors.moviesAccent.copy(alpha = 0.12f) else Color.Transparent)
             .combinedClickable(

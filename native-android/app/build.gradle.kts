@@ -121,6 +121,7 @@ android {
             versionNameSuffix = "-debug"
             isDebuggable = true
             signingConfig = signingConfigs.getByName("watchioDev")
+            resValue("string", "app_name", "Watchio IPTV Dev")
         }
         create("local") {
             initWith(getByName("debug"))
@@ -128,7 +129,7 @@ android {
             versionNameSuffix = "-local"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("debug")
-            resValue("string", "app_name", "Watchio Local")
+            resValue("string", "app_name", "Watchio IPTV Local")
         }
         create("uitest") {
             initWith(getByName("local"))
@@ -136,7 +137,7 @@ android {
             versionNameSuffix = "-uitest"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("debug")
-            resValue("string", "app_name", "Watchio Test")
+            resValue("string", "app_name", "Watchio IPTV Test")
         }
         release {
             isMinifyEnabled = true

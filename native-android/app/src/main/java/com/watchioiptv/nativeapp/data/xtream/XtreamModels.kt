@@ -4,9 +4,10 @@ import com.watchioiptv.nativeapp.core.model.ProviderId
 
 data class XtreamCredentialsInput(
     val displayName: String,
-    val serverUrl: String,
+    val serverUrl: String? = null,
     val username: String,
     val password: String,
+    val managed: Boolean = false,
 )
 
 data class XtreamAuthInfo(

@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -21,6 +22,7 @@ import com.watchioiptv.nativeapp.ui.theme.LocalWatchioTypography
 fun WatchioFocusableCard(
     title: String,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
     accent: Color = LocalWatchioColors.current.liveTvAccent,
     contentPadding: PaddingValues = PaddingValues(horizontal = 24.dp, vertical = 18.dp),
     minWidth: Dp = LocalWatchioComponentSizes.current.cardMinWidth,
@@ -33,6 +35,7 @@ fun WatchioFocusableCard(
     val colors = LocalWatchioColors.current
     WatchioCard(
         modifier = modifier,
+        focusRequester = focusRequester,
         accent = accent,
         minWidth = minWidth,
         minHeight = minHeight,

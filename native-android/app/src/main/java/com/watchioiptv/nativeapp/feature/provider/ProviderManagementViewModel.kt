@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.watchioiptv.nativeapp.core.model.ProviderId
 import com.watchioiptv.nativeapp.data.m3u.M3uRepository
 import com.watchioiptv.nativeapp.data.xtream.XtreamRepository
+import com.watchioiptv.nativeapp.data.xtream.WatchioEndpointManager
+import com.watchioiptv.nativeapp.feature.home.managedServerLabel
 import com.watchioiptv.nativeapp.domain.model.ProviderType
 import com.watchioiptv.nativeapp.domain.model.WatchioProvider
 import com.watchioiptv.nativeapp.domain.repository.ProviderRepository
@@ -21,8 +23,12 @@ data class ProviderManagementUiState(
     val providers: List<ProviderRowUiState> = emptyList(),
     val selectedProviderId: ProviderId? = null,
     val refreshingProviderId: ProviderId? = null,
+    val switchingProviderId: ProviderId? = null,
+    val serverChoices: List<ManagedServerChoice> = emptyList(),
     val message: String? = null,
 )
+
+data class ManagedServerChoice(val id: String, val name: String, val active: Boolean)
 
 data class ProviderRowUiState(
     val provider: WatchioProvider,
@@ -43,15 +49,19 @@ class ProviderManagementViewModel(
     private val settingsRepository: SettingsRepository,
     private val xtreamRepository: XtreamRepository,
     private val m3uRepository: M3uRepository,
+    private val endpointManager: WatchioEndpointManager,
 ) : ViewModel() {
     private val status = MutableStateFlow(ProviderManagementUiState())
     private var refreshJob: Job? = null
+    private var switchJob: Job? = null
 
     val state: StateFlow<ProviderManagementUiState> = combine(
         providerRepository.observeProviders(),
         settingsRepository.selectedProviderId,
         status,
-    ) { providers, selectedProviderId, current ->
+        endpointManager.configuredEndpoints,
+        endpointManager.activeEndpoint,
+    ) { providers, selectedProviderId, current, endpoints, activeEndpoint ->
         val rows = providers.map { provider ->
             val counts = counts(provider)
             ProviderRowUiState(
@@ -62,7 +72,12 @@ class ProviderManagementViewModel(
                 refreshState = if (current.refreshingProviderId == provider.id) "Refreshing..." else provider.lastRefreshAtEpochMs?.let { "Updated" } ?: "Idle",
             )
         }
-        current.copy(providers = rows, selectedProviderId = selectedProviderId, message = current.message)
+        current.copy(
+            providers = rows,
+            selectedProviderId = selectedProviderId,
+            serverChoices = endpoints.map { ManagedServerChoice(it.id, managedServerLabel(it.id), it.url == activeEndpoint?.url) },
+            message = current.message,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProviderManagementUiState())
 
     fun select(providerId: ProviderId) {
@@ -97,6 +112,22 @@ class ProviderManagementViewModel(
             val next = remaining.firstOrNull { it.enabled && it.type == ProviderType.Xtream }?.id
             settingsRepository.setSelectedProviderId(next)
             status.value = status.value.copy(message = if (next == null) "Provider removed. Add a provider to continue." else "Provider removed")
+        }
+    }
+
+    init {
+        viewModelScope.launch { runCatching { endpointManager.refreshConfig() } }
+    }
+
+    fun switchServer(providerId: ProviderId, endpointId: String) {
+        if (switchJob?.isActive == true) return
+        switchJob = viewModelScope.launch {
+            status.value = status.value.copy(switchingProviderId = providerId, message = "Switching server...")
+            val result = runCatching { xtreamRepository.switchManagedProviderServer(providerId, endpointId) }
+            status.value = status.value.copy(
+                switchingProviderId = null,
+                message = result.fold(onSuccess = { "${managedServerLabel(it.id)} active" }, onFailure = { it.message ?: "Server switch failed." }),
+            )
         }
     }
 

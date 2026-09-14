@@ -37,6 +37,8 @@ import com.watchioiptv.nativeapp.data.series.SeriesRepository
 import com.watchioiptv.nativeapp.data.updates.UpdateRepository
 import com.watchioiptv.nativeapp.data.xtream.XtreamPlaybackUrlResolver
 import com.watchioiptv.nativeapp.data.xtream.XtreamRepository
+import com.watchioiptv.nativeapp.data.xtream.WatchioEndpointManager
+import com.watchioiptv.nativeapp.data.xtream.AndroidWatchioEndpointConfigSource
 import com.watchioiptv.nativeapp.domain.playback.PlaybackUrlResolver
 import com.watchioiptv.nativeapp.domain.repository.CatalogRepository
 import com.watchioiptv.nativeapp.domain.repository.FavoritesRepository
@@ -70,6 +72,7 @@ class AppContainer(context: Context) {
     val secretStore: SecretStore = AndroidSecretStore(appContext)
     val providerCredentialStore = ProviderCredentialStore(secretStore)
     val networkModule = NetworkModule()
+    val endpointManager = WatchioEndpointManager(AndroidWatchioEndpointConfigSource(appContext, networkModule.okHttpClient))
 
     private val announcementRemote = if (BuildConfig.APPLICATION_ID.endsWith(".uitest")) {
         StaticAnnouncementRemoteDataSource(UITEST_ANNOUNCEMENT_FEED)
@@ -102,6 +105,7 @@ class AppContainer(context: Context) {
         settingsRepository = settingsRepository,
         retrofitFactory = networkModule::retrofit,
         clock = SystemWatchioClock,
+        endpointManager = endpointManager,
     )
     val m3uRepository = M3uRepository(
         database = database,

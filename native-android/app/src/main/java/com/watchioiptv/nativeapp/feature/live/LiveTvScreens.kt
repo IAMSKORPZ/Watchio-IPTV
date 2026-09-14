@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -56,6 +56,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
@@ -81,6 +83,8 @@ import com.watchioiptv.nativeapp.ui.components.WatchioButtonVariant
 import com.watchioiptv.nativeapp.ui.components.WatchioCard
 import com.watchioiptv.nativeapp.ui.components.WatchioFocusableCard
 import com.watchioiptv.nativeapp.ui.components.WatchioPageHeader
+import com.watchioiptv.nativeapp.ui.focus.CategoryContentFocusTransferEffect
+import com.watchioiptv.nativeapp.ui.focus.rememberCategoryContentFocusTransferState
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioColors
 import kotlinx.coroutines.delay
 import java.time.Instant
@@ -96,6 +100,7 @@ fun LiveTvScreen(
     onCategorySearch: (String) -> Unit,
     onLiveSearch: (String) -> Unit,
     onChannel: (LiveTvChannel) -> Unit,
+    onChannelBrowsed: (LiveTvChannel) -> Unit = {},
     onFavorite: (LiveTvChannel) -> Unit,
     onRetry: () -> Unit,
     onRefreshEpg: () -> Unit,
@@ -104,6 +109,10 @@ fun LiveTvScreen(
 ) {
     val colors = LocalWatchioColors.current
     val firstCategoryFocus = remember { FocusRequester() }
+    val contentFocus = remember { FocusRequester() }
+    val inputModeManager = LocalInputModeManager.current
+    var initialFocusRequested by remember { mutableStateOf(false) }
+    val contentFocusTransfer = rememberCategoryContentFocusTransferState()
     var liveSearchVisible by remember { mutableStateOf(false) }
     var optionsChannel by remember { mutableStateOf<LiveTvChannel?>(null) }
     var isLongBackHandled by remember { mutableStateOf(false) }
@@ -114,16 +123,23 @@ fun LiveTvScreen(
         }
         return
     }
-    LaunchedEffect(uiState.categories.firstOrNull()?.id) {
-        if (uiState.categories.isNotEmpty()) firstCategoryFocus.requestFocus()
+    LaunchedEffect(uiState.categories, uiState.selectedCategory?.id, inputModeManager.inputMode) {
+        if (!initialFocusRequested && uiState.categories.isNotEmpty() && inputModeManager.inputMode == InputMode.Keyboard) {
+            initialFocusRequested = firstCategoryFocus.requestFocus()
+        }
     }
+    CategoryContentFocusTransferEffect(
+        state = contentFocusTransfer,
+        selectedCategoryId = uiState.selectedCategory?.id,
+        targetContentId = uiState.selectedChannel?.id ?: uiState.channels.firstOrNull()?.id,
+        targetFocusRequester = contentFocus,
+    )
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.linearGradient(listOf(colors.surfaceBase, Color(0xFF12071F), Color(0xFF041B22))))
             .padding(horizontal = 18.dp, vertical = 14.dp)
             .testTag("live-tv-screen")
-            .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.key == Key.Back || event.key == Key.Escape) {
                     val nativeEvent = event.nativeKeyEvent
@@ -206,7 +222,11 @@ fun LiveTvScreen(
                         state = uiState,
                         firstFocus = firstCategoryFocus,
                         onCategorySearch = onCategorySearch,
-                        onCategory = onCategory,
+                        onCategory = { category, categoryWasFocused ->
+                            initialFocusRequested = true
+                            contentFocusTransfer.onCategoryActivated(category.id, categoryWasFocused)
+                            onCategory(category)
+                        },
                         modifier = Modifier.weight(if (compact) 0.22f else 0.22f).fillMaxHeight(),
                     )
                     ChannelListPanel(
@@ -217,6 +237,8 @@ fun LiveTvScreen(
                             if (channel.id == uiState.selectedChannel?.id) onFullscreen() else onChannel(channel)
                         },
                         onChannelOptions = { optionsChannel = it },
+                        onChannelBrowsed = onChannelBrowsed,
+                        contentFocus = contentFocus,
                         modifier = Modifier.weight(if (compact) 0.28f else 0.28f).fillMaxHeight(),
                     )
                     RightLivePanel(
@@ -353,9 +375,8 @@ private fun LiveChannelSearchOverlay(
             Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.48f))
-                .imePadding()
                 .testTag("live-search-overlay"),
-            contentAlignment = Alignment.Center,
+            contentAlignment = Alignment.BottomCenter,
         ) {
             WatchioCard(
                 modifier = Modifier
@@ -443,7 +464,7 @@ private fun CategoryPanel(
     state: LiveTvUiState,
     firstFocus: FocusRequester,
     onCategorySearch: (String) -> Unit,
-    onCategory: (LiveTvCategory) -> Unit,
+    onCategory: (LiveTvCategory, Boolean) -> Unit,
     modifier: Modifier,
 ) {
     val colors = LocalWatchioColors.current
@@ -458,15 +479,15 @@ private fun CategoryPanel(
         }
     }
     WatchioCard(modifier = modifier.testTag("live-category-panel"), accent = colors.liveTvAccent, minWidth = 0.dp, minHeight = 0.dp) {
-        Column(Modifier.fillMaxSize().padding(10.dp)) {
+        Column(Modifier.fillMaxSize().padding(7.dp)) {
             OutlinedTextField(
                 value = state.categorySearchQuery,
                 onValueChange = onCategorySearch,
                 singleLine = true,
                 label = { Text("Search categories") },
-                modifier = Modifier.fillMaxWidth().testTag("live-category-search"),
+                modifier = Modifier.fillMaxWidth().height(52.dp).testTag("live-category-search"),
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("live-categories")) {
                 itemsIndexed(visible, key = { _, item -> item.id }) { index, category ->
                     val isSelected = category.id == state.selectedCategory?.id
@@ -474,10 +495,10 @@ private fun CategoryPanel(
                     CategoryRow(
                         category = category,
                         selected = isSelected,
-                        onClick = { onCategory(category) },
+                        onClick = { categoryWasFocused -> onCategory(category, categoryWasFocused) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 8.dp)
+                            .padding(bottom = 5.dp)
                             .then(if (isDefaultFocus) Modifier.focusRequester(firstFocus) else Modifier)
                             .testTag(categoryTag(category)),
                     )
@@ -488,16 +509,18 @@ private fun CategoryPanel(
 }
 
 @Composable
-private fun CategoryRow(category: LiveTvCategory, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun CategoryRow(category: LiveTvCategory, selected: Boolean, onClick: (Boolean) -> Unit, modifier: Modifier) {
     val colors = LocalWatchioColors.current
+    var categoryHasFocus by remember(category.id) { mutableStateOf(false) }
     WatchioCard(
-        modifier = modifier,
+        modifier = modifier.onFocusChanged { categoryHasFocus = it.hasFocus },
         accent = if (selected) colors.liveTvAccent else colors.focusGlow,
         selected = selected,
         minWidth = 0.dp,
-        minHeight = 54.dp,
+        minHeight = 46.dp,
         contentDescription = category.name,
-        onClick = onClick,
+        focusedBackgroundAlpha = 0.04f,
+        onClick = { onClick(categoryHasFocus) },
     ) {
         Text(
             category.name,
@@ -505,7 +528,7 @@ private fun CategoryRow(category: LiveTvCategory, selected: Boolean, onClick: ()
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
         )
     }
 }
@@ -517,6 +540,8 @@ private fun ChannelListPanel(
     initialScrollIndex: Int,
     onChannel: (LiveTvChannel) -> Unit,
     onChannelOptions: (LiveTvChannel) -> Unit,
+    onChannelBrowsed: (LiveTvChannel) -> Unit,
+    contentFocus: FocusRequester,
     modifier: Modifier,
 ) {
     val colors = LocalWatchioColors.current
@@ -541,7 +566,14 @@ private fun ChannelListPanel(
             modifier = Modifier.fillMaxSize().padding(10.dp).testTag("live-channels"),
         ) {
             items(channels, key = { it.id }) { channel ->
-                ChannelRow(channel, channel.id == selectedChannel?.id, onChannel, onChannelOptions)
+                ChannelRow(
+                    channel = channel,
+                    selected = channel.id == selectedChannel?.id,
+                    onChannel = onChannel,
+                    onChannelOptions = onChannelOptions,
+                    onChannelBrowsed = onChannelBrowsed,
+                    modifier = if (channel.id == selectedChannel?.id) Modifier.focusRequester(contentFocus) else Modifier,
+                )
             }
         }
     }
@@ -631,7 +663,7 @@ private fun ChannelInfoCard(
     modifier: Modifier,
 ) {
     val colors = LocalWatchioColors.current
-    val channel = uiState.selectedChannel
+    val channel = uiState.browsedChannel ?: uiState.selectedChannel
     val range = programmeTimeRange(uiState.nowNext.currentStartEpochMs, uiState.nowNext.currentEndEpochMs)
     WatchioCard(modifier = modifier, accent = colors.liveTvAccent, minWidth = 0.dp, minHeight = 0.dp) {
         Column(
@@ -667,7 +699,7 @@ private fun EpgPanel(uiState: LiveTvUiState, compact: Boolean, onRefreshEpg: () 
     val colors = LocalWatchioColors.current
     WatchioCard(modifier = modifier, accent = colors.seriesAccent, minWidth = 0.dp, minHeight = 0.dp) {
         Column(Modifier.fillMaxSize().padding(if (compact) 12.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {
-            val channel = uiState.selectedChannel
+            val channel = uiState.browsedChannel ?: uiState.selectedChannel
             Text("CURRENT PROGRAMME", color = colors.textPrimary, fontWeight = FontWeight.Bold)
             if (channel == null) {
                 Text("No programme selected", color = colors.textSecondary)
@@ -831,17 +863,25 @@ fun FullscreenPlayerScreen(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChannelRow(channel: LiveTvChannel, selected: Boolean, onChannel: (LiveTvChannel) -> Unit, onChannelOptions: (LiveTvChannel) -> Unit) {
+private fun ChannelRow(
+    channel: LiveTvChannel,
+    selected: Boolean,
+    onChannel: (LiveTvChannel) -> Unit,
+    onChannelOptions: (LiveTvChannel) -> Unit,
+    onChannelBrowsed: (LiveTvChannel) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalWatchioColors.current
     WatchioCard(
         accent = if (selected) colors.liveTvAccent else colors.focusGlow,
         selected = selected,
         minWidth = 0.dp,
-        minHeight = 64.dp,
+        minHeight = 52.dp,
         contentDescription = channel.name,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 8.dp)
+            .padding(bottom = 5.dp)
+            .onFocusChanged { if (it.isFocused) onChannelBrowsed(channel) }
             .combinedClickable(
                 onClick = { onChannel(channel) },
                 onLongClick = { onChannelOptions(channel) },
@@ -850,7 +890,7 @@ private fun ChannelRow(channel: LiveTvChannel, selected: Boolean, onChannel: (Li
             .testTag("live-channel-card"),
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(10.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -874,7 +914,7 @@ private fun ChannelLogo(url: String?) {
     val colors = LocalWatchioColors.current
     Box(
         Modifier
-            .size(42.dp)
+            .size(36.dp)
             .background(colors.surfaceElevated, RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center,
     ) {

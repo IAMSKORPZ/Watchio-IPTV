@@ -37,20 +37,24 @@ class SearchRepository(
     }
 
     private suspend fun live(providerId: ProviderId, type: ProviderType, query: String, limit: Int): List<WatchioSearchResult> = when (type) {
-        ProviderType.Xtream -> database.liveStreamDao().search(providerId.value, query, limit).map { it.toResult() }
-        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().searchByType(providerId.value, ContentType.Live.persisted, query, limit).map { it.toResult(ContentType.Live) }
-    }
+        ProviderType.Xtream -> database.liveStreamDao().search(providerId.value, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult() }
+        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().searchByType(providerId.value, ContentType.Live.persisted, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult(ContentType.Live) }
+    }.rankedForSearch(query, limit)
 
     private suspend fun movies(providerId: ProviderId, type: ProviderType, query: String, limit: Int): List<WatchioSearchResult> = when (type) {
-        ProviderType.Xtream -> database.vodDao().search(providerId.value, query, limit).map { it.toResult() }
-        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().searchByType(providerId.value, ContentType.Movie.persisted, query, limit).map { it.toResult(ContentType.Movie) }
-    }
+        ProviderType.Xtream -> database.vodDao().search(providerId.value, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult() }
+        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().searchByType(providerId.value, ContentType.Movie.persisted, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult(ContentType.Movie) }
+    }.rankedForSearch(query, limit)
 
     private suspend fun series(providerId: ProviderId, type: ProviderType, query: String, limit: Int): List<WatchioSearchResult> = when (type) {
-        ProviderType.Xtream -> database.seriesDao().search(providerId.value, query, limit).map { it.toResult() }
-        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().searchByType(providerId.value, ContentType.Series.persisted, query, limit)
+        ProviderType.Xtream -> database.seriesDao().search(providerId.value, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult() }
+        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().searchByType(providerId.value, ContentType.Series.persisted, query, limit * CANDIDATE_MULTIPLIER)
             .groupBy { it.seriesName ?: it.name.substringBefore(" S").substringBefore(" Season").trim() }
             .values.mapNotNull { it.minByOrNull { row -> row.playlistOrder }?.toResult(ContentType.Series) }
+    }.rankedForSearch(query, limit)
+
+    private companion object {
+        const val CANDIDATE_MULTIPLIER = 5
     }
 
     private fun LiveStreamEntity.toResult() = WatchioSearchResult(

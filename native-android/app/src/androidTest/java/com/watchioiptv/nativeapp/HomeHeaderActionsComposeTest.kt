@@ -79,4 +79,45 @@ class HomeHeaderActionsComposeTest {
         composeRule.onNodeWithTag("home-announcements-badge").assertIsDisplayed()
         composeRule.onNodeWithText("9+").assertIsDisplayed()
     }
+
+    @Test
+    fun activeServerLabelShowsSafeIdentityWithoutRawUrl() {
+        composeRule.setContent {
+            WatchioTheme {
+                HomeTopBar(
+                    now = LocalDateTime.of(2026, 9, 13, 12, 0),
+                    activeServerLabel = "MediaTitans",
+                    onSearch = {},
+                    onSports = {},
+                    onAnnouncements = {},
+                    onProviders = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("active-server-indicator").assertIsDisplayed()
+        composeRule.onNodeWithText("MediaTitans").assertIsDisplayed()
+        composeRule.onNodeWithText("Active").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("http://mediatitans.live:8880", useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun offlineServerShowsInactiveWithoutRawUrl() {
+        composeRule.setContent {
+            WatchioTheme {
+                HomeTopBar(
+                    now = LocalDateTime.of(2026, 9, 13, 12, 0),
+                    activeServerLabel = "AW999",
+                    activeServerOnline = false,
+                    onSearch = {},
+                    onSports = {},
+                    onAnnouncements = {},
+                    onProviders = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Inactive").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("http://aw999.test:8880", useUnmergedTree = true).fetchSemanticsNodes().isEmpty())
+    }
 }

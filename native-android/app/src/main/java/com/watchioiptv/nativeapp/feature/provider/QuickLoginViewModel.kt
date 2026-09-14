@@ -107,9 +107,10 @@ class QuickLoginViewModel(
                     invitation = invitation,
                     credentials = QuickLoginCredentials(
                         providerName = provider.displayName,
-                        serverUrl = provider.serverUrl ?: throw IllegalArgumentException("Active provider server is unavailable."),
+                        serverUrl = provider.serverUrl.takeUnless { provider.id.value.startsWith(MANAGED_PROVIDER_PREFIX) },
                         username = credentials.username,
                         password = credentials.password,
+                        mode = if (provider.id.value.startsWith(MANAGED_PROVIDER_PREFIX)) "managed" else "legacy",
                     ),
                 )
             }.onSuccess {
@@ -146,6 +147,7 @@ class QuickLoginViewModel(
                         serverUrl = credentials.serverUrl,
                         username = credentials.username,
                         password = credentials.password,
+                        managed = credentials.mode == "managed",
                     ),
                 )
             }.onSuccess {
@@ -163,5 +165,9 @@ class QuickLoginViewModel(
 
     private fun stage(name: String) {
         println("QuickLogin:$name")
+    }
+
+    private companion object {
+        const val MANAGED_PROVIDER_PREFIX = "xtream-managed-"
     }
 }

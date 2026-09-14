@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -58,12 +59,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.onClick
@@ -91,6 +95,8 @@ import com.watchioiptv.nativeapp.ui.components.ResumePlaybackRequest
 import com.watchioiptv.nativeapp.ui.components.WatchioCard
 import com.watchioiptv.nativeapp.ui.components.WatchioFocusableCard
 import com.watchioiptv.nativeapp.ui.components.WatchioPageHeader
+import com.watchioiptv.nativeapp.ui.focus.CategoryContentFocusTransferEffect
+import com.watchioiptv.nativeapp.ui.focus.rememberCategoryContentFocusTransferState
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioBorders
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioColors
 import com.watchioiptv.nativeapp.ui.theme.LocalWatchioRadii
@@ -110,6 +116,10 @@ fun SeriesScreen(
 ) {
     val colors = LocalWatchioColors.current
     val firstCategoryFocus = remember { FocusRequester() }
+    val firstSeriesFocus = remember { FocusRequester() }
+    val inputModeManager = LocalInputModeManager.current
+    var initialFocusRequested by remember { mutableStateOf(false) }
+    val contentFocusTransfer = rememberCategoryContentFocusTransferState()
     var searchVisible by remember { mutableStateOf(initialSearchVisible) }
     var optionsSeries by remember { mutableStateOf<SeriesCardUiModel?>(null) }
     val gridState = rememberLazyGridState()
@@ -134,9 +144,17 @@ fun SeriesScreen(
         }
         return
     }
-    LaunchedEffect(state.categories.firstOrNull()?.id) {
-        if (state.categories.isNotEmpty()) firstCategoryFocus.requestFocus()
+    LaunchedEffect(state.categories, state.selectedCategory?.id, inputModeManager.inputMode) {
+        if (!initialFocusRequested && state.categories.isNotEmpty() && inputModeManager.inputMode == InputMode.Keyboard) {
+            initialFocusRequested = firstCategoryFocus.requestFocus()
+        }
     }
+    CategoryContentFocusTransferEffect(
+        state = contentFocusTransfer,
+        selectedCategoryId = state.selectedCategory?.id,
+        targetContentId = state.series.firstOrNull()?.series?.id,
+        targetFocusRequester = firstSeriesFocus,
+    )
     Box(Modifier.fillMaxSize().background(colors.surfaceBase).testTag("series-screen")) {
         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)) {
             WatchioPageHeader(title = "SERIES", onBack = onBack, testTagPrefix = "series") {
@@ -171,7 +189,11 @@ fun SeriesScreen(
                     SeriesCategoryRail(
                         state = state,
                         firstFocus = firstCategoryFocus,
-                        onCategory = onCategory,
+                        onCategory = { category, categoryWasFocused ->
+                            initialFocusRequested = true
+                            contentFocusTransfer.onCategoryActivated(category.id, categoryWasFocused)
+                            onCategory(category)
+                        },
                         modifier = Modifier.width(categoryWidth).fillMaxHeight(),
                     )
                     WatchioCard(
@@ -209,11 +231,12 @@ fun SeriesScreen(
                                     contentPadding = PaddingValues(bottom = 24.dp),
                                     modifier = Modifier.fillMaxSize().testTag("series-grid"),
                                 ) {
-                                    items(state.series, key = { "${it.series.providerId.value}:${it.series.id}" }) { item ->
+                                    itemsIndexed(state.series, key = { _, item -> "${item.series.providerId.value}:${item.series.id}" }) { index, item ->
                                         SeriesCard(
                                             item = item,
                                             onSeries = onSeries,
                                             onSeriesOptions = { optionsSeries = it },
+                                            modifier = if (index == 0) Modifier.focusRequester(firstSeriesFocus) else Modifier,
                                         )
                                     }
                                 }
@@ -343,7 +366,7 @@ private fun SeriesMoreButton(accent: Color, onClick: () -> Unit, modifier: Modif
 private fun SeriesCategoryRail(
     state: SeriesUiState,
     firstFocus: FocusRequester,
-    onCategory: (SeriesCategory) -> Unit,
+    onCategory: (SeriesCategory, Boolean) -> Unit,
     modifier: Modifier,
 ) {
     val colors = LocalWatchioColors.current
@@ -354,11 +377,11 @@ private fun SeriesCategoryRail(
                 SeriesCategoryRow(
                     category = category,
                     selected = category.id == state.selectedCategory?.id,
-                    onClick = { onCategory(category) },
+                    onClick = { categoryWasFocused -> onCategory(category, categoryWasFocused) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 6.dp)
-                        .then(if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                        .then(if (category.id == state.selectedCategory?.id || (state.selectedCategory == null && index == 0)) Modifier.focusRequester(firstFocus) else Modifier)
                         .testTag("series-category-${category.id}"),
                 )
             }
@@ -370,21 +393,23 @@ private fun SeriesCategoryRail(
 private fun SeriesCategoryRow(
     category: SeriesCategory,
     selected: Boolean,
-    onClick: () -> Unit,
+    onClick: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
     val typography = LocalWatchioTypography.current
     var isOverflowing by remember(category.name) { mutableStateOf(false) }
+    var categoryHasFocus by remember(category.id) { mutableStateOf(false) }
 
     WatchioCard(
-        modifier = modifier.height(48.dp),
+        modifier = modifier.height(48.dp).onFocusChanged { categoryHasFocus = it.hasFocus },
         accent = if (selected) colors.seriesAccent else colors.focusGlow,
         selected = selected,
         minWidth = 0.dp,
         minHeight = 48.dp,
         contentDescription = category.name,
-        onClick = onClick,
+        focusedBackgroundAlpha = 0.04f,
+        onClick = { onClick(categoryHasFocus) },
     ) { focused ->
         val shouldMarquee = (focused || selected) && isOverflowing
         Box(
@@ -527,6 +552,7 @@ private fun SeriesCard(
     item: SeriesCardUiModel,
     onSeries: (SeriesCardUiModel) -> Unit,
     onSeriesOptions: (SeriesCardUiModel) -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -534,7 +560,7 @@ private fun SeriesCard(
     val formattedRating = item.series.formattedRating ?: formatRating(item.series.rating)
     val showProgress = item.isContinueWatching && item.progress != null && item.progress > 0f
     Column(
-        Modifier
+        modifier
             .border(if (focused) 3.dp else 1.dp, if (focused) colors.focusBorder else Color.Transparent)
             .background(if (focused) colors.seriesAccent.copy(alpha = 0.12f) else Color.Transparent)
             .combinedClickable(

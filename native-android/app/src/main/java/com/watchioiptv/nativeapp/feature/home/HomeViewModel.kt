@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.watchioiptv.nativeapp.core.model.ProviderId
 import com.watchioiptv.nativeapp.data.m3u.M3uRepository
 import com.watchioiptv.nativeapp.data.xtream.XtreamRepository
+import com.watchioiptv.nativeapp.data.xtream.WatchioEndpointManager
 import com.watchioiptv.nativeapp.domain.model.ContentType
 import com.watchioiptv.nativeapp.domain.model.ProviderType
 import com.watchioiptv.nativeapp.domain.repository.ProviderRepository
@@ -15,6 +16,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -38,7 +41,12 @@ data class HomeUiState(
     val liveRefreshing: Boolean = false,
     val moviesRefreshing: Boolean = false,
     val seriesRefreshing: Boolean = false,
+    val liveRefreshProgress: Float? = null,
+    val moviesRefreshProgress: Float? = null,
+    val seriesRefreshProgress: Float? = null,
     val refreshMessage: String? = null,
+    val activeServerLabel: String? = null,
+    val activeServerOnline: Boolean = true,
 ) {
     val providerSummary: String =
         providerName ?: "No providers configured"
@@ -49,6 +57,7 @@ class HomeViewModel(
     settingsRepository: SettingsRepository,
     private val xtreamRepository: XtreamRepository,
     private val m3uRepository: M3uRepository,
+    private val endpointManager: WatchioEndpointManager,
 ) : ViewModel() {
     private val refreshStatus = MutableStateFlow(HomeRefreshStatus())
     private val refreshJobs = mutableMapOf<ContentType, Job>()
@@ -58,7 +67,9 @@ class HomeViewModel(
         providerRepository.observeProviders(),
         settingsRepository.selectedProviderId,
         refreshStatus,
-    ) { providers, selectedProviderId, refresh ->
+        endpointManager.activeEndpoint,
+        endpointManager.activeEndpointOnline,
+    ) { providers, selectedProviderId, refresh, activeEndpoint, activeEndpointOnline ->
         val selected = selectedProviderId?.let { id -> providers.firstOrNull { it.id == id && it.enabled && it.type == ProviderType.Xtream } }
             ?: providers.firstOrNull { it.enabled && it.type == ProviderType.Xtream }
         val xtreamCounts = if (selected?.type == ProviderType.Xtream) xtreamRepository.counts(selected.id) else null
@@ -80,7 +91,14 @@ class HomeViewModel(
             liveRefreshing = refresh.isRefreshing(selected?.id, ContentType.Live),
             moviesRefreshing = refresh.isRefreshing(selected?.id, ContentType.Movie),
             seriesRefreshing = refresh.isRefreshing(selected?.id, ContentType.Series),
+            liveRefreshProgress = refresh.progress(selected?.id, ContentType.Live),
+            moviesRefreshProgress = refresh.progress(selected?.id, ContentType.Movie),
+            seriesRefreshProgress = refresh.progress(selected?.id, ContentType.Series),
             refreshMessage = refresh.message,
+            activeServerLabel = activeEndpoint?.takeIf {
+                selected?.id?.value?.startsWith(MANAGED_PROVIDER_PREFIX) == true && it.url == selected.serverUrl
+            }?.let { managedServerLabel(it.id) },
+            activeServerOnline = activeEndpointOnline != false,
         )
     }.flatMapLatest { home ->
         val providerId = home.providerId ?: return@flatMapLatest flowOf(home)
@@ -102,6 +120,19 @@ class HomeViewModel(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = HomeUiState(),
     )
+
+    init {
+        viewModelScope.launch {
+            combine(providerRepository.observeProviders(), settingsRepository.selectedProviderId) { providers, selectedProviderId ->
+                selectedProviderId?.let { id -> providers.firstOrNull { it.id == id && it.enabled } }
+                    ?: providers.firstOrNull { it.enabled }
+            }.distinctUntilChanged { old, new -> old?.id == new?.id && old?.serverUrl == new?.serverUrl }
+                .collectLatest { provider ->
+                    if (provider?.id?.value?.startsWith(MANAGED_PROVIDER_PREFIX) == true) endpointManager.restoreActive(provider.serverUrl)
+                    else endpointManager.clearActive()
+                }
+        }
+    }
 
     fun refreshSelectedProvider() {
         refreshSection(ContentType.Live)
@@ -134,24 +165,34 @@ class HomeViewModel(
         }
     }
 
-    private data class HomeRefreshStatus(
+    internal data class HomeRefreshStatus(
         val refreshing: Set<Pair<ProviderId, ContentType>> = emptySet(),
+        val progress: Map<Pair<ProviderId, ContentType>, Float> = emptyMap(),
         val message: String? = null,
     ) {
         fun isRefreshing(providerId: ProviderId?, contentType: ContentType): Boolean =
             providerId != null && Pair(providerId, contentType) in refreshing
 
+        fun progress(providerId: ProviderId?, contentType: ContentType): Float? =
+            providerId?.let { progress[Pair(it, contentType)] }
+
         fun start(providerId: ProviderId, contentType: ContentType): HomeRefreshStatus =
-            copy(refreshing = refreshing + Pair(providerId, contentType), message = "Refreshing ${sectionLabel(contentType)}...")
+            copy(
+                refreshing = refreshing + Pair(providerId, contentType),
+                progress = progress + (Pair(providerId, contentType) to 0.08f),
+                message = "Refreshing ${sectionLabel(contentType)}...",
+            )
 
         fun finish(providerId: ProviderId, contentType: ContentType, success: Boolean): HomeRefreshStatus =
             copy(
                 refreshing = refreshing - Pair(providerId, contentType),
+                progress = progress + (Pair(providerId, contentType) to 1f),
                 message = if (success) "${sectionLabel(contentType)} updated" else "${sectionLabel(contentType)} refresh failed. Cached library preserved.",
             )
     }
 
     private companion object {
+        const val MANAGED_PROVIDER_PREFIX = "xtream-managed-"
         fun sectionLabel(contentType: ContentType): String = when (contentType) {
             ContentType.Live -> "Live TV"
             ContentType.Movie -> "Movies"
@@ -159,4 +200,12 @@ class HomeViewModel(
             ContentType.Episode -> "Episodes"
         }
     }
+}
+
+internal fun managedServerLabel(endpointId: String): String = when (endpointId.trim().lowercase()) {
+    "xolo" -> "Xolo"
+    "mediatitans" -> "MediaTitans"
+    "as8880" -> "AS8880"
+    "aw999" -> "AW999"
+    else -> "Server"
 }

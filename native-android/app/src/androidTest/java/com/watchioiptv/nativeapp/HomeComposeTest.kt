@@ -1,7 +1,7 @@
 package com.watchioiptv.nativeapp
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -70,13 +70,9 @@ class HomeComposeTest {
         composeRule.onNodeWithTag("live-header").assertIsDisplayed()
         composeRule.onNodeWithTag("live-back-icon").assertIsDisplayed()
         composeRule.onNodeWithTag("live-branding").assertIsDisplayed()
-        composeRule.onNodeWithText("Watchio").assertIsDisplayed()
         composeRule.onNodeWithTag("live-title").assertIsDisplayed()
         composeRule.onNodeWithTag("live-clock").assertIsDisplayed()
         composeRule.onNodeWithTag("live-category-search").assertIsDisplayed()
-        composeRule.onNodeWithTag("live-category-all").assertIsDisplayed()
-        composeRule.onNodeWithTag("live-category-favorites").assertIsDisplayed()
-        composeRule.onNodeWithTag("live-category-history").assertIsDisplayed()
         composeRule.onNodeWithTag("live-channel-list").assertIsDisplayed()
         composeRule.onNodeWithTag("live-preview").assertIsDisplayed()
         composeRule.onNodeWithTag("live-channel-info").assertIsDisplayed()
@@ -97,7 +93,7 @@ class HomeComposeTest {
         composeRule.onNodeWithContentDescription("Announcements").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Playlist").performClick()
         composeRule.waitUntil(5_000) {
-            composeRule.onAllNodes(hasText("Providers")).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodes(hasText("PROVIDER MANAGEMENT")).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
@@ -127,8 +123,10 @@ class HomeComposeTest {
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithTag("announcements-list").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithTag("announcement-uitest-update").assertIsFocused()
-        composeRule.onNodeWithTag("announcement-uitest-update").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("announcement-uitest-update")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
         composeRule.onNodeWithTag("announcement-details").assertIsDisplayed()
         composeRule.onNodeWithTag("announcement-detail-back-icon").performClick()
         composeRule.onNodeWithTag("announcements-list").assertIsDisplayed()

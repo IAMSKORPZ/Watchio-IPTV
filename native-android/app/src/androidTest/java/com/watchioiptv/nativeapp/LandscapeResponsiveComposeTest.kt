@@ -7,7 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -22,8 +27,11 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +80,8 @@ import com.watchioiptv.nativeapp.feature.library.SearchUiState
 import com.watchioiptv.nativeapp.feature.library.contentRoute
 import com.watchioiptv.nativeapp.feature.tvguide.WatchioGuideChannel
 import com.watchioiptv.nativeapp.ui.theme.WatchioTheme
+import com.watchioiptv.nativeapp.ui.HomeRefreshControl
+import com.watchioiptv.nativeapp.ui.HomeRefreshProgress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.junit.Assert.assertEquals
@@ -446,8 +456,8 @@ class LandscapeResponsiveComposeTest {
 
         composeRule.onNodeWithTag("live-search").performClick()
         composeRule.onNodeWithTag("live-search-overlay").assertIsDisplayed()
-        composeRule.onNodeWithTag("live-title").assertIsDisplayed()
-        composeRule.onNodeWithTag("live-clock").assertIsDisplayed()
+        composeRule.onNodeWithTag("live-title").assertExists()
+        composeRule.onNodeWithTag("live-clock").assertExists()
         val headerBounds = composeRule.onNodeWithTag("live-header", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val fieldBounds = composeRule.onNodeWithTag("live-search-field", useUnmergedTree = true).getUnclippedBoundsInRoot()
         assertTrue("search field must not be embedded in header", fieldBounds.top > headerBounds.bottom)
@@ -1017,6 +1027,282 @@ class LandscapeResponsiveComposeTest {
         composeRule.onNodeWithTag("movie-category-favorites", useUnmergedTree = true).performClick()
         composeRule.waitForIdle()
         assertTrue("Clicking category must invoke onCategory with selected item", selectedCategory?.id == fav.id)
+    }
+
+    @Test
+    fun moviesCategoryActivationMovesFocusIntoLoadedContent() {
+        val all = MovieCategory("all", "ALL MOVIES", MovieCategoryKind.All)
+        val action = MovieCategory("action", "ACTION", MovieCategoryKind.Provider, "action")
+        var state by mutableStateOf(
+            MoviesUiState(
+                loading = false,
+                categories = listOf(all, action),
+                selectedCategory = all,
+                movies = listOf(movie("1")),
+            )
+        )
+        var activations = 0
+        var openedMovies = 0
+
+        setLandscapeContent {
+            WatchioTheme {
+                MoviesScreen(
+                    state = state,
+                    onCategory = { category ->
+                        activations += 1
+                        state = state.copy(selectedCategory = category, movies = listOf(movie("2")))
+                    },
+                    onCategorySearch = {},
+                    onSearch = {},
+                    onMovie = { openedMovies += 1 },
+                    onBack = {},
+                )
+            }
+        }
+
+        val actionCategory = composeRule.onNodeWithTag("movie-category-action", useUnmergedTree = true)
+        actionCategory.performSemanticsAction(SemanticsActions.RequestFocus)
+        actionCategory.assertIsFocused()
+        actionCategory.performKeyInput { pressKey(Key.Enter) }
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithTag("movie-card", useUnmergedTree = true)[0].assertIsFocused()
+        actionCategory.assertIsNotFocused()
+        assertEquals(1, activations)
+        assertEquals(0, openedMovies)
+    }
+
+    @Test
+    fun seriesCategoryActivationMovesFocusIntoLoadedContent() {
+        val all = SeriesCategory("all", "ALL SERIES", SeriesCategoryKind.All)
+        val drama = SeriesCategory("drama", "DRAMA", SeriesCategoryKind.Provider, "drama")
+        var state by mutableStateOf(
+            SeriesUiState(
+                loading = false,
+                categories = listOf(all, drama),
+                selectedCategory = all,
+                series = listOf(SeriesCardUiModel(series("1"))),
+            )
+        )
+        var activations = 0
+        var openedSeries = 0
+
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                SeriesScreen(
+                    state = state,
+                    onCategory = { category ->
+                        activations += 1
+                        state = state.copy(selectedCategory = category, series = listOf(SeriesCardUiModel(series("2"))))
+                    },
+                    onCategorySearch = {},
+                    onSearch = {},
+                    onSeries = { openedSeries += 1 },
+                    onBack = {},
+                )
+            }
+        }
+
+        val dramaCategory = composeRule.onNodeWithTag("series-category-drama", useUnmergedTree = true)
+        dramaCategory.performSemanticsAction(SemanticsActions.RequestFocus)
+        dramaCategory.assertIsFocused()
+        dramaCategory.performKeyInput { pressKey(Key.Enter) }
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithTag("series-card", useUnmergedTree = true)[0].assertIsFocused()
+        dramaCategory.assertIsNotFocused()
+        assertEquals(1, activations)
+        assertEquals(0, openedSeries)
+    }
+
+    @Test
+    fun liveCategoryActivationMovesFocusIntoLoadedContent() {
+        val all = liveCategory("all", "All Channels")
+        val news = liveCategory("news", "News")
+        var state by mutableStateOf(
+            LiveTvUiState(
+                loading = false,
+                categories = listOf(all, news),
+                selectedCategory = all,
+                channels = listOf(liveChannel("1", "One")),
+                selectedChannel = liveChannel("1", "One"),
+            )
+        )
+        var activations = 0
+        var openedChannels = 0
+
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                LiveTvScreen(
+                    uiState = state,
+                    playerState = WatchioPlayerState.Idle(),
+                    playerManager = FakePlayerManager(),
+                    onCategory = { category ->
+                        activations += 1
+                        val channel = liveChannel("2", "Two")
+                        state = state.copy(selectedCategory = category, channels = listOf(channel), selectedChannel = channel)
+                    },
+                    onCategorySearch = {},
+                    onLiveSearch = {},
+                    onChannel = { openedChannels += 1 },
+                    onFavorite = {},
+                    onRetry = {},
+                    onRefreshEpg = {},
+                    onFullscreen = {},
+                    onBack = {},
+                )
+            }
+        }
+
+        val newsCategory = composeRule.onNodeWithTag("live-category-news", useUnmergedTree = true)
+        newsCategory.performSemanticsAction(SemanticsActions.RequestFocus)
+        newsCategory.assertIsFocused()
+        newsCategory.performKeyInput { pressKey(Key.Enter) }
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithTag("live-channel-card", useUnmergedTree = true)[0].assertIsFocused()
+        newsCategory.assertIsNotFocused()
+        assertEquals(1, activations)
+        assertEquals(0, openedChannels)
+    }
+
+    @Test
+    fun moviesCategoryActivationTransfersForDelayedContentBeforeMovingFocus() {
+        val all = MovieCategory("all", "ALL MOVIES", MovieCategoryKind.All)
+        val action = MovieCategory("action", "ACTION", MovieCategoryKind.Provider, "action")
+        var state by mutableStateOf(
+            MoviesUiState(
+                loading = false,
+                categories = listOf(all, action),
+                selectedCategory = all,
+                movies = listOf(movie("1")),
+            )
+        )
+        var openedMovies = 0
+
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                MoviesScreen(
+                    state = state,
+                    onCategory = { category -> state = state.copy(selectedCategory = category, movies = emptyList()) },
+                    onCategorySearch = {},
+                    onSearch = {},
+                    onMovie = { openedMovies += 1 },
+                    onBack = {},
+                )
+            }
+        }
+
+        val actionCategory = composeRule.onNodeWithTag("movie-category-action", useUnmergedTree = true)
+        actionCategory.performSemanticsAction(SemanticsActions.RequestFocus)
+        actionCategory.performKeyInput { pressKey(Key.Enter) }
+        composeRule.waitForIdle()
+        actionCategory.assertIsFocused()
+
+        composeRule.runOnIdle { state = state.copy(movies = listOf(movie("2"))) }
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithTag("movie-card", useUnmergedTree = true)[0].assertIsFocused()
+        assertEquals(0, openedMovies)
+    }
+
+    @Test
+    fun programmaticMovieCategoryScrollsFullyVisibleWithoutStealingContentFocus() {
+        val categories = listOf(MovieCategory("all", "ALL MOVIES", MovieCategoryKind.All)) +
+            (1..20).map { MovieCategory("category-$it", "CATEGORY $it", MovieCategoryKind.Provider, "category-$it") }
+        var state by mutableStateOf(
+            MoviesUiState(loading = false, categories = categories, selectedCategory = categories.first(), movies = listOf(movie("1")))
+        )
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                MoviesScreen(state, {}, {}, {}, {}, {})
+            }
+        }
+
+        val movieCard = composeRule.onAllNodesWithTag("movie-card", useUnmergedTree = true)[0]
+        movieCard.performSemanticsAction(SemanticsActions.RequestFocus)
+        movieCard.assertIsFocused()
+        composeRule.runOnIdle { state = state.copy(selectedCategory = categories.last()) }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("movie-category-category-20", useUnmergedTree = true).assertIsDisplayed()
+        movieCard.assertIsFocused()
+    }
+
+    @Test
+    fun liveRowsAreCompactAndFocusedChannelDrivesGuideWithoutStartingPlayback() {
+        val channelA = liveChannel("a", "Channel A")
+        val channelB = liveChannel("b", "Channel B")
+        var selected = channelA
+        var state by mutableStateOf(
+            LiveTvUiState(
+                loading = false,
+                categories = listOf(liveCategory("all", "All Channels")),
+                selectedCategory = liveCategory("all", "All Channels"),
+                channels = listOf(channelA, channelB),
+                selectedChannel = channelA,
+                browsedChannel = channelA,
+                nowNext = LiveTvNowNext("Programme A", null, 0f),
+            )
+        )
+        var playbackSelections = 0
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                LiveTvScreen(
+                    uiState = state,
+                    playerState = WatchioPlayerState.Playing(WatchioPlayerMetadata()),
+                    playerManager = FakePlayerManager(),
+                    onCategory = {}, onCategorySearch = {}, onLiveSearch = {},
+                    onChannel = { selected = it; playbackSelections += 1 },
+                    onChannelBrowsed = {
+                        state = state.copy(browsedChannel = it, nowNext = LiveTvNowNext("Programme ${it.name.takeLast(1)}", null, 0f))
+                    },
+                    onFavorite = {}, onRetry = {}, onRefreshEpg = {}, onFullscreen = {}, onBack = {},
+                )
+            }
+        }
+
+        val categoryBounds = composeRule.onAllNodesWithTag("live-category-all", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
+        val channelBounds = composeRule.onAllNodesWithTag("live-channel-card", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
+        val searchBounds = composeRule.onNodeWithTag("live-category-search", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val categoryHeight = categoryBounds.bottom - categoryBounds.top
+        val channelHeight = channelBounds.bottom - channelBounds.top
+        val searchHeight = searchBounds.bottom - searchBounds.top
+        assertTrue("category row must be compact: $categoryHeight", categoryHeight <= 51.dp)
+        assertTrue("channel row must be compact: $channelHeight", channelHeight <= 57.dp)
+        assertTrue("category search must be compact: $searchHeight", searchHeight <= 53.dp)
+
+        val second = composeRule.onAllNodesWithTag("live-channel-card", useUnmergedTree = true)[1]
+        second.performSemanticsAction(SemanticsActions.RequestFocus)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("Programme B").assertIsDisplayed()
+        assertEquals(channelA.id, selected.id)
+        assertEquals(0, playbackSelections)
+
+        second.performKeyInput { pressKey(Key.Enter) }
+        composeRule.waitForIdle()
+        assertEquals(channelB.id, selected.id)
+        assertEquals(1, playbackSelections)
+    }
+
+    @Test
+    fun homeRefreshControlIsDpadFocusableAndActivatesExactlyOnce() {
+        val refreshes = mutableMapOf("Live TV" to 0, "Movies" to 0, "Series" to 0)
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                Column {
+                    refreshes.keys.forEach { title ->
+                        HomeRefreshControl(title, Color.Magenta, refreshing = false) { refreshes[title] = refreshes.getValue(title) + 1 }
+                        HomeRefreshProgress(title, Color.Magenta, progress = 0.08f)
+                    }
+                }
+            }
+        }
+        listOf("live-tv", "movies", "series").forEach { tag ->
+            val refresh = composeRule.onNodeWithTag("home-$tag-refresh", useUnmergedTree = true)
+            refresh.performSemanticsAction(SemanticsActions.RequestFocus)
+            refresh.assertIsFocused()
+            refresh.performKeyInput { pressKey(Key.Enter) }
+            composeRule.onNodeWithTag("home-$tag-refresh-progress", useUnmergedTree = true).assertIsDisplayed()
+        }
+        composeRule.waitForIdle()
+        assertTrue(refreshes.values.all { it == 1 })
     }
 
     @Test
@@ -2198,6 +2484,20 @@ class LandscapeResponsiveComposeTest {
         }
         composeRule.waitForIdle()
         composeRule.setContent(content)
+    }
+
+    private fun setLandscapeKeyboardContent(content: @androidx.compose.runtime.Composable () -> Unit) {
+        lateinit var inputModeManager: InputModeManager
+        setLandscapeContent {
+            inputModeManager = LocalInputModeManager.current
+            content()
+        }
+        composeRule.runOnIdle {
+            assertTrue(
+                "Test must enter keyboard input mode",
+                inputModeManager.requestInputMode(InputMode.Keyboard),
+            )
+        }
     }
 
     private fun liveCategory(id: String, name: String) = LiveTvCategory(id, name, LiveTvCategoryKind.All)

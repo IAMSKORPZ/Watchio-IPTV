@@ -38,6 +38,7 @@ data class LiveTvUiState(
     val selectedCategory: LiveTvCategory? = null,
     val channels: List<LiveTvChannel> = emptyList(),
     val selectedChannel: LiveTvChannel? = null,
+    val browsedChannel: LiveTvChannel? = null,
     val initialScrollIndex: Int = 0,
     val nowNext: LiveTvNowNext = LiveTvNowNext(null, null, 0f),
     val categorySearchQuery: String = "",
@@ -132,6 +133,7 @@ class LiveTvViewModel(
                 selectedCategory = targetCategory,
                 channels = channels,
                 selectedChannel = targetChannel,
+                browsedChannel = targetChannel,
                 initialScrollIndex = targetIndex,
             )
 
@@ -159,6 +161,7 @@ class LiveTvViewModel(
                 selectedCategory = category,
                 channels = channels,
                 selectedChannel = newSelected,
+                browsedChannel = newSelected,
                 initialScrollIndex = newIndex,
                 nowNext = LiveTvNowNext(null, null, 0f),
             )
@@ -215,6 +218,7 @@ class LiveTvViewModel(
             val index = currentChannels.indexOfFirst { it.id == channel.id }.coerceAtLeast(0)
             mutableUi.value = mutableUi.value.copy(
                 selectedChannel = channel,
+                browsedChannel = channel,
                 initialScrollIndex = index,
                 errorMessage = null,
             )
@@ -250,6 +254,12 @@ class LiveTvViewModel(
             }
             startEpgTicker(channel)
         }
+    }
+
+    fun browseChannel(channel: LiveTvChannel) {
+        if (mutableUi.value.browsedChannel?.id == channel.id) return
+        mutableUi.value = mutableUi.value.copy(browsedChannel = channel, nowNext = LiveTvNowNext(null, null, 0f))
+        viewModelScope.launch { updateNowNext(channel) }
     }
 
     private suspend fun persistBrowsingState(
@@ -296,7 +306,7 @@ class LiveTvViewModel(
     fun retry() = playerManager.retry()
 
     fun refreshEpg() {
-        val providerId = mutableUi.value.selectedChannel?.providerId ?: return
+        val providerId = (mutableUi.value.browsedChannel ?: mutableUi.value.selectedChannel)?.providerId ?: return
         if (mutableUi.value.epgRefreshing) return
         viewModelScope.launch {
             mutableUi.value = mutableUi.value.copy(epgRefreshing = true, epgRefreshMessage = null)
@@ -305,7 +315,7 @@ class LiveTvViewModel(
                 epgRefreshing = false,
                 epgRefreshMessage = if (result.isSuccess) "EPG refreshed." else "EPG refresh failed. Cached guide retained.",
             )
-            mutableUi.value.selectedChannel?.let { updateNowNext(it) }
+            (mutableUi.value.browsedChannel ?: mutableUi.value.selectedChannel)?.let { updateNowNext(it) }
         }
     }
     fun playPause() {
@@ -363,7 +373,9 @@ class LiveTvViewModel(
     }
 
     private suspend fun updateNowNext(channel: LiveTvChannel) {
-        mutableUi.value = mutableUi.value.copy(nowNext = liveTvRepository.nowNext(channel, clock.nowEpochMs()))
+        val nowNext = liveTvRepository.nowNext(channel, clock.nowEpochMs())
+        val displayedChannel = mutableUi.value.browsedChannel ?: mutableUi.value.selectedChannel
+        if (displayedChannel?.id == channel.id) mutableUi.value = mutableUi.value.copy(nowNext = nowNext)
     }
 
     override fun onCleared() {

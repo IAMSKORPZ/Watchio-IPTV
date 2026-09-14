@@ -27,7 +27,7 @@ app\build\outputs\apk\androidTest\uitest\app-uitest-androidTest.apk
 
 - `applicationIdSuffix = ".uitest"`
 - `versionNameSuffix = "-uitest"`
-- app label override `Watchio Test`
+- app label override `Watchio IPTV Test`
 - `testBuildType = "uitest"`
 
 Connected instrumentation now runs against `com.watchioiptv.nativeapp.uitest`, not the real `com.watchioiptv.nativeapp.debug` package.
