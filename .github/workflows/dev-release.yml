@@ -154,7 +154,7 @@ jobs:
           set -euo pipefail
           APK="native-android/app/build/outputs/apk/debug/app-debug.apk"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
-          "$BUILD_TOOLS/aapt" dump badging "$APK" | grep "package: name='com.watchioiptv.nativeapp.debug' versionCode='$WATCHIO_VERSION_CODE' versionName='$WATCHIO_DEBUG_VERSION_NAME'"
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | grep "package: name='com.iamskorpz.watchioiptv.debug' versionCode='$WATCHIO_VERSION_CODE' versionName='$WATCHIO_DEBUG_VERSION_NAME'"
           CERT="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | python3 -c "import sys, re; text=sys.stdin.read(); m=re.search(r'certificate SHA-256 digest:\s*([a-fA-F0-9]+)', text); print(m.group(1).lower() if m else '')")"
           EXPECTED="$(echo "$WATCHIO_DEV_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
           if [[ "$CERT" != "$EXPECTED" ]]; then

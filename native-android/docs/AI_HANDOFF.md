@@ -5,7 +5,7 @@ This file is the current quick handoff for future AI work.
 ## Safety
 
 - Do not commit or push unless explicitly asked.
-- Do not uninstall or clear `com.watchioiptv.nativeapp.debug` on real user devices.
+- Do not uninstall or clear `com.iamskorpz.watchioiptv.debug` on real user devices.
 - Connected automation must use the isolated `uitest` package and `connectedUitestAndroidTest`.
 - Keep credentials, provider URLs, tokens, and playlist URLs out of logs, docs, tests, screenshots, and reports.
 

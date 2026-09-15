@@ -36,11 +36,11 @@ fun verifySigningIdentity(identity: WatchioSigningIdentity, values: Map<String, 
 }
 
 android {
-    namespace = "com.watchioiptv.nativeapp"
+    namespace = "com.iamskorpz.watchioiptv"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.watchioiptv.nativeapp"
+        applicationId = "com.iamskorpz.watchioiptv"
         minSdk = 24
         targetSdk = 36
         versionCode = 13

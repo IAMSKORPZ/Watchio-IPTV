@@ -17,7 +17,7 @@ Room tests use `Room.inMemoryDatabaseBuilder` with the target app context and cl
 Focused isolated run:
 
 ```powershell
-adb shell am instrument -w -r -e class com.watchioiptv.nativeapp.DatabaseRepositoryTest com.watchioiptv.nativeapp.uitest.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w -r -e class com.iamskorpz.watchioiptv.DatabaseRepositoryTest com.iamskorpz.watchioiptv.uitest.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 ## DataStore Instrumentation Tests
@@ -29,7 +29,7 @@ This avoids duplicate active DataStore instances for one backing file in the sam
 Focused isolated run:
 
 ```powershell
-adb shell am instrument -w -r -e class com.watchioiptv.nativeapp.DataStoreSettingsTest com.watchioiptv.nativeapp.uitest.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w -r -e class com.iamskorpz.watchioiptv.DataStoreSettingsTest com.iamskorpz.watchioiptv.uitest.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 ## UI Instrumentation Tests
@@ -45,7 +45,7 @@ Phase 14.2B.1 keeps Room at v6. Home status testing focuses on stable semantics 
 Focused isolated run:
 
 ```powershell
-adb shell am instrument -w -r -e class com.watchioiptv.nativeapp.WatchioNavigationTest com.watchioiptv.nativeapp.uitest.test/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w -r -e class com.iamskorpz.watchioiptv.WatchioNavigationTest com.iamskorpz.watchioiptv.uitest.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 ## Connected Device Requirements
@@ -59,17 +59,17 @@ adb devices -l
 Offline emulators or unreachable wireless devices can make Gradle/UTP choose a bad target. If stale native debug installs interfere, uninstall only:
 
 ```powershell
-adb uninstall com.watchioiptv.nativeapp.uitest
-adb uninstall com.watchioiptv.nativeapp.uitest.test
+adb uninstall com.iamskorpz.watchioiptv.uitest
+adb uninstall com.iamskorpz.watchioiptv.uitest.test
 ```
 
-Do not uninstall or clear `com.watchioiptv.nativeapp.debug` on manually configured devices such as the S22. That package contains the real provider, Room data, DataStore settings, SecretStore credentials, favourites, history, and EPG cache.
+Do not uninstall or clear `com.iamskorpz.watchioiptv.debug` on manually configured devices such as the S22. That package contains the real provider, Room data, DataStore settings, SecretStore credentials, favourites, history, and EPG cache.
 
 Phase 14.2C moves connected instrumentation to an isolated `uitest` build:
 
-- real/manual app: `com.watchioiptv.nativeapp.debug`
-- isolated test app: `com.watchioiptv.nativeapp.uitest`
-- test runner package: `com.watchioiptv.nativeapp.uitest.test`
+- real/manual app: `com.iamskorpz.watchioiptv.debug`
+- isolated test app: `com.iamskorpz.watchioiptv.uitest`
+- test runner package: `com.iamskorpz.watchioiptv.uitest.test`
 
 See `docs/TEST_ISOLATION.md`.
 
@@ -165,7 +165,7 @@ Phase 14.2H adds Live TV route assertions for the redesigned category rail, chan
 
 Phase 14.2H.1 updates Live TV tests for the shared Settings-style header and verifies the old permanent `Fullscreen`, `Favorite`, and `Retry` button strip is absent from the normal Live screen. Phase 14.2H.5.2 adds a compact-landscape regression test proving Header Search opens an overlay, keeps `LIVE TV` and clock/date visible, keeps the text field out of the header row, filters channels, and selects a result back into preview.
 
-Phase 14.2H.2 adds compact Live TV regression coverage for selected-channel programme display, no-EPG fallback, next programme display, time range display, and stale now/next suppression when no channel is selected. Connected testing continues to use only `connectedUitestAndroidTest`; never uninstall or clear the real `com.watchioiptv.nativeapp.debug` package on user devices.
+Phase 14.2H.2 adds compact Live TV regression coverage for selected-channel programme display, no-EPG fallback, next programme display, time range display, and stale now/next suppression when no channel is selected. Connected testing continues to use only `connectedUitestAndroidTest`; never uninstall or clear the real `com.iamskorpz.watchioiptv.debug` package on user devices.
 
 Phase 14.2H.3 adds Live TV layout regression coverage that checks preview is above the EPG panel, preview and channel info share the top row, preview remains wider than compact info, and `Buffering...` stays inside the preview surface.
 

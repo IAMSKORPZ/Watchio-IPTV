@@ -53,7 +53,7 @@ This document describes the current native Android application. The active app i
 
 - Unit: masking, credential safety, and theme defaults.
 - Instrumentation: Room/repository, DataStore, Android secure storage, navigation smoke, focusable card render.
-- Connected instrumentation: Phase 14.2C uses a dedicated `uitest` build type with application id `com.watchioiptv.nativeapp.uitest`. The real manual debug package remains `com.watchioiptv.nativeapp.debug`, so connected tests cannot mutate the user's provider, SecretStore, Room, DataStore, favourites, history, or EPG cache.
+- Connected instrumentation: Phase 14.2C uses a dedicated `uitest` build type with application id `com.iamskorpz.watchioiptv.uitest`. The real manual debug package remains `com.iamskorpz.watchioiptv.debug`, so connected tests cannot mutate the user's provider, SecretStore, Room, DataStore, favourites, history, or EPG cache.
 - Fixtures: fake-only M3U, Xtream, XMLTV files in `test-fixtures/`.
 - Full native test strategy and connected device requirements: `docs/TESTING.md`.
 - Xtream behavior and import strategy: `docs/XTREAM.md`.

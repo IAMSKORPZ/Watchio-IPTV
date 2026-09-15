@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$expectedPackage = 'com.watchioiptv.nativeapp.debug'
+$expectedPackage = 'com.iamskorpz.watchioiptv.debug'
 $expectedCert = [Environment]::GetEnvironmentVariable('WATCHIO_DEV_CERT_SHA256', 'User')
 if ([string]::IsNullOrWhiteSpace($expectedCert)) {
     $expectedCert = $env:WATCHIO_DEV_CERT_SHA256

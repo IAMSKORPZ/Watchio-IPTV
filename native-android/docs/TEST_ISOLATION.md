@@ -4,9 +4,9 @@ Phase 14.2C separates automated connected tests from the real manually configure
 
 ## Package Ids
 
-- Real/manual debug app: `com.watchioiptv.nativeapp.debug`
-- Isolated connected-test app: `com.watchioiptv.nativeapp.uitest`
-- Isolated instrumentation package: `com.watchioiptv.nativeapp.uitest.test`
+- Real/manual debug app: `com.iamskorpz.watchioiptv.debug`
+- Isolated connected-test app: `com.iamskorpz.watchioiptv.uitest`
+- Isolated instrumentation package: `com.iamskorpz.watchioiptv.uitest.test`
 
 The real debug app keeps the normal APK path:
 
@@ -30,7 +30,7 @@ app\build\outputs\apk\androidTest\uitest\app-uitest-androidTest.apk
 - app label override `Watchio IPTV Test`
 - `testBuildType = "uitest"`
 
-Connected instrumentation now runs against `com.watchioiptv.nativeapp.uitest`, not the real `com.watchioiptv.nativeapp.debug` package.
+Connected instrumentation now runs against `com.iamskorpz.watchioiptv.uitest`, not the real `com.iamskorpz.watchioiptv.debug` package.
 
 ## Commands
 
@@ -65,5 +65,5 @@ The isolated `uitest` app has its own Android package sandbox, so Room, DataStor
 Use the isolated app for fresh first-run/onboarding tests. Do not clear the real debug package to manufacture first-run state.
 
 ## Phase 14.2D.2
-Strict Xtream-gate tests continue to run against com.watchioiptv.nativeapp.uitest through connectedUitestAndroidTest only. The real debug package and user provider data must not be cleared for onboarding tests.
+Strict Xtream-gate tests continue to run against com.iamskorpz.watchioiptv.uitest through connectedUitestAndroidTest only. The real debug package and user provider data must not be cleared for onboarding tests.
 

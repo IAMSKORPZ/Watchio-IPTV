@@ -37,9 +37,9 @@ Debug APK: `app\build\outputs\apk\debug\app-debug.apk`
 
 Use only isolated connected testing:
 
-- Manual app: `com.watchioiptv.nativeapp.debug`
-- UI-test app: `com.watchioiptv.nativeapp.uitest`
-- Test runner: `com.watchioiptv.nativeapp.uitest.test`
+- Manual app: `com.iamskorpz.watchioiptv.debug`
+- UI-test app: `com.iamskorpz.watchioiptv.uitest`
+- Test runner: `com.iamskorpz.watchioiptv.uitest.test`
 
 Never run `connectedDebugAndroidTest` for normal automation. Do not uninstall or clear manual-app data. Install manual builds with `adb install -r` only. Do not modify BRAVIA through ADB; use its in-app updater.
 

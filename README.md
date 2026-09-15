@@ -57,9 +57,9 @@ From `native-android/`:
 
 Connected automation uses isolated packages:
 
-- Manual app: `com.watchioiptv.nativeapp.debug`
-- UI-test app: `com.watchioiptv.nativeapp.uitest`
-- Test runner: `com.watchioiptv.nativeapp.uitest.test`
+- Manual app: `com.iamskorpz.watchioiptv.debug`
+- UI-test app: `com.iamskorpz.watchioiptv.uitest`
+- Test runner: `com.iamskorpz.watchioiptv.uitest.test`
 
 Do not use `connectedDebugAndroidTest` for normal automation. Do not uninstall or clear manual-app data. Install manual debug builds with `adb install -r` only. BRAVIA updates stay in-app-updater only.
 

@@ -27,9 +27,9 @@ Do not use `connectedDebugAndroidTest` for normal automation because it targets 
 
 ## Device Safety
 
-- Real manual app: `com.watchioiptv.nativeapp.debug`
-- Isolated UI test app: `com.watchioiptv.nativeapp.uitest`
-- Test runner: `com.watchioiptv.nativeapp.uitest.test`
+- Real manual app: `com.iamskorpz.watchioiptv.debug`
+- Isolated UI test app: `com.iamskorpz.watchioiptv.uitest`
+- Test runner: `com.iamskorpz.watchioiptv.uitest.test`
 - Install manual APKs with `adb install -r`.
 - Never uninstall or clear app data unless the user explicitly approves.
 

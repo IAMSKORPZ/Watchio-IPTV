@@ -84,11 +84,11 @@ Updates is a standalone Watchio page with a shared `WatchioPageHeader` titled `U
 
 ## Signing Identities
 
-Watchio has two permanent signing identities. DEV signs `com.watchioiptv.nativeapp.debug` for local development builds and GitHub prereleases. PUBLIC signs `com.watchioiptv.nativeapp` for public releases. The keys, aliases, passwords, and certificates are independent. Neither identity may fall back to Android's default debug keystore.
+Watchio has two permanent signing identities. DEV signs `com.iamskorpz.watchioiptv.debug` for local development builds and GitHub prereleases. PUBLIC signs `com.iamskorpz.watchioiptv` for public releases. The keys, aliases, passwords, and certificates are independent. Neither identity may fall back to Android's default debug keystore.
 
 A DEV update is compatible only when:
 
-- application ID matches `com.watchioiptv.nativeapp.debug`
+- application ID matches `com.iamskorpz.watchioiptv.debug`
 - signing certificate matches the installed debug build
 - `versionCode` is greater than or equal to the installed update path requirements
 
@@ -106,7 +106,7 @@ DEV: 0A:7E:10:03:97:7E:5D:14:FB:35:E3:36:1D:61:42:E1:35:40:73:DA:43:D2:B9:A2:DC:
 PUBLIC: 8A:76:E2:0B:7C:B2:E1:68:12:F5:05:12:75:A3:D1:12:FC:FB:AB:7C:24:24:C5:E8:97:F5:58:87:6B:CC:6F:F0
 ```
 
-Gradle verifies each requested identity against its expected fingerprint and fails when credentials are missing or mismatched. The isolated LOCAL (`com.watchioiptv.nativeapp.local`) and UITEST packages may use Android's default debug key because they never share a DEV or PUBLIC package ID.
+Gradle verifies each requested identity against its expected fingerprint and fails when credentials are missing or mismatched. The isolated LOCAL (`com.iamskorpz.watchioiptv.local`) and UITEST packages may use Android's default debug key because they never share a DEV or PUBLIC package ID.
 
 Required GitHub configuration for automated dev releases:
 
