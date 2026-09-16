@@ -82,6 +82,7 @@ import com.iamskorpz.watchioiptv.feature.tvguide.WatchioGuideChannel
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import com.iamskorpz.watchioiptv.ui.HomeRefreshControl
 import com.iamskorpz.watchioiptv.ui.HomeRefreshProgress
+import com.iamskorpz.watchioiptv.ui.HomeScreen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.junit.Assert.assertEquals
@@ -1306,6 +1307,30 @@ class LandscapeResponsiveComposeTest {
     }
 
     @Test
+    fun homeLiveRefreshIsReachedFromCardByDpadAndReturns() =
+        assertHomeRefreshTraversal("home-live-tv", "home-live-tv-refresh", 0)
+
+    @Test
+    fun homeMoviesRefreshIsReachedFromCardByDpadAndReturns() =
+        assertHomeRefreshTraversal("home-movies", "home-movies-refresh", 1)
+
+    @Test
+    fun homeSeriesRefreshIsReachedFromCardByDpadAndReturns() =
+        assertHomeRefreshTraversal("home-series", "home-series-refresh", 2)
+
+    @Test
+    fun homeLiveRefreshUsesModalUpdatingState() =
+        assertHomeRefreshModal("home-live-tv", "home-live-tv-refresh", "Live TV", 0, failure = false)
+
+    @Test
+    fun homeMoviesRefreshUsesModalUpdatingState() =
+        assertHomeRefreshModal("home-movies", "home-movies-refresh", "Movies", 1, failure = false)
+
+    @Test
+    fun homeSeriesRefreshFailureRestoresInteraction() =
+        assertHomeRefreshModal("home-series", "home-series-refresh", "Series", 2, failure = true)
+
+    @Test
     fun moviesShortAndLongCategoryTextRenderCleanly() {
         // Phase 14.2I.2: Short category text (ACTION) and long category text
         // (JUST RELEASED HOLLYWOOD 4K ULTRA HD MOVIES) must both render cleanly without crash.
@@ -2498,6 +2523,156 @@ class LandscapeResponsiveComposeTest {
                 inputModeManager.requestInputMode(InputMode.Keyboard),
             )
         }
+    }
+
+    private fun assertHomeRefreshTraversal(cardTag: String, refreshTag: String, refreshIndex: Int) {
+        val refreshes = IntArray(3)
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                HomeScreen(
+                    providerSummary = "Test provider",
+                    activeServerLabel = "Test server",
+                    activeServerOnline = true,
+                    providerCount = 1,
+                    liveCount = 1,
+                    movieCount = 1,
+                    seriesCount = 1,
+                    liveRefreshAtEpochMs = null,
+                    moviesRefreshAtEpochMs = null,
+                    seriesRefreshAtEpochMs = null,
+                    providerExpiryEpochMs = null,
+                    liveRefreshing = false,
+                    moviesRefreshing = false,
+                    seriesRefreshing = false,
+                    liveRefreshProgress = null,
+                    moviesRefreshProgress = null,
+                    seriesRefreshProgress = null,
+                    refreshMessage = null,
+                    onAddXtreamProvider = {},
+                    onAddM3uUrlProvider = {},
+                    onAddM3uFileProvider = {},
+                    onProviders = {},
+                    onSettings = {},
+                    onLiveTv = {},
+                    onTvGuide = {},
+                    onMovies = {},
+                    onSeries = {},
+                    onSearch = {},
+                    onSports = {},
+                    onAnnouncements = {},
+                    announcementUnreadCount = 0,
+                    onRefreshLive = { refreshes[0]++ },
+                    onRefreshMovies = { refreshes[1]++ },
+                    onRefreshSeries = { refreshes[2]++ },
+                )
+            }
+        }
+
+        val card = composeRule.onNodeWithTag(cardTag, useUnmergedTree = true)
+        val refresh = composeRule.onNodeWithTag(refreshTag, useUnmergedTree = true)
+        card.performSemanticsAction(SemanticsActions.RequestFocus)
+        card.assertIsFocused()
+        card.performKeyInput { pressKey(Key.DirectionDown) }
+        refresh.assertIsFocused()
+        refresh.performKeyInput { pressKey(Key.DirectionCenter) }
+        composeRule.runOnIdle { assertEquals(1, refreshes[refreshIndex]) }
+        refresh.performKeyInput { pressKey(Key.DirectionUp) }
+        card.assertIsFocused()
+    }
+
+    private fun assertHomeRefreshModal(
+        cardTag: String,
+        refreshTag: String,
+        title: String,
+        refreshIndex: Int,
+        failure: Boolean,
+    ) {
+        val refreshes = IntArray(3)
+        var refreshing by mutableStateOf(false)
+        var progress by mutableStateOf<Float?>(null)
+        var message by mutableStateOf<String?>(null)
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                HomeScreen(
+                    providerSummary = "Test provider",
+                    activeServerLabel = "Test server",
+                    activeServerOnline = true,
+                    providerCount = 1,
+                    liveCount = 1,
+                    movieCount = 1,
+                    seriesCount = 1,
+                    liveRefreshAtEpochMs = null,
+                    moviesRefreshAtEpochMs = null,
+                    seriesRefreshAtEpochMs = null,
+                    providerExpiryEpochMs = null,
+                    liveRefreshing = refreshIndex == 0 && refreshing,
+                    moviesRefreshing = refreshIndex == 1 && refreshing,
+                    seriesRefreshing = refreshIndex == 2 && refreshing,
+                    liveRefreshProgress = progress.takeIf { refreshIndex == 0 },
+                    moviesRefreshProgress = progress.takeIf { refreshIndex == 1 },
+                    seriesRefreshProgress = progress.takeIf { refreshIndex == 2 },
+                    refreshMessage = message,
+                    onAddXtreamProvider = {},
+                    onAddM3uUrlProvider = {},
+                    onAddM3uFileProvider = {},
+                    onProviders = {},
+                    onSettings = {},
+                    onLiveTv = {},
+                    onTvGuide = {},
+                    onMovies = {},
+                    onSeries = {},
+                    onSearch = {},
+                    onSports = {},
+                    onAnnouncements = {},
+                    announcementUnreadCount = 0,
+                    onRefreshLive = { refreshes[0]++; refreshing = true; progress = 0.08f },
+                    onRefreshMovies = { refreshes[1]++; refreshing = true; progress = 0.08f },
+                    onRefreshSeries = { refreshes[2]++; refreshing = true; progress = 0.08f },
+                )
+            }
+        }
+
+        val card = composeRule.onNodeWithTag(cardTag, useUnmergedTree = true)
+        val refresh = composeRule.onNodeWithTag(refreshTag, useUnmergedTree = true)
+        card.performSemanticsAction(SemanticsActions.RequestFocus)
+        card.performKeyInput { pressKey(Key.DirectionDown) }
+        refresh.assertIsFocused()
+        refresh.performKeyInput { pressKey(Key.DirectionCenter) }
+        composeRule.waitUntil(5_000) { composeRule.onAllNodesWithTag("home-refresh-modal").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.runOnIdle { assertEquals(1, refreshes[refreshIndex]) }
+
+        val modal = composeRule.onNodeWithTag("home-refresh-modal", useUnmergedTree = true)
+        modal.assertIsFocused()
+        composeRule.onNodeWithText("Updating $title…").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-refresh-modal-indeterminate", useUnmergedTree = true).assertIsDisplayed()
+        modal.performKeyInput {
+            pressKey(Key.DirectionLeft)
+            pressKey(Key.DirectionRight)
+            pressKey(Key.DirectionUp)
+            pressKey(Key.DirectionDown)
+            pressKey(Key.DirectionCenter)
+            pressKey(Key.Enter)
+            pressKey(Key.Back)
+        }
+        modal.assertIsFocused()
+        composeRule.runOnIdle { assertEquals(1, refreshes[refreshIndex]) }
+
+        composeRule.runOnUiThread { progress = 0.64f }
+        composeRule.onNodeWithTag("home-refresh-modal-progress", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithText("64%").assertIsDisplayed()
+
+        composeRule.runOnUiThread {
+            message = if (failure) "$title refresh failed. Cached library preserved." else "$title updated"
+            refreshing = false
+            progress = 1f
+        }
+        composeRule.waitUntil(5_000) { composeRule.onAllNodesWithTag("home-refresh-modal").fetchSemanticsNodes().isEmpty() }
+        composeRule.onNodeWithTag("home-refresh-message", useUnmergedTree = true).assertIsDisplayed()
+        refresh.assertIsFocused()
+        refresh.performKeyInput { pressKey(Key.DirectionUp) }
+        card.assertIsFocused()
+        card.performKeyInput { pressKey(Key.DirectionDown) }
+        refresh.assertIsFocused()
     }
 
     private fun liveCategory(id: String, name: String) = LiveTvCategory(id, name, LiveTvCategoryKind.All)

@@ -19,6 +19,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -96,9 +98,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -108,6 +112,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.navigation.NavHostController
@@ -1116,7 +1121,7 @@ private fun ProviderTypeSetupScreen(
 }
 
 @Composable
-private fun HomeScreen(
+internal fun HomeScreen(
     providerSummary: String,
     activeServerLabel: String?,
     activeServerOnline: Boolean,
@@ -1156,6 +1161,25 @@ private fun HomeScreen(
     val spacing = LocalWatchioSpacing.current
     val sizes = LocalWatchioComponentSizes.current
     val firstFocus = remember { FocusRequester() }
+    val moviesFocus = remember { FocusRequester() }
+    val seriesFocus = remember { FocusRequester() }
+    val liveRefreshFocus = remember { FocusRequester() }
+    val moviesRefreshFocus = remember { FocusRequester() }
+    val seriesRefreshFocus = remember { FocusRequester() }
+    val modalFocus = remember { FocusRequester() }
+    val activeRefreshTitle = when {
+        liveRefreshing -> "Live TV"
+        moviesRefreshing -> "Movies"
+        seriesRefreshing -> "Series"
+        else -> null
+    }
+    val activeRefreshProgress = when (activeRefreshTitle) {
+        "Live TV" -> liveRefreshProgress
+        "Movies" -> moviesRefreshProgress
+        "Series" -> seriesRefreshProgress
+        else -> null
+    }
+    var lastRefreshTitle by remember { mutableStateOf<String?>(null) }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -1164,6 +1188,19 @@ private fun HomeScreen(
         }
     }
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
+    LaunchedEffect(activeRefreshTitle) {
+        if (activeRefreshTitle != null) {
+            lastRefreshTitle = activeRefreshTitle
+            modalFocus.requestFocus()
+        } else {
+            when (lastRefreshTitle) {
+                "Live TV" -> liveRefreshFocus.requestFocus()
+                "Movies" -> moviesRefreshFocus.requestFocus()
+                "Series" -> seriesRefreshFocus.requestFocus()
+            }
+            lastRefreshTitle = null
+        }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1173,7 +1210,8 @@ private fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = sizes.tvSafePadding + spacing.lg, vertical = sizes.tvSafePadding),
+                .padding(horizontal = sizes.tvSafePadding + spacing.lg, vertical = sizes.tvSafePadding)
+                .then(if (activeRefreshTitle != null) Modifier.clearAndSetSemantics { } else Modifier),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             HomeTopBar(
@@ -1208,12 +1246,12 @@ private fun HomeScreen(
                     HomePrimaryCard(
                         action = liveAction,
                         refreshing = liveRefreshing,
-                        refreshProgress = liveRefreshProgress,
                         onRefresh = onRefreshLive,
+                        cardFocusRequester = firstFocus,
+                        refreshFocusRequester = liveRefreshFocus,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .focusRequester(firstFocus)
                             .testTag("home-live-tv"),
                     )
                     Column(
@@ -1223,8 +1261,9 @@ private fun HomeScreen(
                         HomePrimaryCard(
                             action = movieAction,
                             refreshing = moviesRefreshing,
-                            refreshProgress = moviesRefreshProgress,
                             onRefresh = onRefreshMovies,
+                            cardFocusRequester = moviesFocus,
+                            refreshFocusRequester = moviesRefreshFocus,
                             modifier = Modifier
                                 .weight(0.72f)
                                 .fillMaxWidth()
@@ -1245,8 +1284,9 @@ private fun HomeScreen(
                         HomePrimaryCard(
                             action = seriesAction,
                             refreshing = seriesRefreshing,
-                            refreshProgress = seriesRefreshProgress,
                             onRefresh = onRefreshSeries,
+                            cardFocusRequester = seriesFocus,
+                            refreshFocusRequester = seriesRefreshFocus,
                             modifier = Modifier
                                 .weight(0.72f)
                                 .fillMaxWidth()
@@ -1263,7 +1303,17 @@ private fun HomeScreen(
                 }
             }
             Spacer(Modifier.height(spacing.sm))
+            refreshMessage?.let { message ->
+                Text(message, color = colors.textSecondary, style = LocalWatchioTypography.current.body, modifier = Modifier.testTag("home-refresh-message"))
+            }
             HomeFooter(providerSummary = providerSummary, providerExpiryEpochMs = providerExpiryEpochMs)
+        }
+        activeRefreshTitle?.let { title ->
+            HomeRefreshModal(
+                title = title,
+                progress = activeRefreshProgress,
+                focusRequester = modalFocus,
+            )
         }
     }
 }
@@ -2218,8 +2268,9 @@ private fun TvRootExitBackHandler(
 private fun HomePrimaryCard(
     action: HomeAction,
     refreshing: Boolean,
-    refreshProgress: Float?,
     onRefresh: () -> Unit,
+    cardFocusRequester: FocusRequester,
+    refreshFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
@@ -2227,7 +2278,10 @@ private fun HomePrimaryCard(
     val type = LocalWatchioTypography.current
     val radii = LocalWatchioRadii.current
     WatchioCard(
-        modifier = modifier.shadow(10.dp, RoundedCornerShape(radii.lg)),
+        modifier = modifier
+            .focusProperties { down = refreshFocusRequester }
+            .focusRequester(cardFocusRequester)
+            .shadow(10.dp, RoundedCornerShape(radii.lg)),
         accent = action.accent,
         minWidth = 0.dp,
         minHeight = 0.dp,
@@ -2264,10 +2318,71 @@ private fun HomePrimaryCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                HomeRefreshControl(action.title, action.accent, refreshing, onRefresh)
+                HomeRefreshControl(
+                    title = action.title,
+                    accent = action.accent,
+                    refreshing = refreshing,
+                    onRefresh = onRefresh,
+                    focusRequester = refreshFocusRequester,
+                    upFocusRequester = cardFocusRequester,
+                )
             }
-            refreshProgress?.let { progress ->
-                HomeRefreshProgress(action.title, action.accent, progress)
+        }
+    }
+}
+
+@Composable
+internal fun HomeRefreshModal(
+    title: String,
+    progress: Float?,
+    focusRequester: FocusRequester,
+) {
+    val colors = LocalWatchioColors.current
+    val spacing = LocalWatchioSpacing.current
+    val radii = LocalWatchioRadii.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val reliableProgress = progress?.takeIf { it > 0.08f && it < 1f }?.coerceIn(0f, 1f)
+    val updatingLabel = "Updating $title"
+    BackHandler { }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.72f))
+            .focusRequester(focusRequester)
+            .onPreviewKeyEvent { true }
+            .clickable(interactionSource = interactionSource, indication = null, onClick = {})
+            .semantics(mergeDescendants = true) {
+                contentDescription = updatingLabel
+                stateDescription = reliableProgress?.let { "$updatingLabel ${(it * 100).roundToInt()} percent" } ?: updatingLabel
+            }
+            .testTag("home-refresh-modal"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = 420.dp)
+                .fillMaxWidth(0.78f)
+                .background(colors.surfaceElevated, RoundedCornerShape(radii.lg))
+                .border(2.dp, colors.focusBorder, RoundedCornerShape(radii.lg))
+                .padding(spacing.xl),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(spacing.lg),
+            ) {
+                Text("Updating $title…", color = colors.textPrimary, style = LocalWatchioTypography.current.screenTitle, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                if (reliableProgress != null) {
+                    LinearProgressIndicator(
+                        progress = { reliableProgress },
+                        color = colors.focusGlow,
+                        trackColor = colors.surfaceCard,
+                        modifier = Modifier.fillMaxWidth().progressSemantics(reliableProgress).testTag("home-refresh-modal-progress"),
+                    )
+                    Text("${(reliableProgress * 100).roundToInt()}%", color = colors.textSecondary, style = LocalWatchioTypography.current.body)
+                } else {
+                    CircularProgressIndicator(color = colors.focusGlow, modifier = Modifier.size(52.dp).testTag("home-refresh-modal-indeterminate"))
+                }
             }
         }
     }
@@ -2278,10 +2393,23 @@ internal fun HomeRefreshControl(
     title: String,
     accent: Color,
     refreshing: Boolean,
+    focusRequester: FocusRequester? = null,
+    upFocusRequester: FocusRequester? = null,
     onRefresh: () -> Unit,
 ) {
+    val focusModifier = if (focusRequester != null && upFocusRequester != null) {
+        Modifier
+            .focusProperties { up = upFocusRequester }
+            .focusRequester(focusRequester)
+    } else {
+        Modifier
+    }
     WatchioCard(
-        modifier = Modifier.width(44.dp).height(34.dp).testTag("home-${title.lowercase().replace(' ', '-')}-refresh"),
+        modifier = Modifier
+            .width(44.dp)
+            .height(34.dp)
+            .testTag("home-${title.lowercase().replace(' ', '-')}-refresh")
+            .then(focusModifier),
         accent = accent,
         enabled = !refreshing,
         minWidth = 44.dp,
