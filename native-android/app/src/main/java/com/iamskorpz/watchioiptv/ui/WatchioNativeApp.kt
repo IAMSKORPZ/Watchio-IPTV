@@ -951,6 +951,7 @@ fun WatchioNativeApp(
                 val state by updatesViewModel.state.collectAsStateWithLifecycle()
                 UpdatesScreen(
                     state = state,
+                    channelDisplayName = BuildConfig.UPDATE_CHANNEL_DISPLAY_NAME,
                     onBack = { navController.popBackStack() },
                     onCheck = updatesViewModel::checkForUpdates,
                     onDownload = updatesViewModel::downloadUpdate,

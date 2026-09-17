@@ -58,6 +58,7 @@ import java.io.File
 @Composable
 fun UpdatesScreen(
     state: UpdatesUiState,
+    channelDisplayName: String,
     onBack: () -> Unit,
     onCheck: () -> Unit,
     onDownload: () -> Unit,
@@ -82,9 +83,9 @@ fun UpdatesScreen(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val isTv = maxWidth >= 700.dp
             if (isTv) {
-                UpdatesTvLayout(state, onCheck, onDownload, onPermissionRequired)
+                UpdatesTvLayout(state, channelDisplayName, onCheck, onDownload, onPermissionRequired)
             } else {
-                UpdatesMobileLayout(state, onCheck, onDownload, onPermissionRequired)
+                UpdatesMobileLayout(state, channelDisplayName, onCheck, onDownload, onPermissionRequired)
             }
         }
     }
@@ -97,6 +98,7 @@ fun UpdatesScreen(
 @Composable
 private fun UpdatesTvLayout(
     state: UpdatesUiState,
+    channelDisplayName: String,
     onCheck: () -> Unit,
     onDownload: () -> Unit,
     onPermissionRequired: () -> Unit,
@@ -113,7 +115,7 @@ private fun UpdatesTvLayout(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(spacing.md),
         ) {
-            UpdateStatusCard(state)
+            UpdateStatusCard(state, channelDisplayName)
             state.manifest?.let { manifest ->
                 if (showReleaseNotes(state)) {
                     ReleaseNotesCard(manifest)
@@ -126,7 +128,7 @@ private fun UpdatesTvLayout(
                 .fillMaxHeight(),
             verticalArrangement = Arrangement.spacedBy(spacing.md),
         ) {
-            UpdateActionPanel(state, onCheck, onDownload, onPermissionRequired)
+            UpdateActionPanel(state, channelDisplayName, onCheck, onDownload, onPermissionRequired)
         }
     }
 }
@@ -138,6 +140,7 @@ private fun UpdatesTvLayout(
 @Composable
 private fun UpdatesMobileLayout(
     state: UpdatesUiState,
+    channelDisplayName: String,
     onCheck: () -> Unit,
     onDownload: () -> Unit,
     onPermissionRequired: () -> Unit,
@@ -149,8 +152,8 @@ private fun UpdatesMobileLayout(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(spacing.md),
     ) {
-        UpdateStatusCard(state)
-        UpdateActionPanel(state, onCheck, onDownload, onPermissionRequired)
+        UpdateStatusCard(state, channelDisplayName)
+        UpdateActionPanel(state, channelDisplayName, onCheck, onDownload, onPermissionRequired)
         state.manifest?.let { manifest ->
             if (showReleaseNotes(state)) {
                 ReleaseNotesCard(manifest)
@@ -165,7 +168,7 @@ private fun UpdatesMobileLayout(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun UpdateStatusCard(state: UpdatesUiState) {
+private fun UpdateStatusCard(state: UpdatesUiState, channelDisplayName: String) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
     val type = LocalWatchioTypography.current
@@ -206,7 +209,7 @@ private fun UpdateStatusCard(state: UpdatesUiState) {
                 modifier = Modifier.testTag("updates-status-heading"),
             )
             Text(
-                statusSubtitle(state),
+                statusSubtitle(state, channelDisplayName),
                 color = colors.textSecondary,
                 style = type.body,
                 modifier = Modifier.testTag("updates-status-subtitle"),
@@ -218,7 +221,7 @@ private fun UpdateStatusCard(state: UpdatesUiState) {
                 UpdateInfoRow("New Version", state.manifest.versionName, accentColor, testTag = "updates-new-version")
                 UpdateInfoRow("Published", state.manifest.publishedAt)
             }
-            UpdateInfoRow("Channel", "Development")
+            UpdateInfoRow("Channel", channelDisplayName, testTag = "updates-channel")
         }
     }
 }
@@ -273,6 +276,7 @@ private fun ReleaseNotesCard(manifest: UpdateManifest) {
 @Composable
 private fun UpdateActionPanel(
     state: UpdatesUiState,
+    channelDisplayName: String,
     onCheck: () -> Unit,
     onDownload: () -> Unit,
     onPermissionRequired: () -> Unit,
@@ -445,7 +449,7 @@ private fun UpdateActionPanel(
                         if (state.status == UpdateStatus.DevelopmentBuildNewer)
                             "This build is newer than the published release manifest."
                         else
-                            "You're running the latest development build.",
+                            "You're running the latest $channelDisplayName build.",
                         color = colors.textSecondary,
                         style = type.body,
                     )
@@ -515,7 +519,7 @@ private fun UpdateActionPanel(
                 ) {
                     Text("CHECK FOR UPDATES", color = colors.textMuted, style = type.label, fontWeight = FontWeight.Bold)
                     Text(
-                        "Tap below to check the development channel for the latest Watchio build.",
+                        "Tap below to check the $channelDisplayName channel for the latest Watchio build.",
                         color = colors.textSecondary,
                         style = type.body,
                     )
@@ -643,12 +647,12 @@ private fun statusHeading(state: UpdatesUiState): String = when (state.status) {
     UpdateStatus.Error -> "Unable to Update"
 }
 
-private fun statusSubtitle(state: UpdatesUiState): String = when (state.status) {
-    UpdateStatus.Idle -> "Check the development channel when ready."
-    UpdateStatus.Checking -> "Looking for the latest development build…"
-    UpdateStatus.UpToDate -> "You're running the latest development build."
+private fun statusSubtitle(state: UpdatesUiState, channelDisplayName: String): String = when (state.status) {
+    UpdateStatus.Idle -> "Check the $channelDisplayName channel when ready."
+    UpdateStatus.Checking -> "Looking for the latest $channelDisplayName build…"
+    UpdateStatus.UpToDate -> "You're running the latest $channelDisplayName build."
     UpdateStatus.DevelopmentBuildNewer -> "This build is newer than the published release manifest."
-    UpdateStatus.UpdateAvailable -> "A newer development build is available."
+    UpdateStatus.UpdateAvailable -> "A newer $channelDisplayName build is available."
     UpdateStatus.Downloading -> downloadDetail(state) ?: "Downloading the update package."
     UpdateStatus.Verifying -> "Checking file integrity…"
     UpdateStatus.ReadyToInstall -> "The update has been downloaded and verified."

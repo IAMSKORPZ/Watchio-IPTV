@@ -53,6 +53,7 @@ class UpdatesScreenComposeTest {
         onCheck: () -> Unit = {},
         onDownload: () -> Unit = {},
         onPermissionRequired: () -> Unit = {},
+        channelDisplayName: String = "Development",
     ) {
         val effectiveManifest = manifest ?: if (mandatory) this.manifest.copy(mandatory = true) else null
         composeRule.setContent {
@@ -68,6 +69,7 @@ class UpdatesScreenComposeTest {
                         totalBytes = totalBytes,
                         errorMessage = errorMessage,
                     ),
+                    channelDisplayName = channelDisplayName,
                     onBack = onBack,
                     onCheck = onCheck,
                     onDownload = onDownload,
@@ -82,6 +84,21 @@ class UpdatesScreenComposeTest {
         setContent()
         composeRule.onNodeWithTag("updates-title").assertIsDisplayed()
         composeRule.onNodeWithText("UPDATES").assertIsDisplayed()
+    }
+
+    @Test
+    fun publicChannelDisplaysStableNotDevelopment() {
+        setContent(channelDisplayName = "Stable")
+        composeRule.onNodeWithTag("updates-channel").assertIsDisplayed()
+        composeRule.onNodeWithText("Stable").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("Development").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun developmentChannelDisplaysDevelopment() {
+        setContent(channelDisplayName = "Development")
+        composeRule.onNodeWithTag("updates-channel").assertIsDisplayed()
+        composeRule.onNodeWithText("Development").assertIsDisplayed()
     }
 
     @Test

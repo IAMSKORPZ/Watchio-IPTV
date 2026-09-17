@@ -193,7 +193,8 @@ class AppContainer(context: Context) {
     val updateRepository = UpdateRepository(
         context = appContext,
         okHttpClient = networkModule.okHttpClient,
-        manifestUrl = if (BuildConfig.APPLICATION_ID.endsWith(".uitest")) UpdateRepository.UITEST_MANIFEST_URL else null,
+        manifestUrl = BuildConfig.UPDATE_MANIFEST_URL,
+        expectedChannel = BuildConfig.UPDATE_CHANNEL,
     )
 
     init {

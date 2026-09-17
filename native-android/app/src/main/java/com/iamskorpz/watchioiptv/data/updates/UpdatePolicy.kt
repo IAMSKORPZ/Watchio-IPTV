@@ -1,8 +1,10 @@
 package com.iamskorpz.watchioiptv.data.updates
 
 object UpdatePolicy {
-    fun validateManifest(manifest: UpdateManifest, expectedChannel: String = "dev") {
+    fun validateManifest(manifest: UpdateManifest, expectedChannel: String) {
         if (manifest.schemaVersion != 1) throw UpdateException("Unsupported update manifest.")
+        if (expectedChannel !in setOf("stable", "dev", "uitest")) throw UpdateException("Update channel is invalid.")
+        if (manifest.channel !in setOf("stable", "dev", "uitest")) throw UpdateException("Update channel is invalid.")
         if (manifest.channel != expectedChannel) throw UpdateException("Update channel mismatch.")
         if (manifest.versionCode <= 0) throw UpdateException("Invalid update version.")
         if (manifest.versionName.isBlank()) throw UpdateException("Invalid update version.")

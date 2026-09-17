@@ -126,6 +126,9 @@ android {
             isDebuggable = true
             signingConfig = signingConfigs.getByName("watchioDev")
             resValue("string", "app_name", "Watchio IPTV Dev")
+            buildConfigField("String", "UPDATE_CHANNEL", "\"dev\"")
+            buildConfigField("String", "UPDATE_CHANNEL_DISPLAY_NAME", "\"Development\"")
+            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/dev/native-android/update/update.json\"")
         }
         create("local") {
             initWith(getByName("debug"))
@@ -134,6 +137,9 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("debug")
             resValue("string", "app_name", "Watchio IPTV Local")
+            buildConfigField("String", "UPDATE_CHANNEL", "\"local\"")
+            buildConfigField("String", "UPDATE_CHANNEL_DISPLAY_NAME", "\"Local\"")
+            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"\"")
         }
         create("uitest") {
             initWith(getByName("local"))
@@ -142,6 +148,9 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("debug")
             resValue("string", "app_name", "Watchio IPTV Test")
+            buildConfigField("String", "UPDATE_CHANNEL", "\"uitest\"")
+            buildConfigField("String", "UPDATE_CHANNEL_DISPLAY_NAME", "\"Test\"")
+            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"watchio://uitest/update.json\"")
         }
         release {
             isMinifyEnabled = true
@@ -151,6 +160,9 @@ android {
                 "proguard-rules.pro",
             )
             signingConfig = signingConfigs.getByName("watchioPublic")
+            buildConfigField("String", "UPDATE_CHANNEL", "\"stable\"")
+            buildConfigField("String", "UPDATE_CHANNEL_DISPLAY_NAME", "\"Stable\"")
+            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/main/native-android/update/stable.json\"")
         }
     }
 
