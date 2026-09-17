@@ -1,31 +1,20 @@
 {
   "schemaVersion": 1,
   "channel": "dev",
-  "versionCode": 13,
-  "versionName": "0.1.0-dev.12-debug",
+  "versionCode": 16,
+  "versionName": "0.1.3",
   "minimumSupportedVersionCode": 1,
   "mandatory": false,
-  "publishedAt": "2026-09-08T16:49:57.012687Z",
+  "publishedAt": "2026-09-17T14:48:32Z",
   "releaseNotes": [
-    "Watchio DEV 0.1.0-dev.12",
-    "Sports API Setup",
-    "New: Use your own free football-data.org API key",
-    "New: Sports Data setup in Settings",
-    "New: Direct football-data.org registration link",
-    "New: Secure local API-key storage and validation before saving",
-    "New: Friendly setup state and update/remove support",
-    "Improved: 401/403 credential, rate-limit, Retry-After, and network-error handling",
-    "Improved: Sports cache refresh after credential changes",
-    "Security: Watchio no longer ships a shared football-data.org API key",
-    "Security: Sports requests use the user's configured credential",
-    "Existing: Sports WATCH matches fixtures against the user's IPTV provider and EPG",
-    "Existing: Watchio does not supply television streams",
-    "Tester note: One provider stream was unavailable at source; Watchio returned the source error without endless buffering."
+    "Corrected Stable/Public update channel handling.",
+    "Improved update package validation.",
+    "Fixed Home version display to use the installed app version."
   ],
-  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.12",
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.3",
   "apk": {
-    "fileName": "watchio-dev-0.1.0-dev.12-debug.apk",
-    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.12/watchio-dev-0.1.0-dev.12-debug.apk",
-    "sha256": "4889bb623610aa0058cd995da119ef4c08f76f6daad4230bd729c189a2dd77ab"
+    "fileName": "Watchio-IPTV.apk",
+    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/latest/download/Watchio-IPTV.apk",
+    "sha256": "6427C8008FD48A9837174CE7BB253D04A2C6F9D89D4FC3BEC9B36D6FD5CA85CE"
   }
 }
