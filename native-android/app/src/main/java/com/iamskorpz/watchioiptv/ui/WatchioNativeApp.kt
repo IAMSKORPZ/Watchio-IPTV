@@ -2470,10 +2470,12 @@ private fun HomeFooter(providerSummary: String, providerExpiryEpochMs: Long?) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(formatHomeExpiration(providerExpiryEpochMs), color = colors.textSecondary, style = type.body)
-        Text("v0.1.0", color = colors.textMuted, style = type.body)
+        Text(formatHomeVersion(BuildConfig.VERSION_NAME), color = colors.textMuted, style = type.body)
         Text("Active Provider: $providerSummary", color = colors.textSecondary, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 300.dp))
     }
 }
+
+internal fun formatHomeVersion(versionName: String): String = "v$versionName"
 
 private fun formatHomeUpdatedTime(epochMs: Long?): String {
     if (epochMs == null || epochMs <= 0L) return "Updated last: Never"

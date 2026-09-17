@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
   "channel": "stable",
-  "versionCode": 15,
-  "versionName": "0.1.2",
+  "versionCode": 16,
+  "versionName": "0.1.3",
   "minimumSupportedVersionCode": 1,
   "mandatory": false,
-  "publishedAt": "2026-09-16T00:00:00Z",
+  "publishedAt": "2026-09-17T13:23:00Z",
   "releaseNotes": [
-    "Watchio IPTV v0.1.2",
-    "Improved TV refresh focus and loading experience."
+    "Corrected Stable/Public update channel handling.",
+    "Improved update package validation."
   ],
-  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.2",
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.3",
   "apk": {
     "fileName": "Watchio-IPTV.apk",
     "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/latest/download/Watchio-IPTV.apk",
-    "sha256": "B5F5135DD8BC0E39F4C015B8CF3D3C52094DE3A9979E0F6A8533324CD5092C49"
+    "sha256": "6427C8008FD48A9837174CE7BB253D04A2C6F9D89D4FC3BEC9B36D6FD5CA85CE"
   }
 }
