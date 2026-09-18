@@ -82,6 +82,7 @@ import com.iamskorpz.watchioiptv.ui.components.WatchioButton
 import com.iamskorpz.watchioiptv.ui.components.WatchioButtonVariant
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
+import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
@@ -368,7 +369,6 @@ private fun LiveChannelSearchOverlay(
     onDismiss: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
-    val fieldFocus = remember { FocusRequester() }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BackHandler(onBack = onDismiss)
         Box(
@@ -392,15 +392,12 @@ private fun LiveChannelSearchOverlay(
                         Text("Search channels", color = colors.textPrimary, fontWeight = FontWeight.Bold)
                         TextButton(onClick = onDismiss, modifier = Modifier.testTag("live-search-close")) { Text("Close") }
                     }
-                    OutlinedTextField(
+                    WatchioSearchTextField(
                         value = query,
                         onValueChange = onSearch,
-                        singleLine = true,
-                        label = { Text("Search channels") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(fieldFocus)
-                            .testTag("live-search-field"),
+                        label = "Search channels",
+                        testTag = "live-search-field",
+                        modifier = Modifier.fillMaxWidth(),
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { onSearch("") }, modifier = Modifier.testTag("live-search-clear")) { Text("Clear") }

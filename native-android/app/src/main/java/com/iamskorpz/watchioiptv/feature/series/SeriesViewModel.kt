@@ -113,7 +113,12 @@ class SeriesViewModel(
                         ?: return@collectLatest
                     val category = if (query.isBlank()) mutableSeries.value.selectedCategory ?: allCategory else allCategory
                     val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE, query)
-                    mutableSeries.value = mutableSeries.value.copy(searchQuery = query, series = items, hasMore = query.isBlank() && items.size == SeriesRepository.PAGE_SIZE)
+                    // A delayed result may complete after the IME has already produced a
+                    // newer edit. Result loading must never write editable text back.
+                    mutableSeries.value = mutableSeries.value.copy(
+                        series = items,
+                        hasMore = query.isBlank() && items.size == SeriesRepository.PAGE_SIZE,
+                    )
                 }
         }
         viewModelScope.launch {
@@ -207,6 +212,9 @@ class SeriesViewModel(
     }
 
     fun updateSearch(query: String) {
+        // Text ownership must update synchronously. The debounced flow owns only
+        // result loading; delaying this echo makes IMEs edit against stale text.
+        mutableSeries.value = mutableSeries.value.copy(searchQuery = query)
         if (query.isBlank()) {
             searchQueryFlow.value = ""
             categoryJob?.cancel()
@@ -216,7 +224,7 @@ class SeriesViewModel(
                     ?: mutableSeries.value.categories.firstOrNull { it.id == "all" }
                     ?: return@launch
                 val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE)
-                mutableSeries.value = mutableSeries.value.copy(searchQuery = "", series = items, hasMore = items.size == SeriesRepository.PAGE_SIZE)
+                mutableSeries.value = mutableSeries.value.copy(series = items, hasMore = items.size == SeriesRepository.PAGE_SIZE)
             }
         } else {
             searchQueryFlow.value = query
@@ -248,8 +256,19 @@ class SeriesViewModel(
     fun loadDetails(series: WatchioSeriesItem, targetEpisodeId: String? = null) {
         viewModelScope.launch {
             val currentAutoResume = mutableDetails.value.autoResumeEnabled
-            mutableDetails.value = SeriesDetailsUiState(loading = true, autoResumeEnabled = currentAutoResume, targetEpisodeId = targetEpisodeId)
-            val details = seriesRepository.details(series)
+            mutableDetails.value = SeriesDetailsUiState(
+                loading = true,
+                details = series.catalogDetails(),
+                autoResumeEnabled = currentAutoResume,
+                targetEpisodeId = targetEpisodeId,
+            )
+            val details = runCatching { seriesRepository.details(series) }.getOrElse {
+                mutableDetails.value = mutableDetails.value.copy(
+                    loading = false,
+                    errorMessage = "Unable to load episodes from this provider.",
+                )
+                return@launch
+            }
             val targetEpisode = targetEpisodeId?.let { id -> details.episodes.firstOrNull { it.episodeId == id } }
             val selected = targetEpisode?.seasonNumber
                 ?: details.seasons.firstOrNull { it.seasonNumber == 1 }?.seasonNumber
@@ -265,6 +284,24 @@ class SeriesViewModel(
             )
         }
     }
+
+    private fun WatchioSeriesItem.catalogDetails() = SeriesDetails(
+        series = this,
+        title = name,
+        posterUrl = coverUrl,
+        backdropUrl = null,
+        plot = plot,
+        cast = cast,
+        director = director,
+        genre = genre,
+        releaseDate = releaseDate,
+        rating = rating,
+        runtime = runtime,
+        trailerKey = trailerKey,
+        tmdbId = tmdbId,
+        seasons = emptyList(),
+        episodes = emptyList(),
+    )
 
     fun loadDetails(seriesId: String, targetEpisodeId: String? = null) {
         viewModelScope.launch {

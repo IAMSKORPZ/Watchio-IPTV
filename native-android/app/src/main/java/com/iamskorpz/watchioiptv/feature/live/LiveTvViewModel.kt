@@ -181,6 +181,9 @@ class LiveTvViewModel(
     }
 
     fun updateLiveSearch(query: String) {
+        // Echo editable text before asynchronous filtering so Compose can keep
+        // the IME selection and composition attached to the current value.
+        mutableUi.value = mutableUi.value.copy(liveSearchQuery = query)
         viewModelScope.launch {
             val providerId = liveTvRepository.selectedProviderId() ?: return@launch
             val allCategory = mutableUi.value.categories.firstOrNull { it.id == "all" }
@@ -192,8 +195,8 @@ class LiveTvViewModel(
                     .orEmpty()
                     .filter { it.name.contains(query, ignoreCase = true) }
             }
+            if (mutableUi.value.liveSearchQuery != query) return@launch
             mutableUi.value = mutableUi.value.copy(
-                liveSearchQuery = query,
                 channels = channels,
                 selectedChannel = channels.firstOrNull { it.id == mutableUi.value.selectedChannel?.id } ?: mutableUi.value.selectedChannel,
             )

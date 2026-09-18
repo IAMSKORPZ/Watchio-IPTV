@@ -42,7 +42,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -95,6 +94,7 @@ import com.iamskorpz.watchioiptv.ui.components.ResumePlaybackRequest
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
+import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioBorders
@@ -478,12 +478,12 @@ private fun SeriesSearchOverlay(
                     Text("Search series", color = colors.textPrimary, fontWeight = FontWeight.Bold)
                     TextButton(onClick = onDismiss, modifier = Modifier.testTag("series-search-close")) { Text("Close") }
                 }
-                OutlinedTextField(
+                WatchioSearchTextField(
                     value = query,
                     onValueChange = onSearch,
-                    singleLine = true,
-                    label = { Text("Search series") },
-                    modifier = Modifier.fillMaxWidth().testTag("series-search-field"),
+                    label = "Search series",
+                    testTag = "series-search-field",
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { onSearch("") }, modifier = Modifier.testTag("series-search-clear")) { Text("Clear") }
@@ -658,7 +658,7 @@ fun SeriesDetailsScreen(
     val colors = LocalWatchioColors.current
     val type = LocalWatchioTypography.current
     BackHandler(onBack = onBack)
-    if (state.loading) {
+    if (state.loading && state.details == null) {
         Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = colors.seriesAccent)
         }
@@ -764,7 +764,7 @@ fun SeriesDetailsScreen(
                                 ) {
                                     SeriesDetailsTabButton(
                                         title = "Episodes",
-                                        count = details.episodes.size,
+                                        count = if (state.loading) null else details.episodes.size,
                                         selected = state.activeTab == "episodes",
                                         onClick = { onTab("episodes") },
                                         modifier = Modifier.weight(1f).testTag("series-tab-episodes"),
@@ -917,7 +917,12 @@ fun SeriesDetailsScreen(
                     val currentSeason = details.seasons.firstOrNull { it.seasonNumber == state.selectedSeasonNumber }
                     val seasonName = currentSeason?.name ?: "Season ${state.selectedSeasonNumber ?: 1}"
                     val epCount = state.selectedEpisodes.size
-                    val epCountText = if (epCount == 1) "1 Episode" else "$epCount Episodes"
+                    val epCountText = when {
+                        state.loading -> "Loading episodes..."
+                        state.errorMessage != null -> "Episodes unavailable"
+                        epCount == 1 -> "1 Episode"
+                        else -> "$epCount Episodes"
+                    }
 
                     item(key = "series_episodes_section_header") {
                         Spacer(Modifier.height(6.dp))
@@ -930,7 +935,22 @@ fun SeriesDetailsScreen(
                         )
                     }
 
-                    if (state.selectedEpisodes.isEmpty()) {
+                    if (state.loading) {
+                        item(key = "series_loading_episodes") {
+                            Row(
+                                modifier = Modifier.padding(24.dp).testTag("series-episodes-loading"),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(color = colors.seriesAccent, modifier = Modifier.size(24.dp))
+                                Text("Loading series details", color = colors.textSecondary)
+                            }
+                        }
+                    } else if (state.errorMessage != null) {
+                        item(key = "series_episodes_error") {
+                            Text(state.errorMessage, color = colors.textSecondary, modifier = Modifier.padding(24.dp).testTag("series-episodes-error"))
+                        }
+                    } else if (state.selectedEpisodes.isEmpty()) {
                         item(key = "series_no_episodes") {
                             Text("No episodes available", color = colors.textSecondary, modifier = Modifier.padding(24.dp).testTag("series-no-episodes"))
                         }

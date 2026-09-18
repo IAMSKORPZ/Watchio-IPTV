@@ -43,7 +43,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -103,6 +102,7 @@ import com.iamskorpz.watchioiptv.ui.components.ResumePlaybackRequest
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
+import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
 import com.iamskorpz.watchioiptv.ui.components.WatchioProgressBar
@@ -523,12 +523,12 @@ private fun MovieSearchOverlay(
                     Text("Search movies", color = colors.textPrimary, fontWeight = FontWeight.Bold)
                     TextButton(onClick = onDismiss, modifier = Modifier.testTag("movie-search-close")) { Text("Close") }
                 }
-                OutlinedTextField(
+                WatchioSearchTextField(
                     value = query,
                     onValueChange = onSearch,
-                    singleLine = true,
-                    label = { Text("Search movies") },
-                    modifier = Modifier.fillMaxWidth().testTag("movie-search-field"),
+                    label = "Search movies",
+                    testTag = "movie-search-field",
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { onSearch("") }, modifier = Modifier.testTag("movie-search-clear")) { Text("Clear") }

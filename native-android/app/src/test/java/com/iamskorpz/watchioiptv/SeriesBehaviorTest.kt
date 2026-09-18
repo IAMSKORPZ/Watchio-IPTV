@@ -51,6 +51,47 @@ class SeriesBehaviorTest {
     }
 
     @Test
+    fun seriesInfoAcceptsObjectGroupedEpisodesAndMalformedOptionalInfo() {
+        val dto = Json { ignoreUnknownKeys = true }.decodeFromString<XtreamSeriesInfoResponseDto>(
+            """
+            {
+              "info":{"name":"Family Show"},
+              "seasons":[
+                {"season_number":"1","episode_count":"2","name":"Season 1"},
+                {"season_number":2,"episode_count":2,"name":"Season 2"}
+              ],
+              "episodes":{
+                "1":{
+                  "1":{"id":"101","episode_num":"1","title":"Pilot","container_extension":"mp4","info":[]},
+                  "2":{"id":102,"episode_num":2,"title":"Second","container_extension":"mkv","info":{"plot":null,"duration_secs":"1200"}}
+                },
+                "2":[
+                  {"id":"201","episode_num":1,"title":"Return","container_extension":"mp4","info":null},
+                  {"id":"202","episode_num":"2","title":null,"container_extension":"mp4"}
+                ]
+              }
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(setOf("1", "2"), dto.episodes.keys)
+        assertEquals(4, dto.episodes.values.sumOf { it.size })
+        assertEquals(null, dto.episodes.getValue("1").first().info)
+        assertEquals(1200, dto.episodes.getValue("1")[1].info?.durationSecs)
+        assertEquals("202", dto.episodes.getValue("2")[1].id)
+    }
+
+    @Test
+    fun seriesInfoAcceptsFlatEpisodeArrayGroupedBySeason() {
+        val dto = Json { ignoreUnknownKeys = true }.decodeFromString<XtreamSeriesInfoResponseDto>(
+            """{"episodes":[{"id":"101","season":"1","episode_num":1},{"id":"201","season":2,"episode_num":"1"}]}""",
+        )
+
+        assertEquals(1, dto.episodes.getValue("1").size)
+        assertEquals(1, dto.episodes.getValue("2").size)
+    }
+
+    @Test
     fun episodeResolverUsesEpisodeIdAndMasksSecrets() = runTest {
         val secrets = ProviderCredentialStore(FakeSecretStore())
         secrets.saveXtreamCredentials("provider-a", XtreamCredentials("user", "pass"))

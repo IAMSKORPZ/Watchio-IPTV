@@ -3,6 +3,7 @@ package com.iamskorpz.watchioiptv.data.xtream
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -10,12 +11,17 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.JsonEncoder
 
 object FlexibleStringSerializer : KSerializer<String?> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexibleString", PrimitiveKind.STRING)
@@ -92,5 +98,43 @@ object FlexibleStringListSerializer : KSerializer<List<String>> {
 
     override fun serialize(encoder: Encoder, value: List<String>) {
         encoder.encodeSerializableValue(ListSerializer(String.serializer()), value)
+    }
+}
+
+object FlexibleSeriesEpisodesSerializer : KSerializer<Map<String, List<XtreamEpisodeDto>>> {
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("FlexibleSeriesEpisodes")
+
+    override fun deserialize(decoder: Decoder): Map<String, List<XtreamEpisodeDto>> {
+        val input = decoder as? JsonDecoder ?: return emptyMap()
+
+        fun decodeEpisode(element: JsonElement): XtreamEpisodeDto? {
+            val normalized = if (element is JsonObject && element["info"] !is JsonObject) {
+                JsonObject(element.filterKeys { it != "info" })
+            } else {
+                element
+            }
+            return runCatching { input.json.decodeFromJsonElement<XtreamEpisodeDto>(normalized) }.getOrNull()
+        }
+
+        fun decodeSeason(element: JsonElement): List<XtreamEpisodeDto> = when (element) {
+            is JsonArray -> element.mapNotNull(::decodeEpisode)
+            is JsonObject -> element.values.mapNotNull(::decodeEpisode)
+            else -> emptyList()
+        }
+
+        return when (val element = input.decodeJsonElement()) {
+            is JsonObject -> element.mapValues { (_, value) -> decodeSeason(value) }.filterValues { it.isNotEmpty() }
+            is JsonArray -> element.mapNotNull(::decodeEpisode).groupBy { it.season?.toString() ?: "0" }
+            else -> emptyMap()
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: Map<String, List<XtreamEpisodeDto>>) {
+        val output = encoder as? JsonEncoder ?: return
+        output.encodeJsonElement(
+            JsonObject(value.mapValues { (_, episodes) ->
+                JsonArray(episodes.map { output.json.encodeToJsonElement(it) })
+            }),
+        )
     }
 }

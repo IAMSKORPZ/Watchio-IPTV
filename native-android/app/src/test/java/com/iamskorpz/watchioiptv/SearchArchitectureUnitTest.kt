@@ -7,12 +7,24 @@ import com.iamskorpz.watchioiptv.data.library.SearchResults
 import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
 import com.iamskorpz.watchioiptv.domain.model.ContentType
 import com.iamskorpz.watchioiptv.feature.library.contentRoute
+import com.iamskorpz.watchioiptv.ui.components.isTvSearchActivationKey
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SearchArchitectureUnitTest {
+
+    @Test
+    fun tvSearchAcceptsRemoteCenterAndEnterOnKeyUp() {
+        assertTrue(isTvSearchActivationKey(Key.DirectionCenter, KeyEventType.KeyUp))
+        assertTrue(isTvSearchActivationKey(Key.Enter, KeyEventType.KeyUp))
+        assertTrue(isTvSearchActivationKey(Key.NumPadEnter, KeyEventType.KeyUp))
+        assertFalse(isTvSearchActivationKey(Key.Enter, KeyEventType.KeyDown))
+        assertFalse(isTvSearchActivationKey(Key.DirectionDown, KeyEventType.KeyUp))
+    }
 
     @Test
     fun contentRouteResolvesCorrectScreenDestinations() {
