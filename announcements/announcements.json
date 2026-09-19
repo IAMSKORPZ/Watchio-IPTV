@@ -22,6 +22,17 @@
       "enabled": true,
       "dismissible": true,
       "action": null
+    },
+    {
+      "id": "watchio-v0-1-4-whats-new-2026-09-19",
+      "title": "What's New in Watchio v0.1.4 🎉",
+      "body": "We've been working hard to make Watchio even better!\n\n• Automatic update checks when Watchio starts\n• New in-app announcements\n• Improved Search and filtering\n• Improved Series and episode loading\n• Better Refresh experience across Live TV, Movies & Series\n• Improved TV remote navigation and focus\n• Better layouts across phones and TVs\n• General performance and stability improvements\n\nThanks for using Watchio! ❤️",
+      "publishedAt": "2026-09-19T15:33:49Z",
+      "type": "FEATURE",
+      "priority": "NORMAL",
+      "enabled": true,
+      "dismissible": true,
+      "action": null
     }
   ]
 }
