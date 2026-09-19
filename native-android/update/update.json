@@ -1,20 +1,21 @@
 {
   "schemaVersion": 1,
   "channel": "dev",
-  "versionCode": 16,
-  "versionName": "0.1.3",
+  "versionCode": 17,
+  "versionName": "0.1.4",
   "minimumSupportedVersionCode": 1,
   "mandatory": false,
-  "publishedAt": "2026-09-17T14:48:32Z",
+  "publishedAt": "2026-09-19T14:50:19Z",
   "releaseNotes": [
-    "Corrected Stable/Public update channel handling.",
-    "Improved update package validation.",
-    "Fixed Home version display to use the installed app version."
+    "Automatic update checks and Watchio-styled update notifications.",
+    "In-app announcements with responsive phone and TV dialogs.",
+    "Improved TV remote focus, Search input, Series loading, and refresh behavior.",
+    "General stability and performance improvements."
   ],
-  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.3",
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.4",
   "apk": {
     "fileName": "Watchio-IPTV.apk",
     "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/latest/download/Watchio-IPTV.apk",
-    "sha256": "6427C8008FD48A9837174CE7BB253D04A2C6F9D89D4FC3BEC9B36D6FD5CA85CE"
+    "sha256": "6354657B34B9B069C53AA44DD6C93EFEFEA2014C583FBCE423E7778118B58C05"
   }
 }
