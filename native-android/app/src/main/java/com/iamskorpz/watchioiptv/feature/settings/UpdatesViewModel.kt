@@ -45,6 +45,8 @@ class UpdatesViewModel(
     private val mutableState = MutableStateFlow(UpdatesUiState(installed = repository.installedVersion()))
     val state: StateFlow<UpdatesUiState> = mutableState.asStateFlow()
     private var job: Job? = null
+    private val sessionDeferral = OptionalUpdateSessionDeferral()
+    val deferredUpdateCode: StateFlow<Int?> = sessionDeferral.deferredUpdateCode
 
     init {
         checkForUpdates()
@@ -86,6 +88,11 @@ class UpdatesViewModel(
         }
     }
 
+    fun deferOptionalUpdateForSession() {
+        val manifest = mutableState.value.manifest ?: return
+        sessionDeferral.defer(manifest)
+    }
+
     fun downloadUpdate() {
         val manifest = mutableState.value.manifest ?: return
         if (mutableState.value.busy) return
@@ -123,5 +130,14 @@ class UpdatesViewModel(
             "Update package does not match Watchio." -> "Update package does not match Watchio."
             else -> "Unable to check for updates. Check your internet connection and try again."
         }
+    }
+}
+
+internal class OptionalUpdateSessionDeferral {
+    private val mutableDeferredUpdateCode = MutableStateFlow<Int?>(null)
+    val deferredUpdateCode: StateFlow<Int?> = mutableDeferredUpdateCode.asStateFlow()
+
+    fun defer(manifest: UpdateManifest) {
+        if (!manifest.mandatory) mutableDeferredUpdateCode.value = manifest.versionCode
     }
 }

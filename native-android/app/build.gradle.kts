@@ -175,6 +175,14 @@ android {
     }
 }
 
+androidComponents {
+    onVariants(selector().withBuildType("uitest")) { variant ->
+        variant.outputs.forEach { output ->
+            output.versionCode.set(900013)
+        }
+    }
+}
+
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.incremental", "true")

@@ -167,6 +167,10 @@ import com.iamskorpz.watchioiptv.feature.settings.FootballDataSettingsUiState
 import com.iamskorpz.watchioiptv.feature.settings.FootballDataSettingsViewModel
 import com.iamskorpz.watchioiptv.feature.settings.UpdatesScreen
 import com.iamskorpz.watchioiptv.feature.settings.UpdatesViewModel
+import com.iamskorpz.watchioiptv.feature.startup.StartupAnnouncementModal
+import com.iamskorpz.watchioiptv.feature.startup.StartupUpdateModal
+import com.iamskorpz.watchioiptv.feature.startup.resolveStartupNotification
+import com.iamskorpz.watchioiptv.feature.startup.StartupNotification
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideScreen
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideViewModel
 import com.iamskorpz.watchioiptv.feature.sports.SportsScreen
@@ -251,6 +255,10 @@ fun WatchioNativeApp(
     )
     val announcementsState by announcementsViewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { announcementsViewModel.refresh() }
+    val updatesViewModel: UpdatesViewModel = viewModel(factory = updatesFactory(container))
+    val updatesState by updatesViewModel.state.collectAsStateWithLifecycle()
+    val deferredUpdateCode by updatesViewModel.deferredUpdateCode.collectAsStateWithLifecycle()
+    var shownAnnouncementId by rememberSaveable { mutableStateOf<String?>(null) }
     var backgroundPlaybackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingLiveChannel by remember { mutableStateOf<LiveTvChannel?>(null) }
     var livePlaybackOrigin by rememberSaveable { mutableStateOf(LivePlaybackOrigin.Live) }
@@ -266,6 +274,7 @@ fun WatchioNativeApp(
         onExit = { (context as? Activity)?.finish() },
     )
     WatchioTheme(themeState = themeState) {
+        Box(Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = "bootstrap",
@@ -947,10 +956,8 @@ fun WatchioNativeApp(
                 SettingsPlaceholderScreen("Backup & Restore", "Backup and restore is not configured yet.", onBack = { navController.popBackStack() })
             }
             composable("settings/updates") {
-                val updatesViewModel: UpdatesViewModel = viewModel(factory = updatesFactory(container))
-                val state by updatesViewModel.state.collectAsStateWithLifecycle()
                 UpdatesScreen(
-                    state = state,
+                    state = updatesState,
                     onBack = { navController.popBackStack() },
                     onCheck = updatesViewModel::checkForUpdates,
                     onDownload = updatesViewModel::downloadUpdate,
@@ -1006,6 +1013,37 @@ fun WatchioNativeApp(
                     )
                 }
             }
+        }
+        val startupNotification = if (currentBackStackEntry?.destination?.route == "home") resolveStartupNotification(
+            updateStatus = updatesState.status,
+            manifest = updatesState.manifest,
+            deferredUpdateCode = deferredUpdateCode,
+            snapshot = announcementsState.snapshot,
+            shownAnnouncementId = shownAnnouncementId,
+            updaterScreenOpen = false,
+        ) else null
+        when (startupNotification) {
+            is StartupNotification.Update -> StartupUpdateModal(
+                manifest = startupNotification.manifest,
+                onLater = updatesViewModel::deferOptionalUpdateForSession,
+                onUpdate = {
+                    updatesViewModel.deferOptionalUpdateForSession()
+                    navController.navigate("settings/updates") { launchSingleTop = true }
+                },
+            )
+            is StartupNotification.RemoteAnnouncement -> {
+                val announcement = startupNotification.announcement
+                LaunchedEffect(announcement.id) { announcementsViewModel.markRead(announcement.id) }
+                StartupAnnouncementModal(
+                    announcement = announcement,
+                    onDismiss = {
+                        shownAnnouncementId = announcement.id
+                        announcementsViewModel.dismiss(announcement.id)
+                    },
+                )
+            }
+            null -> Unit
+        }
         }
 }
 }

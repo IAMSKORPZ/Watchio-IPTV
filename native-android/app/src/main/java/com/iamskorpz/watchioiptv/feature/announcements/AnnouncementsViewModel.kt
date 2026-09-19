@@ -46,6 +46,10 @@ class AnnouncementsViewModel(private val repository: AnnouncementRepository) : V
         viewModelScope.launch { repository.markRead(id) }
     }
 
+    fun markRead(id: String) {
+        viewModelScope.launch { repository.markRead(id) }
+    }
+
     fun closeDetails() { controls.value = controls.value.copy(selectedId = null) }
     fun toggleArchived() { controls.value = controls.value.copy(showArchived = !controls.value.showArchived) }
     fun dismiss(id: String) {

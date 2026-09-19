@@ -18,12 +18,10 @@ class UpdateRepository(
     private val okHttpClient: OkHttpClient,
     private val manifestUrl: String? = WATCHIO_DEV_UPDATE_MANIFEST_URL,
     private val expectedChannel: String = "dev",
+    private val localManifest: (suspend (InstalledVersion) -> String)? = null,
+    private val artifactDownloadsEnabled: Boolean = true,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
-
-    companion object {
-        const val UITEST_MANIFEST_URL = "watchio://uitest/update.json"
-    }
 
     fun installedVersion(): InstalledVersion {
         val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -33,7 +31,7 @@ class UpdateRepository(
 
     suspend fun checkForUpdates(): UpdateCheckResult = withContext(Dispatchers.IO) {
         val installed = installedVersion()
-        val body = httpGet(manifestUrl ?: WATCHIO_DEV_UPDATE_MANIFEST_URL)
+        val body = localManifest?.invoke(installed) ?: httpGet(manifestUrl ?: WATCHIO_DEV_UPDATE_MANIFEST_URL)
         val manifest = parseManifest(body)
         UpdatePolicy.validateManifest(manifest, expectedChannel)
         val status = UpdatePolicy.compare(manifest.versionCode, installed.versionCode)
@@ -44,6 +42,7 @@ class UpdateRepository(
         manifest: UpdateManifest,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): VerifiedUpdateFile = withContext(Dispatchers.IO) {
+        if (!artifactDownloadsEnabled) throw UpdateException("UITEST fixture cannot download or install APKs.")
         UpdatePolicy.validateManifest(manifest, expectedChannel)
         val updatesDir = File(context.cacheDir, "updates").also { it.mkdirs() }
         val target = File(updatesDir, UpdatePolicy.sanitizeFileName(manifest.apk.fileName))
@@ -103,32 +102,12 @@ class UpdateRepository(
     }
 
     private fun httpGet(url: String): String {
-        if (url == UITEST_MANIFEST_URL) return uitestManifest()
         val request = Request.Builder().url(url).get().build()
         okHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) throw UpdateException("Unable to check for updates.")
             return response.body?.string()?.takeIf { it.isNotBlank() } ?: throw UpdateException("Update information was empty.")
         }
     }
-
-    private fun uitestManifest(): String = """
-        {
-          "schemaVersion": 1,
-          "channel": "dev",
-          "versionCode": ${installedVersion().versionCode},
-          "versionName": "${installedVersion().versionName}",
-          "minimumSupportedVersionCode": 1,
-          "mandatory": false,
-          "publishedAt": "2026-08-28T16:36:29+01:00",
-          "releaseNotes": ["UITEST deterministic update manifest."],
-          "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.0-dev.1",
-          "apk": {
-            "fileName": "watchio-dev-0.1.0-dev.1-debug.apk",
-            "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.0-dev.1/watchio-dev-0.1.0-dev.1-debug.apk",
-            "sha256": "7453742ce6d876bdf153bfc699938ffa9aef6ba0efa3ab96acfc9bbe46d33b6a"
-          }
-        }
-    """.trimIndent()
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
