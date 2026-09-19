@@ -64,6 +64,7 @@ class AnnouncementFeedParser(
             priority = priority,
             action = value["action"]?.let { runCatching { parseAction(it.jsonObject) }.getOrNull() },
             dismissible = runCatching { value["dismissible"]?.jsonPrimitive?.booleanOrNull }.getOrNull() ?: true,
+            enabled = runCatching { value["enabled"]?.jsonPrimitive?.booleanOrNull }.getOrNull() ?: true,
             expiresAt = runCatching {
                 value["expiresAt"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)
             }.getOrNull(),
@@ -77,7 +78,7 @@ class AnnouncementFeedParser(
             "NONE" -> null
             "OPEN_URL" -> {
                 val url = value["url"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                require(url.startsWith("https://") || url.startsWith("http://"))
+                require(url.startsWith("https://"))
                 AnnouncementAction.OpenUrl(url, label ?: "OPEN")
             }
             "OPEN_SCREEN" -> {
@@ -106,7 +107,7 @@ class GitHubAnnouncementRemoteDataSource(
     }
 
     companion object {
-        const val FEED_URL = "https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/dev/announcements/announcements.json"
+        const val FEED_URL = "https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/main/announcements/announcements.json"
     }
 }
 
@@ -175,6 +176,7 @@ class AnnouncementRepository(
             remoteList
         }
         val announcements = allAnnouncements
+            .filter { it.enabled }
             .filterNot(::isExpired)
             .sortedByDescending { runCatching { Instant.parse(it.publishedAt) }.getOrNull() ?: Instant.MIN }
         AnnouncementSnapshot(

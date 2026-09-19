@@ -410,13 +410,16 @@ class SeriesRepository(
     fun isCompleted(positionMs: Long?, durationMs: Long?): Boolean = isCompletedPosition(positionMs, durationMs)
 
     private suspend fun loadXtreamDetails(series: WatchioSeriesItem) {
-        val provider = database.providerDao().findById(series.providerId.value) ?: return
-        val credentials = credentialStore.getXtreamCredentials(series.providerId.value) ?: return
-        val base = provider.serverUrl ?: return
+        val provider = database.providerDao().findById(series.providerId.value)
+            ?: throw IllegalStateException("Series provider is unavailable.")
+        val credentials = credentialStore.getXtreamCredentials(series.providerId.value)
+            ?: throw IllegalStateException("Series provider credentials are unavailable.")
+        val base = provider.serverUrl
+            ?: throw IllegalStateException("Series provider is unavailable.")
         val response = runCatching {
             retrofitFactory(base).create(XtreamApi::class.java)
                 .seriesInfo(credentials.username, credentials.password, seriesId = series.id)
-        }.getOrNull() ?: return
+        }.getOrElse { throw IllegalStateException("Unable to load series details.", it) }
         val now = clock.nowEpochMs()
         val updated = response.info.toSeriesEntity(series, now)
         val episodes = response.episodes.flatMap { (seasonKey, list) ->

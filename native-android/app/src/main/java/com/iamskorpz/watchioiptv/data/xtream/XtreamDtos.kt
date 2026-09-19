@@ -107,6 +107,7 @@ data class XtreamSeriesDto(
 data class XtreamSeriesInfoResponseDto(
     val info: XtreamSeriesInfoDto? = null,
     val seasons: List<XtreamSeasonDto> = emptyList(),
+    @Serializable(with = FlexibleSeriesEpisodesSerializer::class)
     val episodes: Map<String, List<XtreamEpisodeDto>> = emptyMap(),
 )
 
@@ -145,6 +146,7 @@ data class XtreamSeasonDto(
 data class XtreamEpisodeDto(
     @Serializable(with = FlexibleStringSerializer::class) val id: String? = null,
     @SerialName("episode_num") @Serializable(with = FlexibleIntSerializer::class) val episodeNum: Int? = null,
+    @Serializable(with = FlexibleIntSerializer::class) val season: Int? = null,
     @Serializable(with = FlexibleStringSerializer::class) val title: String? = null,
     @SerialName("container_extension") @Serializable(with = FlexibleStringSerializer::class) val containerExtension: String? = null,
     val info: XtreamEpisodeInfoDto? = null,

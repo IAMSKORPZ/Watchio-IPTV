@@ -29,6 +29,7 @@ data class Announcement(
     val priority: AnnouncementPriority,
     val action: AnnouncementAction? = null,
     val dismissible: Boolean = true,
+    val enabled: Boolean = true,
     val expiresAt: String? = null,
 )
 

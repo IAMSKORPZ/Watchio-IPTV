@@ -15,6 +15,7 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -27,6 +28,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.input.key.Key
@@ -83,6 +85,8 @@ import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import com.iamskorpz.watchioiptv.ui.HomeRefreshControl
 import com.iamskorpz.watchioiptv.ui.HomeRefreshProgress
 import com.iamskorpz.watchioiptv.ui.HomeScreen
+import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
+import com.iamskorpz.watchioiptv.ui.HomeScreen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.junit.Assert.assertEquals
@@ -97,6 +101,72 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 class LandscapeResponsiveComposeTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
+
+    @Test
+    fun sharedSearchFieldPreservesSequentialImeEditsAcrossResultRecomposition() {
+        var query by mutableStateOf("")
+        var resultVersion by mutableStateOf(0)
+        setLandscapeContent {
+            WatchioTheme {
+                Column {
+                    WatchioSearchTextField(
+                        value = query,
+                        onValueChange = {
+                            query = it
+                            resultVersion++
+                        },
+                        label = "Search",
+                        testTag = "ime-search-field",
+                    )
+                    androidx.compose.material3.Text("results-$resultVersion")
+                }
+            }
+        }
+
+        val field = composeRule.onNodeWithTag("ime-search-field")
+        listOf("f", "a", "m", "i", "l", "y", " ", "g", "u", "y").forEachIndexed { index, character ->
+            field.performTextInput(character)
+            field.assertTextEquals("family guy".take(index + 1))
+        }
+    }
+
+    @Test
+    fun sharedSearchFieldPreservesMiddleInsertionDeletionAndExternalReset() {
+        var query by mutableStateOf("famly")
+        var resultVersion by mutableStateOf(0)
+        setLandscapeContent {
+            WatchioTheme {
+                Column {
+                    WatchioSearchTextField(
+                        value = query,
+                        onValueChange = {
+                            query = it
+                            resultVersion++
+                        },
+                        label = "Search",
+                        testTag = "ime-edit-field",
+                    )
+                    androidx.compose.material3.Text("results-$resultVersion")
+                }
+            }
+        }
+
+        val field = composeRule.onNodeWithTag("ime-edit-field")
+        field.performSemanticsAction(SemanticsActions.SetSelection) { setSelection ->
+            setSelection(3, 3, false)
+        }
+        field.performTextInput("i")
+        field.assertTextEquals("family")
+
+        field.performSemanticsAction(SemanticsActions.SetSelection) { setSelection ->
+            setSelection(6, 6, false)
+        }
+        field.performKeyInput { pressKey(Key.Backspace) }
+        field.assertTextEquals("famil")
+
+        composeRule.runOnIdle { query = "" }
+        field.assertTextEquals("")
+    }
 
     @Test
     fun moviesEmptySyncingShowsProgressInsteadOfEmptyMessage() {
@@ -261,7 +331,7 @@ class LandscapeResponsiveComposeTest {
 
         composeRule.onNodeWithTag("movies-search", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("movie-search-panel").assertIsDisplayed()
-        composeRule.onNodeWithTag("movie-search-field").assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-search-field").assertIsDisplayed().assertIsFocused()
         composeRule.onNodeWithTag("movies-title").assertIsDisplayed()
         composeRule.onNodeWithTag("movies-clock").assertIsDisplayed()
         val headerBounds = composeRule.onNodeWithTag("movies-header", useUnmergedTree = true).getUnclippedBoundsInRoot()
@@ -457,6 +527,7 @@ class LandscapeResponsiveComposeTest {
 
         composeRule.onNodeWithTag("live-search").performClick()
         composeRule.onNodeWithTag("live-search-overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("live-search-field").assertIsFocused()
         composeRule.onNodeWithTag("live-title").assertExists()
         composeRule.onNodeWithTag("live-clock").assertExists()
         val headerBounds = composeRule.onNodeWithTag("live-header", useUnmergedTree = true).getUnclippedBoundsInRoot()
@@ -1841,6 +1912,7 @@ class LandscapeResponsiveComposeTest {
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("series-search-overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-search-field").assertIsFocused()
         composeRule.onNodeWithTag("series-search-panel").assertIsDisplayed()
         composeRule.onNodeWithTag("series-search-field").assertIsDisplayed()
 
@@ -2129,6 +2201,7 @@ class LandscapeResponsiveComposeTest {
         composeRule.onNodeWithTag("global-search-overlay", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("global-search-panel", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("global-search-field", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("global-search-field", useUnmergedTree = true).assertIsFocused()
 
         // Verify live group and result
         composeRule.onNodeWithTag("global-search-group-live", useUnmergedTree = true).assertIsDisplayed()

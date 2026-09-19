@@ -42,6 +42,16 @@ class AnnouncementRepositoryTest {
     }
 
     @Test
+    fun disabledAnnouncementIsParsedButExcludedFromRepositorySnapshot() = runTest {
+        val disabled = entry("disabled", extra = "\"enabled\":false")
+        val local = FakeAnnouncementStore()
+        val repository = AnnouncementRepository(AnnouncementRemoteDataSource { feed(disabled, entry("enabled")) }, local)
+
+        assertTrue(repository.refresh().isSuccess)
+        assertEquals(listOf("enabled"), repository.snapshot.first().items.map { it.announcement.id })
+    }
+
+    @Test
     fun parserSupportsSafeActionsAndDropsMalformedActions() {
         val items = parser.parse(feed(
             entry("url", action = """{"type":"OPEN_URL","url":"https://watchio.example/news","label":"NEWS"}"""),

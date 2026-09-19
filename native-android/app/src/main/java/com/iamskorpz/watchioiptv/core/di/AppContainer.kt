@@ -22,8 +22,6 @@ import com.iamskorpz.watchioiptv.data.RoomHistoryRepository
 import com.iamskorpz.watchioiptv.data.RoomProviderRepository
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementRepository
 import com.iamskorpz.watchioiptv.data.announcements.DataStoreAnnouncementLocalStore
-import com.iamskorpz.watchioiptv.data.announcements.GitHubAnnouncementRemoteDataSource
-import com.iamskorpz.watchioiptv.data.announcements.StaticAnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.epg.EpgRepository
 import com.iamskorpz.watchioiptv.data.epg.EpgRefreshCoordinator
 import com.iamskorpz.watchioiptv.data.epg.EpgAutoRefreshScheduler
@@ -34,7 +32,6 @@ import com.iamskorpz.watchioiptv.data.library.SearchRepository
 import com.iamskorpz.watchioiptv.data.m3u.M3uRepository
 import com.iamskorpz.watchioiptv.data.movies.MoviesRepository
 import com.iamskorpz.watchioiptv.data.series.SeriesRepository
-import com.iamskorpz.watchioiptv.data.updates.UpdateRepository
 import com.iamskorpz.watchioiptv.data.xtream.XtreamPlaybackUrlResolver
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
@@ -74,15 +71,13 @@ class AppContainer(context: Context) {
     val networkModule = NetworkModule()
     val endpointManager = WatchioEndpointManager(AndroidWatchioEndpointConfigSource(appContext, networkModule.okHttpClient))
 
-    private val announcementRemote = if (BuildConfig.APPLICATION_ID.endsWith(".uitest")) {
-        StaticAnnouncementRemoteDataSource(UITEST_ANNOUNCEMENT_FEED)
-    } else {
-        GitHubAnnouncementRemoteDataSource(networkModule.okHttpClient)
-    }
+    private val announcementRemote = AppVariantBindings.createAnnouncementRemoteDataSource(
+        appContext,
+        networkModule.okHttpClient,
+    )
     val announcementRepository = AnnouncementRepository(
         remote = announcementRemote,
         local = DataStoreAnnouncementLocalStore(appContext.watchioDataStore),
-        updateChecker = { updateRepository.checkForUpdates() },
     )
     @SuppressLint("UnsafeOptInUsageError")
     val playerManager: WatchioPlayerManager = Media3WatchioPlayerManager(appContext, settingsRepository)
@@ -190,12 +185,7 @@ class AppContainer(context: Context) {
         favoritesRepository = favoritesRepository,
         historyRepository = historyRepository,
     )
-    val updateRepository = UpdateRepository(
-        context = appContext,
-        okHttpClient = networkModule.okHttpClient,
-        manifestUrl = BuildConfig.UPDATE_MANIFEST_URL,
-        expectedChannel = BuildConfig.UPDATE_CHANNEL,
-    )
+    val updateRepository = AppVariantBindings.createUpdateRepository(appContext, networkModule.okHttpClient)
 
     init {
         xtreamRepository.onMoviesUpdated = { moviesRepository.invalidateCache(it) }
@@ -204,7 +194,4 @@ class AppContainer(context: Context) {
         m3uRepository.onSeriesUpdated = { seriesRepository.invalidateCache(it) }
     }
 
-    private companion object {
-        const val UITEST_ANNOUNCEMENT_FEED = """{"version":1,"announcements":[{"id":"uitest-welcome","title":"Welcome to Announcements","body":"Deterministic Watchio test announcement.","publishedAt":"2026-08-31T16:00:00Z","type":"GENERAL","priority":"NORMAL","dismissible":true,"action":null},{"id":"uitest-update","title":"Watchio Update","body":"Update action test.","publishedAt":"2026-08-31T17:00:00Z","type":"UPDATE","priority":"IMPORTANT","dismissible":true,"action":{"type":"OPEN_UPDATER","label":"UPDATE NOW"}}]}"""
-    }
 }
