@@ -421,15 +421,14 @@ fun WatchioNativeApp(
                     onRefresh = announcementsViewModel::refresh,
                     onOpen = announcementsViewModel::open,
                     onCloseDetails = announcementsViewModel::closeDetails,
-                    onDismiss = announcementsViewModel::dismiss,
-                    onToggleArchived = announcementsViewModel::toggleArchived,
+                    onMarkAllRead = announcementsViewModel::markAllRead,
                     onAction = { action ->
                         when (action) {
                             is AnnouncementAction.OpenUpdater -> navController.navigate("settings/updates")
                             is AnnouncementAction.OpenScreen -> navController.navigate(action.screen.route) { launchSingleTop = true }
                             is AnnouncementAction.OpenUrl -> runCatching {
                                 val uri = Uri.parse(action.url)
-                                require(uri.scheme == "https" || uri.scheme == "http")
+                                require(uri.scheme == "https")
                                 context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                             }
                         }
@@ -1033,7 +1032,6 @@ fun WatchioNativeApp(
             )
             is StartupNotification.RemoteAnnouncement -> {
                 val announcement = startupNotification.announcement
-                LaunchedEffect(announcement.id) { announcementsViewModel.markRead(announcement.id) }
                 StartupAnnouncementModal(
                     announcement = announcement,
                     onDismiss = {
@@ -2150,7 +2148,15 @@ internal fun HomeTopBar(
             ) {
                 HomeTopAction("Search", HomeIconKind.Search, colors.textPrimary, onSearch, contentDescription = "Search", testTag = "home-search")
                 HomeTopAction("Sports", HomeIconKind.Sports, colors.liveTvAccent, onSports)
-                HomeTopAction("Announcements", HomeIconKind.Announcement, colors.moviesAccent, onAnnouncements, badgeCount = announcementUnreadCount)
+                HomeTopAction(
+                    "Notifications",
+                    HomeIconKind.Announcement,
+                    colors.moviesAccent,
+                    onAnnouncements,
+                    contentDescription = "Notifications, ${notificationBadgeLabel(announcementUnreadCount)}",
+                    testTag = "home-notifications",
+                    badgeCount = announcementUnreadCount,
+                )
                 HomeTopAction("Playlist", HomeIconKind.Provider, colors.seriesAccent, onProviders)
             }
         }
@@ -2510,6 +2516,12 @@ private fun HomeFooter(providerSummary: String, providerExpiryEpochMs: Long?) {
         Text(formatHomeVersion(BuildConfig.VERSION_NAME), color = colors.textMuted, style = type.body)
         Text("Active Provider: $providerSummary", color = colors.textSecondary, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 300.dp))
     }
+}
+
+internal fun notificationBadgeLabel(count: Int): String = when {
+    count <= 0 -> "no unread notifications"
+    count == 1 -> "1 unread notification"
+    else -> "$count unread notifications"
 }
 
 internal fun formatHomeVersion(versionName: String): String = "v$versionName"

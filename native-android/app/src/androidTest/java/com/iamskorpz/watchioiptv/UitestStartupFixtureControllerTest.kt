@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.iamskorpz.watchioiptv.uitest.StartupFixtureState
 import com.iamskorpz.watchioiptv.uitest.StartupNotificationFixture
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -21,8 +22,16 @@ class UitestStartupFixtureControllerTest {
             "Fixture controller test package is ${instrumentation.context.packageName}."
         }
         val fixture = StartupNotificationFixture(targetContext)
-        when (arguments.getString("operation") ?: "select") {
-            "select" -> fixture.select(StartupFixtureState.valueOf(requireNotNull(arguments.getString("state"))))
+        when (arguments.getString("operation") ?: "reset") {
+            "select", "select-fresh" -> {
+                val state = StartupFixtureState.valueOf(requireNotNull(arguments.getString("state")))
+                if (arguments.getString("operation") == "select-fresh") fixture.selectFresh(state) else fixture.select(state)
+                val application = targetContext.applicationContext as WatchioNativeApplication
+                runBlocking { application.container.announcementRepository.refresh().getOrThrow() }
+                if (state == StartupFixtureState.MIXED_NOTIFICATIONS) {
+                    runBlocking { application.container.announcementRepository.markRead(fixture.inboxAnnouncementIds().first()) }
+                }
+            }
             "next-announcement" -> fixture.nextAnnouncementId()
             "reset" -> fixture.reset()
             else -> error("Unsupported fixture operation")

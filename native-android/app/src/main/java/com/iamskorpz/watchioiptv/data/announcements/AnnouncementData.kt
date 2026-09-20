@@ -121,6 +121,7 @@ interface AnnouncementLocalStore {
     val dismissedIds: Flow<Set<String>>
     suspend fun saveFeed(raw: String)
     suspend fun markSeen(id: String)
+    suspend fun markSeen(ids: Set<String>)
     suspend fun dismiss(id: String)
 }
 
@@ -134,11 +135,9 @@ class DataStoreAnnouncementLocalStore(
 
     override suspend fun saveFeed(raw: String) { dataStore.edit { it[CachedFeed] = raw } }
     override suspend fun markSeen(id: String) { dataStore.edit { it[SeenIds] = it[SeenIds].orEmpty() + id } }
+    override suspend fun markSeen(ids: Set<String>) { dataStore.edit { it[SeenIds] = it[SeenIds].orEmpty() + ids } }
     override suspend fun dismiss(id: String) {
-        dataStore.edit {
-            it[SeenIds] = it[SeenIds].orEmpty() + id
-            it[DismissedIds] = it[DismissedIds].orEmpty() + id
-        }
+        dataStore.edit { it[DismissedIds] = it[DismissedIds].orEmpty() + id }
     }
 
     private companion object {
@@ -200,6 +199,7 @@ class AnnouncementRepository(
     }
 
     suspend fun markRead(id: String) = local.markSeen(id)
+    suspend fun markAllRead(ids: Set<String>) = local.markSeen(ids)
     suspend fun dismiss(id: String) = local.dismiss(id)
 
     private fun generateUpdateAnnouncement(result: UpdateCheckResult?): Announcement? {

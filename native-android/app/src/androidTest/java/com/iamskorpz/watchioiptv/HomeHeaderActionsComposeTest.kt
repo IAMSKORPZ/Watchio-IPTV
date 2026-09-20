@@ -56,7 +56,7 @@ class HomeHeaderActionsComposeTest {
         val actions = listOf(
             "Search" to "home-search",
             "Sports" to "home-action-sports",
-            "Announcements" to "home-action-announcements",
+            "Notifications, 12 unread notifications" to "home-notifications",
             "Playlist" to "home-action-playlist",
         )
         val leftEdges = actions.map { (label, tag) ->
@@ -78,6 +78,21 @@ class HomeHeaderActionsComposeTest {
         assertTrue("header actions must preserve left-to-right DPAD order", leftEdges == leftEdges.sorted())
         composeRule.onNodeWithTag("home-announcements-badge").assertIsDisplayed()
         composeRule.onNodeWithText("9+").assertIsDisplayed()
+    }
+
+    @Test
+    fun zeroUnreadNotificationsHidesBadge() {
+        composeRule.setContent {
+            WatchioTheme {
+                HomeTopBar(
+                    now = LocalDateTime.of(2026, 8, 30, 12, 0),
+                    onSearch = {}, onSports = {}, onAnnouncements = {}, onProviders = {},
+                    announcementUnreadCount = 0,
+                )
+            }
+        }
+        composeRule.onNodeWithTag("home-notifications").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-announcements-badge").assertDoesNotExist()
     }
 
     @Test

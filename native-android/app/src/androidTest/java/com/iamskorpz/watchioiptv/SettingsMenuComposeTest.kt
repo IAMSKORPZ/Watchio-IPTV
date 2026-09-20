@@ -20,6 +20,9 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.semantics.getOrNull
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.iamskorpz.watchioiptv.domain.model.InputMode
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -138,13 +141,22 @@ class SettingsMenuComposeTest {
     @Test
     @OptIn(ExperimentalTestApi::class)
     fun quickLoginShowsTvPairingQr() {
-        openSettingsOrSkip()
-        if (composeRule.onAllNodesWithTag("settings-root").fetchSemanticsNodes().isEmpty()) return
+        val settings = (composeRule.activity.application as WatchioNativeApplication).container.settingsRepository
+        val originalMode = runBlocking { settings.inputMode.first() }
+        try {
+            runBlocking { settings.setInputMode(InputMode.TvRemote) }
+            openSettingsOrSkip()
+            if (composeRule.onAllNodesWithTag("settings-root").fetchSemanticsNodes().isEmpty()) return
 
-        composeRule.onNodeWithTag("settings-quick-login").performScrollTo().performClick()
-        composeRule.waitUntilAtLeastOneExists(hasText("QUICK LOGIN"), 5_000)
-        composeRule.onNodeWithContentDescription("Watchio Quick Login QR code").assertIsDisplayed()
-        composeRule.onNodeWithText("Scan this code using Watchio on your phone.").performScrollTo().assertIsDisplayed()
+            composeRule.onNodeWithTag("settings-quick-login").performScrollTo().performClick()
+            composeRule.waitUntilAtLeastOneExists(hasText("QUICK LOGIN"), 5_000)
+            composeRule.waitUntil(5_000) {
+                composeRule.onAllNodesWithText("Use Watchio on your phone to scan this code.").fetchSemanticsNodes().isNotEmpty()
+            }
+            composeRule.onNodeWithContentDescription("Watchio Quick Login QR code").assertIsDisplayed()
+        } finally {
+            runBlocking { settings.setInputMode(originalMode) }
+        }
     }
 
     @Test

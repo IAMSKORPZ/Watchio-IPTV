@@ -100,7 +100,11 @@ class AnnouncementRepositoryTest {
         repository.dismiss("two")
         snapshot = repository.snapshot.first()
         assertTrue(snapshot.items.first { it.announcement.id == "two" }.isDismissed)
-        assertTrue(snapshot.items.first { it.announcement.id == "two" }.isRead)
+        assertFalse(snapshot.items.first { it.announcement.id == "two" }.isRead)
+        assertEquals(1, snapshot.unreadCount)
+
+        repository.markAllRead(setOf("one", "two"))
+        snapshot = repository.snapshot.first()
         assertEquals(0, snapshot.unreadCount)
     }
 
@@ -266,8 +270,8 @@ private class FakeAnnouncementStore(initialFeed: String? = null) : AnnouncementL
 
     override suspend fun saveFeed(raw: String) { cachedFeed.value = raw }
     override suspend fun markSeen(id: String) { seenIds.value += id }
+    override suspend fun markSeen(ids: Set<String>) { seenIds.value += ids }
     override suspend fun dismiss(id: String) {
-        seenIds.value += id
         dismissedIds.value += id
     }
 }

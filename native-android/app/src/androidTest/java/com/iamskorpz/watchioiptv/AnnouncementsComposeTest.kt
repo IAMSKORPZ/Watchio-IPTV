@@ -4,13 +4,10 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.unit.dp
 import com.iamskorpz.watchioiptv.domain.model.Announcement
 import com.iamskorpz.watchioiptv.domain.model.AnnouncementAction
 import com.iamskorpz.watchioiptv.domain.model.AnnouncementItem
@@ -38,18 +35,17 @@ class AnnouncementsComposeTest {
     }
 
     @Test
-    fun headerDisplaysAnnouncementsTitleAndNoInboxText() {
+    fun headerDisplaysNotificationsTitle() {
         setContent()
         composeRule.onNodeWithTag("announcements-header").assertIsDisplayed()
         composeRule.onNodeWithTag("announcements-title").assertIsDisplayed()
-        composeRule.onNodeWithText("ANNOUNCEMENTS").assertIsDisplayed()
-        assertTrue(composeRule.onAllNodesWithText("INBOX").fetchSemanticsNodes().isEmpty())
+        composeRule.onNodeWithText("NOTIFICATIONS").assertIsDisplayed()
     }
 
     @Test
-    fun headerBackAndArchiveToggleButtonsArePresentAndAccessible() {
+    fun headerBackAndMarkAllReadArePresentAndAccessible() {
         var backCalled = false
-        var archiveToggled = false
+        var markedAllRead = false
         composeRule.setContent {
             WatchioTheme {
                 AnnouncementsScreen(
@@ -60,38 +56,29 @@ class AnnouncementsComposeTest {
                     onRefresh = {},
                     onOpen = {},
                     onCloseDetails = {},
-                    onDismiss = {},
-                    onToggleArchived = { archiveToggled = true },
+                    onMarkAllRead = { markedAllRead = true },
                     onAction = {},
                 )
             }
         }
         composeRule.onNodeWithTag("announcements-back-icon").assertIsDisplayed().performClick()
         assertTrue(backCalled)
-        composeRule.onNodeWithTag("announcements-archive-toggle").assertIsDisplayed().performClick()
-        assertTrue(archiveToggled)
+        composeRule.onNodeWithTag("announcements-mark-all-read").assertIsDisplayed().performClick()
+        assertTrue(markedAllRead)
     }
 
     @Test
-    fun headerElementsDoNotOverlap() {
-        setContent()
-        val brandingBounds = composeRule.onNodeWithTag("announcements-branding").getUnclippedBoundsInRoot()
-        val titleBounds = composeRule.onNodeWithTag("announcements-title").getUnclippedBoundsInRoot()
-        val clockBounds = composeRule.onNodeWithTag("announcements-clock").getUnclippedBoundsInRoot()
-        val toggleBounds = composeRule.onNodeWithTag("announcements-archive-toggle").getUnclippedBoundsInRoot()
-
-        assertTrue(
-            "branding should sit to the left of the title (branding.right <= title.left + 8.dp)",
-            brandingBounds.right <= titleBounds.left + 8.dp,
-        )
-        assertTrue(
-            "title should sit to the left of the clock/actions (title.right <= clockBounds.left + 8.dp)",
-            titleBounds.right <= clockBounds.left + 8.dp,
-        )
-        assertTrue(
-            "clock should sit to the left of archive toggle",
-            clockBounds.right <= toggleBounds.left + 8.dp,
-        )
+    fun readInboxDoesNotShowMarkAllAction() {
+        composeRule.setContent {
+            WatchioTheme {
+                AnnouncementsScreen(
+                    state = AnnouncementsUiState(AnnouncementSnapshot(listOf(AnnouncementItem(announcement, true, false)), true)),
+                    onBack = {}, onRefresh = {}, onOpen = {}, onCloseDetails = {},
+                    onMarkAllRead = {}, onAction = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("announcements-mark-all-read").assertDoesNotExist()
     }
 
     @Test
@@ -114,7 +101,7 @@ class AnnouncementsComposeTest {
                         selectedId = "first",
                     ),
                     onBack = {}, onRefresh = {}, onOpen = {}, onCloseDetails = { back = true },
-                    onDismiss = {}, onToggleArchived = {}, onAction = {},
+                    onMarkAllRead = {}, onAction = {},
                 )
             }
         }
@@ -140,7 +127,7 @@ class AnnouncementsComposeTest {
                 AnnouncementsScreen(
                     state = AnnouncementsUiState(),
                     onBack = {}, onRefresh = {}, onOpen = {}, onCloseDetails = {},
-                    onDismiss = {}, onToggleArchived = {}, onAction = {},
+                    onMarkAllRead = {}, onAction = {},
                 )
             }
         }
@@ -160,7 +147,7 @@ class AnnouncementsComposeTest {
                         selectedId = selectedId,
                     ),
                     onBack = {}, onRefresh = {}, onOpen = onOpen, onCloseDetails = {},
-                    onDismiss = {}, onToggleArchived = {}, onAction = onAction,
+                    onMarkAllRead = {}, onAction = onAction,
                 )
             }
         }
