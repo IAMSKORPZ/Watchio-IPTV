@@ -21,8 +21,16 @@ import com.iamskorpz.watchioiptv.domain.repository.VideoScalingMode
 import com.iamskorpz.watchioiptv.domain.repository.XtreamAccountMetadata
 import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeId
 import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeState
+import com.iamskorpz.watchioiptv.ui.theme.WatchioAppearanceCodec
+import com.iamskorpz.watchioiptv.ui.theme.WatchioAppearanceLibrary
+import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeDefinition
+import com.iamskorpz.watchioiptv.ui.theme.WATCHIO_DEFAULT_THEME_ID
+import com.iamskorpz.watchioiptv.ui.theme.WatchioBuiltInThemes
+import com.iamskorpz.watchioiptv.ui.theme.toAppearanceLong
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 
 class WatchioSettingsRepository(
     private val dataStore: DataStore<Preferences>,
@@ -35,9 +43,14 @@ class WatchioSettingsRepository(
         preferences[ThemeJson]
     }
 
-    val theme: Flow<WatchioThemeState> = themeJson.map {
-        WatchioThemeState.fromId(WatchioThemeId.fromPersisted(it))
+    val appearanceLibrary: Flow<WatchioAppearanceLibrary> = dataStore.data.map { preferences ->
+        preferences[AppearanceJson]?.let(WatchioAppearanceCodec::decode)
+            ?: legacyLibrary(preferences[ThemeJson])
     }
+
+    val activeAppearance: Flow<WatchioThemeDefinition> = appearanceLibrary.map { it.activeTheme() }
+
+    val theme: Flow<WatchioThemeState> = activeAppearance.map(WatchioThemeState::fromDefinition)
 
     override val inputMode: Flow<InputMode> = dataStore.data.map { preferences ->
         InputMode.fromPersisted(preferences[InputModeKey])
@@ -162,6 +175,55 @@ class WatchioSettingsRepository(
 
     suspend fun setTheme(theme: WatchioThemeState) {
         setThemeJson(theme.id.persisted)
+        saveAppearanceLibrary(legacyLibrary(theme.id.persisted))
+    }
+
+    suspend fun saveAppearanceLibrary(library: WatchioAppearanceLibrary) {
+        dataStore.edit { preferences -> preferences[AppearanceJson] = WatchioAppearanceCodec.encode(library) }
+    }
+
+    suspend fun applyTheme(theme: WatchioThemeDefinition) {
+        val normalized = theme.normalized()
+        val current = appearanceLibrary.first()
+        val themes = if (normalized.isBuiltIn) current.themes else current.themes.filterNot { it.id == normalized.id } + normalized
+        saveAppearanceLibrary(current.copy(activeThemeId = normalized.id, themes = themes))
+    }
+
+    suspend fun createTheme(name: String): WatchioThemeDefinition {
+        val theme = appearanceLibrary.first().activeTheme().duplicate(name)
+        applyTheme(theme)
+        return theme
+    }
+
+    suspend fun renameTheme(id: String, name: String) = updateLibrary { library ->
+        if (WatchioBuiltInThemes.byId(id) != null) library
+        else library.copy(themes = library.themes.map { if (it.id == id) it.copy(name = name).normalized() else it })
+    }
+
+    suspend fun duplicateTheme(id: String): WatchioThemeDefinition {
+        val library = appearanceLibrary.first()
+        val source = WatchioBuiltInThemes.byId(id) ?: library.themes.first { it.id == id }
+        val duplicate = source.duplicate()
+        saveAppearanceLibrary(library.copy(activeThemeId = duplicate.id, themes = library.themes + duplicate))
+        return duplicate
+    }
+
+    suspend fun deleteTheme(id: String): Boolean {
+        if (WatchioBuiltInThemes.byId(id) != null) return false
+        updateLibrary { library ->
+            val remaining = library.themes.filterNot { it.id == id }
+            library.copy(
+                themes = remaining,
+                activeThemeId = if (library.activeThemeId == id) WATCHIO_DEFAULT_THEME_ID else library.activeThemeId,
+            )
+        }
+        return true
+    }
+
+    suspend fun resetAppearance() = saveAppearanceLibrary(WatchioAppearanceLibrary.Default)
+
+    private suspend fun updateLibrary(block: (WatchioAppearanceLibrary) -> WatchioAppearanceLibrary) {
+        saveAppearanceLibrary(block(appearanceLibrary.first()).normalized())
     }
 
     suspend fun setEpgAutoRefreshEnabled(enabled: Boolean) {
@@ -250,6 +312,7 @@ class WatchioSettingsRepository(
     private companion object {
         val SelectedProviderId = stringPreferencesKey("selected_provider_id")
         val ThemeJson = stringPreferencesKey("theme_json")
+        val AppearanceJson = stringPreferencesKey("appearance_json_v1")
         val InputModeKey = stringPreferencesKey("input_mode")
         val StreamFormatKey = stringPreferencesKey("stream_format")
         val DeviceModeOnboardingCompleted = booleanPreferencesKey("device_mode_onboarding_completed")
@@ -279,6 +342,31 @@ class WatchioSettingsRepository(
         fun lastLiveChannelIndexKey(providerId: ProviderId) = intPreferencesKey("provider_${providerId.value}_last_live_channel_index")
         fun lastLiveScrollIndexKey(providerId: ProviderId) = intPreferencesKey("provider_${providerId.value}_last_live_scroll_index")
         fun lastLiveScrollOffsetKey(providerId: ProviderId) = intPreferencesKey("provider_${providerId.value}_last_live_scroll_offset")
+    }
+
+    private fun legacyLibrary(value: String?): WatchioAppearanceLibrary {
+        val legacy = WatchioThemeState.fromId(WatchioThemeId.fromPersisted(value))
+        if (legacy.id == WatchioThemeId.WatchioDefault) return WatchioAppearanceLibrary.Default
+        val custom = WatchioThemeDefinition.WatchioDefault.copy(
+            id = "legacy-${legacy.id.persisted}",
+            name = legacy.id.label,
+            colors = WatchioThemeDefinition.WatchioDefault.colors.copy(
+                appBackground = legacy.surfaceBase.toAppearanceLong(),
+                primaryPanel = legacy.surfaceCard.toAppearanceLong(),
+                secondaryPanel = legacy.surfaceElevated.toAppearanceLong(),
+                popup = legacy.surfaceStatus.toAppearanceLong(),
+                primaryText = legacy.textPrimary.toAppearanceLong(),
+                secondaryText = legacy.textSecondary.toAppearanceLong(),
+                mutedText = legacy.textMuted.toAppearanceLong(),
+                accent = legacy.liveTvAccent.toAppearanceLong(),
+                selectedButton = legacy.liveTvAccentBright.toAppearanceLong(),
+                buttonOutline = legacy.liveTvAccentDim.toAppearanceLong(),
+                selectedCardOutline = legacy.moviesAccent.toAppearanceLong(),
+                focusGlow = legacy.focusGlow.toAppearanceLong(),
+                focusOutline = legacy.focusBorder.toAppearanceLong(),
+            ),
+        )
+        return WatchioAppearanceLibrary(activeThemeId = custom.id, themes = listOf(custom))
     }
 }
 

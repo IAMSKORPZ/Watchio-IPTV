@@ -93,5 +93,30 @@ data class WatchioThemeState(
 
         fun fromId(id: WatchioThemeId): WatchioThemeState =
             Available.firstOrNull { it.id == id } ?: Available.first()
+
+        fun fromDefinition(definition: WatchioThemeDefinition): WatchioThemeState {
+            val c = definition.colors
+            return WatchioThemeState(
+                id = WatchioThemeId.WatchioDefault,
+                surfaceBase = c.appBackground.toComposeColor(),
+                surfaceCard = c.primaryPanel.toComposeColor(),
+                surfaceElevated = c.secondaryPanel.toComposeColor(),
+                surfaceStatus = c.popup.toComposeColor(),
+                textPrimary = c.primaryText.toComposeColor(),
+                textSecondary = c.secondaryText.toComposeColor(),
+                textMuted = c.mutedText.toComposeColor(),
+                liveTvAccent = c.accent.toComposeColor(),
+                liveTvAccentBright = c.selectedButton.toComposeColor(),
+                liveTvAccentDim = c.buttonOutline.toComposeColor(),
+                moviesAccent = c.selectedCardOutline.toComposeColor(),
+                moviesAccentBright = c.focusGlow.toComposeColor(),
+                moviesAccentDim = c.cardOutline.toComposeColor(),
+                seriesAccent = c.navigationSelectedIcon.toComposeColor(),
+                seriesAccentBright = c.focusedText.toComposeColor(),
+                seriesAccentDim = c.navigationIcon.toComposeColor(),
+                focusBorder = c.focusOutline.toComposeColor(),
+                focusGlow = c.focusGlow.toComposeColor(),
+            )
+        }
     }
 }

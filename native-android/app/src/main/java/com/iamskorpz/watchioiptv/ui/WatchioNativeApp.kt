@@ -162,6 +162,8 @@ import com.iamskorpz.watchioiptv.feature.settings.AccountInformationUiState
 import com.iamskorpz.watchioiptv.feature.settings.AccountInformationViewModel
 import com.iamskorpz.watchioiptv.feature.settings.SettingsUiState
 import com.iamskorpz.watchioiptv.feature.settings.SettingsViewModel
+import com.iamskorpz.watchioiptv.feature.settings.AppearanceScreen
+import com.iamskorpz.watchioiptv.feature.settings.AppearanceViewModel
 import com.iamskorpz.watchioiptv.feature.settings.FootballDataConnectionStatus
 import com.iamskorpz.watchioiptv.feature.settings.FootballDataSettingsUiState
 import com.iamskorpz.watchioiptv.feature.settings.FootballDataSettingsViewModel
@@ -204,6 +206,8 @@ import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioSpacing
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeState
+import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeDefinition
+import com.iamskorpz.watchioiptv.ui.theme.WatchioAppBackground
 import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -243,6 +247,7 @@ fun WatchioNativeApp(
     navController: NavHostController = rememberNavController(),
 ) {
     val themeState by container.settingsRepository.theme.collectAsStateWithLifecycle(initialValue = com.iamskorpz.watchioiptv.ui.theme.WatchioThemeState())
+    val activeAppearance by container.settingsRepository.activeAppearance.collectAsStateWithLifecycle(initialValue = WatchioThemeDefinition.WatchioDefault)
     val inputMode by container.settingsRepository.inputMode.collectAsStateWithLifecycle(initialValue = InputMode.Auto)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val context = LocalContext.current
@@ -273,8 +278,9 @@ fun WatchioNativeApp(
         ),
         onExit = { (context as? Activity)?.finish() },
     )
-    WatchioTheme(themeState = themeState) {
+    WatchioTheme(themeState = themeState, appearance = activeAppearance) {
         Box(Modifier.fillMaxSize()) {
+        WatchioAppBackground(activeAppearance)
         NavHost(
             navController = navController,
             startDestination = "bootstrap",
@@ -964,11 +970,21 @@ fun WatchioNativeApp(
                 )
             }
             composable("settings/appearance") {
-                val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory(container))
-                val state by settingsViewModel.state.collectAsStateWithLifecycle()
-                SettingsDetailScreen("Appearance", onBack = { navController.popBackStack() }) {
-                    AppearanceSettingsContent(state = state, onTheme = settingsViewModel::setTheme)
-                }
+                val appearanceViewModel: AppearanceViewModel = viewModel(factory = appearanceFactory(container))
+                val state by appearanceViewModel.state.collectAsStateWithLifecycle()
+                AppearanceScreen(
+                    state = state,
+                    onBack = { navController.popBackStack() },
+                    onUpdate = appearanceViewModel::update,
+                    onSelect = appearanceViewModel::select,
+                    onApply = appearanceViewModel::apply,
+                    onDiscard = appearanceViewModel::discard,
+                    onResetSection = appearanceViewModel::resetSection,
+                    onResetAll = appearanceViewModel::resetAll,
+                    onDuplicate = appearanceViewModel::duplicate,
+                    onRename = appearanceViewModel::rename,
+                    onDelete = appearanceViewModel::delete,
+                )
             }
             composable("settings/input-mode") {
                 val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory(container))
@@ -3468,6 +3484,13 @@ private fun settingsFactory(container: AppContainer): ViewModelProvider.Factory 
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return SettingsViewModel(container.settingsRepository, container.epgRefreshCoordinator) as T
         }
+    }
+
+private fun appearanceFactory(container: AppContainer): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            AppearanceViewModel(container.settingsRepository) as T
     }
 
 private fun liveTvFactory(container: AppContainer, initialChannel: LiveTvChannel? = null): ViewModelProvider.Factory =

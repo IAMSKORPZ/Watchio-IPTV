@@ -76,12 +76,14 @@ class DataStoreSettingsTest {
         repository.setTheme(WatchioThemeState.fromId(WatchioThemeId.Purple))
 
         assertEquals("purple", repository.themeJson.first())
-        assertEquals(WatchioThemeId.Purple, repository.theme.first().id)
+        assertEquals("Purple", repository.activeAppearance.first().name)
+        assertEquals(WatchioThemeState.fromId(WatchioThemeId.Purple).surfaceBase, repository.theme.first().surfaceBase)
 
         repository.setTheme(WatchioThemeState.fromId(WatchioThemeId.Blue))
 
         assertEquals("blue", repository.themeJson.first())
-        assertEquals(WatchioThemeId.Blue, repository.theme.first().id)
+        assertEquals("Blue", repository.activeAppearance.first().name)
+        assertEquals(WatchioThemeState.fromId(WatchioThemeId.Blue).surfaceBase, repository.theme.first().surfaceBase)
 
         repository.setTheme(WatchioThemeState.fromId(WatchioThemeId.WatchioDefault))
 

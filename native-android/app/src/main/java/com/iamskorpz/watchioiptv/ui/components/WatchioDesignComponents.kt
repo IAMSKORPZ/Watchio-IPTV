@@ -55,6 +55,9 @@ import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioPosterTokens
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioRadii
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioSpacing
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
+import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioAppearance
+import com.iamskorpz.watchioiptv.ui.theme.toComposeColor
+import androidx.compose.ui.draw.scale
 
 enum class WatchioButtonVariant {
     Primary,
@@ -81,6 +84,7 @@ fun WatchioCard(
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current
     val borders = LocalWatchioBorders.current
+    val appearance = LocalWatchioAppearance.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val shape = RoundedCornerShape(radii.md)
@@ -101,11 +105,12 @@ fun WatchioCard(
     Surface(
         modifier = modifier
             .defaultMinSize(minWidth = minWidth, minHeight = minHeight)
+            .scale(if (focused) appearance.focus.scale else 1f)
             .shadow(
-                elevation = if (focused) 16.dp else 0.dp,
+                elevation = if (focused) (16f * appearance.focus.glowIntensity).dp else 0.dp,
                 shape = shape,
-                ambientColor = colors.focusGlow,
-                spotColor = colors.focusGlow,
+                ambientColor = appearance.colors.focusGlow.toComposeColor().copy(alpha = appearance.focus.glowIntensity),
+                spotColor = appearance.colors.focusGlow.toComposeColor().copy(alpha = appearance.focus.glowIntensity),
             )
             .border(
                 BorderStroke(if (focused) borders.focused else borders.normal, if (active) colors.focusBorder else colors.surfaceElevated),
@@ -118,9 +123,9 @@ fun WatchioCard(
         shape = shape,
     ) {
         val background = when {
-            selected -> accent.copy(alpha = 0.16f)
-            focused -> accent.copy(alpha = focusedBackgroundAlpha)
-            else -> colors.surfaceCard
+            focused -> appearance.colors.focusedBackground.toComposeColor()
+            selected -> appearance.colors.selectedCardBackground.toComposeColor()
+            else -> appearance.colors.cardBackground.toComposeColor().copy(alpha = appearance.cards.opacity)
         }
         Box(Modifier.background(background)) {
             content(focused)

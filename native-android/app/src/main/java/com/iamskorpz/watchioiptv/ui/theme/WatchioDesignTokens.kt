@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv.ui.theme
 
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -83,3 +84,4 @@ val LocalWatchioIconSizes = compositionLocalOf { WatchioIconSizes() }
 val LocalWatchioPosterTokens = compositionLocalOf { WatchioPosterTokens() }
 val LocalWatchioMotion = compositionLocalOf { WatchioMotion() }
 val LocalWatchioTypography = compositionLocalOf { WatchioTypography() }
+val LocalWatchioAppearance = staticCompositionLocalOf { WatchioThemeDefinition.WatchioDefault }
