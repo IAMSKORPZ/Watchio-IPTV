@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,11 @@ import com.iamskorpz.watchioiptv.feature.settings.AppearanceScreen
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import com.iamskorpz.watchioiptv.ui.theme.WatchioBuiltInThemes
 import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeDefinition
+import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
+import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioComponentSizes
+import com.iamskorpz.watchioiptv.ui.theme.toAppearanceLong
+import com.iamskorpz.watchioiptv.ui.components.WatchioButton
+import com.iamskorpz.watchioiptv.ui.components.WatchioCard
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -144,6 +150,42 @@ class AppearanceComposeTest {
         composeRule.onNodeWithTag("appearance-preset-builtin-midnight").performClick()
         composeRule.onNodeWithTag("appearance-preview-theme-builtin-midnight").assertIsDisplayed()
         assertTrue(!applied)
+    }
+
+    @Test fun realSharedComponentsReceiveLightAmoledAndOceanTokens() {
+        val presetState = mutableStateOf(WatchioBuiltInThemes.Light)
+        var observedBackground = 0L
+        var observedCard = 0L
+        var observedButton = 0L
+        var observedCardWidth = 0f
+        composeRule.setContent {
+            WatchioTheme(appearance = presetState.value) {
+                val colors = LocalWatchioColors.current
+                observedBackground = colors.surfaceBase.toAppearanceLong()
+                observedCard = colors.cardSurface.toAppearanceLong()
+                observedButton = colors.buttonSurface.toAppearanceLong()
+                observedCardWidth = LocalWatchioComponentSizes.current.cardMinWidth.value
+                androidx.compose.foundation.layout.Column {
+                    WatchioCard(modifier = androidx.compose.ui.Modifier.testTag("phase2-real-card"), onClick = {}) { }
+                    WatchioButton("Action", onClick = {}, modifier = androidx.compose.ui.Modifier.testTag("phase2-real-button"))
+                }
+            }
+        }
+        composeRule.onNodeWithTag("phase2-real-card").assertIsDisplayed()
+        composeRule.onNodeWithTag("phase2-real-button").assertIsDisplayed()
+
+        listOf(WatchioBuiltInThemes.Light, WatchioBuiltInThemes.AmoledBlack, WatchioBuiltInThemes.Ocean).forEach { preset ->
+            composeRule.runOnIdle { presetState.value = preset }
+            composeRule.waitForIdle()
+            composeRule.onNodeWithTag("phase2-real-card").assertIsDisplayed()
+            composeRule.onNodeWithTag("phase2-real-button").assertIsDisplayed()
+            composeRule.runOnIdle {
+                assertTrue(observedBackground == preset.colors.appBackground)
+                assertTrue(observedCard == preset.colors.cardBackground)
+                assertTrue(observedButton == preset.colors.buttonBackground)
+                assertTrue(observedCardWidth > 0f)
+            }
+        }
     }
 
     @Composable

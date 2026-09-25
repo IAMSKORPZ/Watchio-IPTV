@@ -208,6 +208,8 @@ import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeState
 import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeDefinition
 import com.iamskorpz.watchioiptv.ui.theme.WatchioAppBackground
+import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioAppearance
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -1093,7 +1095,7 @@ private fun BootstrapLoadingScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1120,7 +1122,7 @@ private fun DeviceModeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .padding(32.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -1157,7 +1159,7 @@ private fun ProviderTypeSetupScreen(
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
     Column(
-        modifier = Modifier.fillMaxSize().background(colors.surfaceBase).padding(32.dp),
+        modifier = Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -1258,7 +1260,6 @@ internal fun HomeScreen(
             .fillMaxSize()
             .testTag("home-screen"),
     ) {
-        WatchioHomeBackground()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1388,7 +1389,7 @@ internal fun ProviderManagementScreen(
     val firstFocus = remember { FocusRequester() }
     BackHandler(onBack = onBack)
     Column(
-        modifier = Modifier.fillMaxSize().background(colors.surfaceBase).padding(32.dp),
+        modifier = Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).padding(32.dp),
     ) {
         WatchioPageHeader(title = "PROVIDER MANAGEMENT", onBack = onBack, testTagPrefix = "providers")
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
@@ -1601,7 +1602,7 @@ internal fun XtreamProviderScreen(
     )
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().background(colors.surfaceBase).testTag("xtream-login-screen"),
+        modifier = Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).testTag("xtream-login-screen"),
     ) {
         val compact = maxWidth < 600.dp
         Column(
@@ -2010,7 +2011,7 @@ private fun ProviderFormContainer(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .verticalScroll(scrollState)
             .imePadding()
             .padding(32.dp),
@@ -2075,47 +2076,6 @@ private enum class HomeIconKind {
     Sports,
     Announcement,
     Back,
-}
-
-@Composable
-private fun WatchioHomeBackground() {
-    val colors = LocalWatchioColors.current
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        colors.surfaceBase,
-                        colors.surfaceCard,
-                        colors.surfaceBase,
-                    ),
-                ),
-            ),
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            drawCircle(colors.liveTvAccent.copy(alpha = 0.22f), radius = size.minDimension * 0.42f, center = Offset(size.width * 0.12f, size.height * 0.46f))
-            drawCircle(colors.moviesAccent.copy(alpha = 0.22f), radius = size.minDimension * 0.46f, center = Offset(size.width * 0.46f, size.height * 0.36f))
-            drawCircle(colors.seriesAccent.copy(alpha = 0.20f), radius = size.minDimension * 0.42f, center = Offset(size.width * 0.88f, size.height * 0.46f))
-            drawCircle(colors.liveTvAccent.copy(alpha = 0.12f), radius = size.minDimension * 0.22f, center = Offset(size.width * 0.02f, size.height * 0.18f))
-            drawCircle(colors.seriesAccent.copy(alpha = 0.11f), radius = size.minDimension * 0.24f, center = Offset(size.width * 0.98f, size.height * 0.24f))
-            for (index in 0..10) {
-                val y = size.height * (0.18f + index * 0.08f)
-                drawLine(
-                    color = when (index % 3) {
-                        0 -> colors.liveTvAccent
-                        1 -> colors.moviesAccent
-                        else -> colors.seriesAccent
-                    }.copy(alpha = 0.06f),
-                    start = Offset(0f, y),
-                    end = Offset(size.width, y + (index % 3 - 1) * 54f),
-                    strokeWidth = 3f,
-                    cap = StrokeCap.Round,
-                )
-            }
-            drawRect(Color.Black.copy(alpha = 0.58f), size = size)
-        }
-    }
 }
 
 @Composable
@@ -2239,7 +2199,7 @@ private fun NoProviderHome(
 private fun HomePlaceholderScreen(title: String, message: String, onBack: () -> Unit) {
     val colors = LocalWatchioColors.current
     Column(
-        modifier = Modifier.fillMaxSize().background(colors.surfaceBase).padding(32.dp),
+        modifier = Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -2264,6 +2224,7 @@ private fun HomeTopAction(
     Box(Modifier.size(52.dp)) {
         WatchioCard(
             modifier = Modifier.fillMaxSize().testTag(testTag),
+            surfaceRole = com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole.Control,
             accent = tint,
             minWidth = 0.dp,
             minHeight = 44.dp,
@@ -2283,13 +2244,13 @@ private fun HomeTopAction(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .size(20.dp)
-                    .background(colors.moviesAccent, CircleShape)
+                    .background(colors.badgeSurface, CircleShape)
                     .testTag("home-announcements-badge"),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = if (badgeCount > 9) "9+" else badgeCount.toString(),
-                    color = colors.surfaceBase,
+                    color = colors.badgeText,
                     fontWeight = FontWeight.Bold,
                     style = LocalWatchioTypography.current.label,
                 )
@@ -2365,7 +2326,7 @@ private fun HomePrimaryCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .background(Color.Black.copy(alpha = 0.22f))
+                    .background(colors.surfaceElevated.copy(alpha = 0.72f))
                     .padding(horizontal = spacing.lg),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -2407,7 +2368,7 @@ internal fun HomeRefreshModal(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.72f))
+            .background(colors.playerOverlay.copy(alpha = 0.72f))
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { true }
             .clickable(interactionSource = interactionSource, indication = null, onClick = {})
@@ -2470,6 +2431,7 @@ internal fun HomeRefreshControl(
             .height(34.dp)
             .testTag("home-${title.lowercase().replace(' ', '-')}-refresh")
             .then(focusModifier),
+        surfaceRole = com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole.Control,
         accent = accent,
         enabled = !refreshing,
         minWidth = 44.dp,
@@ -2498,6 +2460,7 @@ private fun HomeSecondaryPill(action: HomeAction, modifier: Modifier = Modifier)
     val type = LocalWatchioTypography.current
     WatchioCard(
         modifier = modifier,
+        surfaceRole = com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole.Control,
         accent = action.accent,
         minWidth = 0.dp,
         minHeight = 0.dp,
@@ -2812,7 +2775,6 @@ private fun SettingsRootScreen(
     BackHandler(onBack = onBack)
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
     Box(Modifier.fillMaxSize().testTag("settings-root")) {
-        WatchioHomeBackground()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -2882,7 +2844,6 @@ private fun SettingsDetailScreen(title: String, onBack: () -> Unit, content: @Co
     val colors = LocalWatchioColors.current
     BackHandler(onBack = onBack)
     Box(Modifier.fillMaxSize().testTag("settings-detail")) {
-        WatchioHomeBackground()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -3113,6 +3074,7 @@ private fun SettingsBackIconButton(onClick: () -> Unit) {
         modifier = Modifier
             .size(48.dp)
             .testTag("settings-back-icon"),
+        surfaceRole = com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole.Control,
         accent = colors.liveTvAccent,
         minWidth = 48.dp,
         minHeight = 48.dp,

@@ -1,5 +1,6 @@
 package com.iamskorpz.watchioiptv
 
+import androidx.compose.ui.graphics.Color
 import com.iamskorpz.watchioiptv.ui.theme.APPEARANCE_SCHEMA_VERSION
 import com.iamskorpz.watchioiptv.ui.theme.WATCHIO_DEFAULT_THEME_ID
 import com.iamskorpz.watchioiptv.ui.theme.WatchioAppearanceCodec
@@ -18,6 +19,12 @@ import com.iamskorpz.watchioiptv.ui.theme.parseHexColor
 import com.iamskorpz.watchioiptv.ui.theme.toHexColor
 import com.iamskorpz.watchioiptv.ui.theme.toComposeColor
 import com.iamskorpz.watchioiptv.ui.theme.toAppearanceLong
+import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeState
+import com.iamskorpz.watchioiptv.ui.components.headerBackIconColor
+import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
+import com.iamskorpz.watchioiptv.ui.components.semanticOutlineWidthDp
+import com.iamskorpz.watchioiptv.ui.components.semanticBorderWidthDp
+import com.iamskorpz.watchioiptv.ui.theme.resolveWatchioThemeState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -26,6 +33,48 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WatchioAppearanceTest {
+    @Test fun semanticOutlineWidthsRemainIndependent() {
+        val base = WatchioThemeDefinition.WatchioDefault
+        val cardOnly = base.copy(cards = base.cards.copy(outlineWidthDp = 2f))
+        assertEquals(2f, semanticOutlineWidthDp(WatchioSurfaceRole.Card, cardOnly))
+        assertEquals(0f, semanticOutlineWidthDp(WatchioSurfaceRole.Panel, cardOnly))
+        assertEquals(0f, semanticOutlineWidthDp(WatchioSurfaceRole.Control, cardOnly))
+
+        val panelOnly = base.copy(surfaces = base.surfaces.copy(outlineWidthDp = 2f))
+        assertEquals(0f, semanticOutlineWidthDp(WatchioSurfaceRole.Card, panelOnly))
+        assertEquals(2f, semanticOutlineWidthDp(WatchioSurfaceRole.Panel, panelOnly))
+        assertEquals(0f, semanticOutlineWidthDp(WatchioSurfaceRole.Control, panelOnly))
+
+        val controlOnly = base.copy(controls = base.controls.copy(outlineWidthDp = 2f))
+        assertEquals(0f, semanticOutlineWidthDp(WatchioSurfaceRole.Card, controlOnly))
+        assertEquals(0f, semanticOutlineWidthDp(WatchioSurfaceRole.Panel, controlOnly))
+        assertEquals(2f, semanticOutlineWidthDp(WatchioSurfaceRole.Control, controlOnly))
+
+        WatchioSurfaceRole.entries.forEach { assertEquals(0f, semanticOutlineWidthDp(it, base)) }
+        assertTrue(base.focus.outlineWidthDp > 0f)
+    }
+
+    @Test fun customCardBorderPrecedenceKeepsNormalFocusAndSelectionIndependent() {
+        val base = WatchioThemeDefinition.WatchioDefault
+        val outlined = base.copy(cards = base.cards.copy(outlineWidthDp = 2f))
+
+        assertEquals(0f, semanticBorderWidthDp(WatchioSurfaceRole.Card, base, focused = false))
+        assertEquals(2f, semanticBorderWidthDp(WatchioSurfaceRole.Card, outlined, focused = false))
+        assertEquals(base.focus.outlineWidthDp, semanticBorderWidthDp(WatchioSurfaceRole.Card, base, focused = true))
+        assertEquals(
+            1.5f,
+            semanticBorderWidthDp(
+                WatchioSurfaceRole.Card,
+                base,
+                focused = false,
+                selected = true,
+                selectedWidthDp = 1.5f,
+            ),
+        )
+        assertEquals(0f, semanticBorderWidthDp(WatchioSurfaceRole.Card, base.copy(surfaces = base.surfaces.copy(outlineWidthDp = 2f)), focused = false))
+        assertEquals(0f, semanticBorderWidthDp(WatchioSurfaceRole.Card, base.copy(controls = base.controls.copy(outlineWidthDp = 2f)), focused = false))
+    }
+
     @Test fun defaultThemeIsImmutableIdentity() {
         assertEquals(WATCHIO_DEFAULT_THEME_ID, WatchioThemeDefinition.WatchioDefault.id)
         assertEquals("Watchio Default", WatchioThemeDefinition.WatchioDefault.name)
@@ -184,5 +233,58 @@ class WatchioAppearanceTest {
         assertTrue(contrastRatio(palette.content, palette.background) >= 4.5f)
         assertTrue(contrastRatio(palette.outline, palette.background) >= 3f)
         assertEquals(before, unsafe)
+    }
+
+    @Test fun nonDefaultAppearanceDrivesRealApplicationSemanticPalette() {
+        listOf(WatchioBuiltInThemes.Light, WatchioBuiltInThemes.AmoledBlack, WatchioBuiltInThemes.Ocean).forEach { preset ->
+            val resolved = resolveWatchioThemeState(WatchioThemeState(), preset)
+            val colors = preset.colors
+            assertEquals(colors.appBackground, resolved.surfaceBase.toAppearanceLong())
+            assertEquals(colors.primaryPanel, resolved.surfaceCard.toAppearanceLong())
+            assertEquals(colors.secondaryPanel, resolved.surfaceElevated.toAppearanceLong())
+            assertEquals(colors.header, resolved.headerSurface.toAppearanceLong())
+            assertEquals(colors.navigationBackground, resolved.navigationSurface.toAppearanceLong())
+            assertEquals(colors.dialog, resolved.dialogSurface.toAppearanceLong())
+            assertEquals(colors.cardBackground, resolved.cardSurface.toAppearanceLong())
+            assertEquals(colors.cardOutline, resolved.cardOutline.toAppearanceLong())
+            assertEquals(colors.selectedCardBackground, resolved.selectedCardSurface.toAppearanceLong())
+            assertEquals(colors.buttonBackground, resolved.buttonSurface.toAppearanceLong())
+            assertEquals(colors.buttonText, resolved.buttonText.toAppearanceLong())
+            assertEquals(colors.badgeBackground, resolved.badgeSurface.toAppearanceLong())
+            assertEquals(colors.badgeText, resolved.badgeText.toAppearanceLong())
+            assertEquals(colors.focusOutline, resolved.focusBorder.toAppearanceLong())
+            assertEquals(colors.focusedBackground, resolved.focusedSurface.toAppearanceLong())
+            assertEquals(colors.focusedText, resolved.focusedContent.toAppearanceLong())
+            assertEquals(colors.playerOverlay, resolved.playerOverlay.toAppearanceLong())
+        }
+    }
+
+    @Test fun watchioDefaultPreservesLegacyVisualPalette() {
+        val legacy = WatchioThemeState()
+        assertEquals(legacy, resolveWatchioThemeState(legacy, WatchioThemeDefinition.WatchioDefault))
+    }
+
+    @Test fun lightThemeKeepsArtworkBackedDetailTextReadable() {
+        val colors = WatchioThemeState.fromDefinition(WatchioBuiltInThemes.Light)
+        assertEquals(Color.White, colors.artworkTextPrimary)
+        assertEquals(Color(0xFFD1D5DB), colors.artworkTextSecondary)
+    }
+
+    @Test fun artworkHeaderBackControlUsesControlContentPalette() {
+        listOf(
+            WatchioThemeDefinition.WatchioDefault,
+            WatchioBuiltInThemes.Light,
+            WatchioBuiltInThemes.AmoledBlack,
+            WatchioBuiltInThemes.Ocean,
+        ).forEach { preset ->
+            val colors = WatchioThemeState.fromDefinition(preset)
+            assertEquals(colors.buttonText, headerBackIconColor(colors, focused = false))
+            assertEquals(colors.focusedContent, headerBackIconColor(colors, focused = true))
+            assertTrue(
+                contrastRatio(colors.buttonText.toAppearanceLong(), colors.buttonSurface.toAppearanceLong()) >= 4.5f,
+            )
+        }
+        val light = WatchioThemeState.fromDefinition(WatchioBuiltInThemes.Light)
+        assertTrue(headerBackIconColor(light, focused = false) != light.artworkTextPrimary)
     }
 }

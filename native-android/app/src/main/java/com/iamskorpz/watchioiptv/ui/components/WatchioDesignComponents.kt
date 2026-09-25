@@ -34,9 +34,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -58,6 +60,7 @@ import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioAppearance
 import com.iamskorpz.watchioiptv.ui.theme.toComposeColor
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
 
 enum class WatchioButtonVariant {
     Primary,
@@ -67,9 +70,64 @@ enum class WatchioButtonVariant {
     CompactAction,
 }
 
+enum class WatchioSurfaceRole { Card, Panel, Control }
+
+internal fun semanticOutlineWidthDp(
+    role: WatchioSurfaceRole,
+    appearance: com.iamskorpz.watchioiptv.ui.theme.WatchioThemeDefinition,
+): Float = when (role) {
+    WatchioSurfaceRole.Card -> appearance.cards.outlineWidthDp
+    WatchioSurfaceRole.Panel -> appearance.surfaces.outlineWidthDp
+    WatchioSurfaceRole.Control -> appearance.controls.outlineWidthDp
+}
+
+internal fun semanticBorderWidthDp(
+    role: WatchioSurfaceRole,
+    appearance: com.iamskorpz.watchioiptv.ui.theme.WatchioThemeDefinition,
+    focused: Boolean,
+    selected: Boolean = false,
+    selectedWidthDp: Float? = null,
+): Float = when {
+    focused -> appearance.focus.outlineWidthDp
+    selected && selectedWidthDp != null -> selectedWidthDp
+    else -> semanticOutlineWidthDp(role, appearance)
+}
+
+@Composable
+fun Modifier.watchioSemanticBorder(
+    role: WatchioSurfaceRole,
+    shape: Shape,
+    focused: Boolean = false,
+    selected: Boolean = false,
+    normalColor: Color? = null,
+    selectedColor: Color? = null,
+    selectedWidth: Dp? = null,
+): Modifier {
+    val appearance = LocalWatchioAppearance.current
+    val colors = LocalWatchioColors.current
+    val width = semanticBorderWidthDp(
+        role = role,
+        appearance = appearance,
+        focused = focused,
+        selected = selected,
+        selectedWidthDp = selectedWidth?.value,
+    ).dp
+    if (width <= 0.dp) return this
+    val color = when {
+        focused -> colors.focusBorder
+        selected -> selectedColor ?: colors.selectedCardOutline
+        normalColor != null -> normalColor
+        role == WatchioSurfaceRole.Panel -> appearance.surfaces.outlineColor.toComposeColor()
+        role == WatchioSurfaceRole.Control -> colors.buttonOutline
+        else -> colors.cardOutline
+    }
+    return border(BorderStroke(width, color), shape)
+}
+
 @Composable
 fun WatchioCard(
     modifier: Modifier = Modifier,
+    surfaceRole: WatchioSurfaceRole = WatchioSurfaceRole.Card,
     focusRequester: FocusRequester? = null,
     accent: Color = LocalWatchioColors.current.focusGlow,
     selected: Boolean = false,
@@ -78,6 +136,11 @@ fun WatchioCard(
     minHeight: Dp = LocalWatchioComponentSizes.current.cardMinHeight,
     contentDescription: String? = null,
     focusedBackgroundAlpha: Float = 0.16f,
+    backgroundColor: Color? = null,
+    outlineColor: Color? = null,
+    selectedBackgroundColor: Color? = null,
+    selectedOutlineColor: Color? = null,
+    backgroundAlpha: Float? = null,
     onClick: (() -> Unit)? = null,
     content: @Composable (focused: Boolean) -> Unit,
 ) {
@@ -87,8 +150,21 @@ fun WatchioCard(
     val appearance = LocalWatchioAppearance.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
-    val shape = RoundedCornerShape(radii.md)
+    val shape = RoundedCornerShape(when (surfaceRole) {
+        WatchioSurfaceRole.Card -> appearance.cards.cornerRadiusDp.dp
+        WatchioSurfaceRole.Panel -> appearance.surfaces.cornerRadiusDp.dp
+        WatchioSurfaceRole.Control -> appearance.controls.cornerRadiusDp.dp
+    })
     val active = focused || selected
+    val borderWidth = if (focused) borders.focused else semanticOutlineWidthDp(surfaceRole, appearance).dp
+    val borderColor = when {
+        focused -> colors.focusBorder
+        selected -> selectedOutlineColor ?: colors.selectedCardOutline
+        outlineColor != null -> outlineColor
+        surfaceRole == WatchioSurfaceRole.Panel -> appearance.surfaces.outlineColor.toComposeColor()
+        surfaceRole == WatchioSurfaceRole.Control -> colors.buttonOutline
+        else -> colors.cardOutline
+    }
     val clickableModifier = if (onClick != null && enabled) {
         Modifier
             .clickable(
@@ -112,22 +188,19 @@ fun WatchioCard(
                 ambientColor = appearance.colors.focusGlow.toComposeColor().copy(alpha = appearance.focus.glowIntensity),
                 spotColor = appearance.colors.focusGlow.toComposeColor().copy(alpha = appearance.focus.glowIntensity),
             )
-            .border(
-                BorderStroke(if (focused) borders.focused else borders.normal, if (active) colors.focusBorder else colors.surfaceElevated),
-                shape,
-            )
+            .then(if (borderWidth > 0.dp) Modifier.border(BorderStroke(borderWidth, borderColor), shape) else Modifier)
             .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .then(clickableModifier),
-        color = if (enabled) colors.surfaceCard else colors.surfaceElevated,
+        color = Color.Transparent,
         shape = shape,
     ) {
         val background = when {
-            focused -> appearance.colors.focusedBackground.toComposeColor()
-            selected -> appearance.colors.selectedCardBackground.toComposeColor()
-            else -> appearance.colors.cardBackground.toComposeColor().copy(alpha = appearance.cards.opacity)
+            focused -> colors.focusedSurface
+            selected -> selectedBackgroundColor ?: colors.selectedCardSurface
+            else -> (backgroundColor ?: colors.cardSurface).copy(alpha = backgroundAlpha ?: appearance.cards.opacity)
         }
-        Box(Modifier.background(background)) {
+        Box(Modifier.background(background).alpha(if (enabled) 1f else appearance.controls.disabledOpacity)) {
             content(focused)
         }
     }
@@ -153,14 +226,27 @@ fun WatchioButton(
         WatchioButtonVariant.Danger -> colors.moviesAccent
         WatchioButtonVariant.CompactAction -> colors.liveTvAccent
     }
+    val selected = variant == WatchioButtonVariant.Primary || variant == WatchioButtonVariant.Danger
+    val buttonBackground = when (variant) {
+        WatchioButtonVariant.Ghost -> Color.Transparent
+        WatchioButtonVariant.Primary, WatchioButtonVariant.Danger -> colors.selectedButtonSurface
+        else -> colors.buttonSurface
+    }
     val minHeight = if (variant == WatchioButtonVariant.CompactAction) sizes.compactButtonMinHeight else sizes.buttonMinHeight
     WatchioCard(
         modifier = modifier,
+        surfaceRole = WatchioSurfaceRole.Control,
         accent = accent,
         enabled = enabled && !loading,
         minWidth = 0.dp,
         minHeight = minHeight,
         contentDescription = text,
+        selected = selected,
+        backgroundColor = buttonBackground,
+        outlineColor = colors.buttonOutline,
+        selectedBackgroundColor = buttonBackground,
+        selectedOutlineColor = colors.buttonOutline,
+        backgroundAlpha = 1f,
         onClick = onClick,
     ) {
         Row(
@@ -174,7 +260,11 @@ fun WatchioButton(
             }
             Text(
                 text = text,
-                color = if (enabled) colors.textPrimary else colors.textMuted,
+                color = when {
+                    !enabled -> colors.textMuted
+                    selected -> colors.selectedButtonText
+                    else -> colors.buttonText
+                },
                 style = if (variant == WatchioButtonVariant.CompactAction) type.label else type.cardTitle,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -194,6 +284,7 @@ fun WatchioIconButton(
     val spacing = LocalWatchioSpacing.current
     WatchioCard(
         modifier = modifier,
+        surfaceRole = WatchioSurfaceRole.Control,
         enabled = enabled,
         minWidth = 48.dp,
         minHeight = 48.dp,
@@ -217,6 +308,7 @@ fun WatchioChip(
     val spacing = LocalWatchioSpacing.current
     WatchioCard(
         modifier = modifier,
+        surfaceRole = WatchioSurfaceRole.Control,
         accent = if (selected) colors.seriesAccent else colors.focusGlow,
         selected = selected,
         minWidth = 0.dp,
@@ -252,13 +344,13 @@ fun WatchioPosterCard(
         onClick = onClick,
     ) {
         Column(Modifier.padding(spacing.sm)) {
-            Box(Modifier.fillMaxWidth().aspectRatio(poster.aspectRatio).background(colors.surfaceElevated)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(poster.aspectRatio).clip(RoundedCornerShape(poster.cornerRadius)).background(colors.surfaceElevated)) {
                 if (!imageUrl.isNullOrBlank()) {
                     AsyncImage(
                         model = imageUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(poster.aspectRatio),
+                        modifier = Modifier.fillMaxWidth().aspectRatio(poster.aspectRatio).clip(RoundedCornerShape(poster.cornerRadius)),
                     )
                 }
             }
@@ -387,7 +479,7 @@ fun ResumePlaybackDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.75f))
+            .background(colors.playerOverlay.copy(alpha = 0.75f))
             .testTag("resume-dialog-backdrop"),
         contentAlignment = Alignment.Center,
     ) {
@@ -397,8 +489,10 @@ fun ResumePlaybackDialog(
                 .padding(24.dp)
                 .testTag("resume-playback-dialog"),
             shape = RoundedCornerShape(radii.lg),
-            color = colors.surfaceCard,
-            border = BorderStroke(1.5.dp, colors.moviesAccent.copy(alpha = 0.6f)),
+            color = colors.dialogSurface,
+            border = LocalWatchioAppearance.current.surfaces.outlineWidthDp
+                .takeIf { it > 0f }
+                ?.let { BorderStroke(it.dp, LocalWatchioAppearance.current.surfaces.outlineColor.toComposeColor()) },
             shadowElevation = 16.dp,
         ) {
             Column(

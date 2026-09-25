@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.iamskorpz.watchioiptv.data.live.LiveTvCategory
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -76,7 +77,7 @@ fun TvGuideScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .padding(24.dp)
             .testTag("tv-guide-screen"),
     ) {

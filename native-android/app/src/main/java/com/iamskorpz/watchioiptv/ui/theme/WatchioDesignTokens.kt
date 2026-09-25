@@ -47,6 +47,8 @@ data class WatchioPosterTokens(
     val aspectRatio: Float = 2f / 3f,
     val minWidth: Dp = 104.dp,
     val maxWidth: Dp = 180.dp,
+    val cornerRadius: Dp = 8.dp,
+    val gridMinWidth: Dp = 132.dp,
 )
 
 data class WatchioMotion(

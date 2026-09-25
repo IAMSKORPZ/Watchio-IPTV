@@ -46,7 +46,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -81,12 +80,14 @@ import com.iamskorpz.watchioiptv.domain.repository.PlayerSettings
 import com.iamskorpz.watchioiptv.ui.components.WatchioButton
 import com.iamskorpz.watchioiptv.ui.components.WatchioButtonVariant
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
+import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
@@ -119,7 +120,7 @@ fun LiveTvScreen(
     var isLongBackHandled by remember { mutableStateOf(false) }
 
     if (uiState.loading) {
-        Box(Modifier.fillMaxSize().background(colors.surfaceBase), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = colors.liveTvAccent)
         }
         return
@@ -138,7 +139,7 @@ fun LiveTvScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.linearGradient(listOf(colors.surfaceBase, Color(0xFF12071F), Color(0xFF041B22))))
+            .background(watchioScreenBackgroundColor())
             .padding(horizontal = 18.dp, vertical = 14.dp)
             .testTag("live-tv-screen")
             .onPreviewKeyEvent { event ->
@@ -290,6 +291,7 @@ private fun LiveSearchIconButton(accent: Color, onClick: () -> Unit, modifier: M
         modifier = modifier
             .size(44.dp)
             .semantics { onClick(label = "Search Live TV") { onClick(); true } },
+        surfaceRole = WatchioSurfaceRole.Control,
         accent = accent,
         minWidth = 44.dp,
         minHeight = 44.dp,
@@ -338,6 +340,7 @@ private fun LiveMoreButton(accent: Color, onClick: () -> Unit, modifier: Modifie
         modifier = modifier
             .size(44.dp)
             .semantics { onClick(label = "More Live TV Options") { onClick(); true } },
+        surfaceRole = WatchioSurfaceRole.Control,
         accent = accent,
         minWidth = 44.dp,
         minHeight = 44.dp,
@@ -383,6 +386,7 @@ private fun LiveChannelSearchOverlay(
                     .fillMaxWidth(0.72f)
                     .fillMaxHeight(0.82f)
                     .testTag("live-search-panel"),
+                surfaceRole = WatchioSurfaceRole.Panel,
                 accent = colors.liveTvAccent,
                 minWidth = 0.dp,
                 minHeight = 0.dp,
@@ -475,7 +479,7 @@ private fun CategoryPanel(
             listState.scrollToItem((index - 1).coerceAtLeast(0))
         }
     }
-    WatchioCard(modifier = modifier.testTag("live-category-panel"), accent = colors.liveTvAccent, minWidth = 0.dp, minHeight = 0.dp) {
+    WatchioCard(modifier = modifier.testTag("live-category-panel"), surfaceRole = WatchioSurfaceRole.Panel, accent = colors.liveTvAccent, minWidth = 0.dp, minHeight = 0.dp) {
         Column(Modifier.fillMaxSize().padding(7.dp)) {
             OutlinedTextField(
                 value = state.categorySearchQuery,
@@ -557,7 +561,7 @@ private fun ChannelListPanel(
         }
     }
 
-    WatchioCard(modifier = modifier.testTag("live-channel-list"), accent = colors.seriesAccent, minWidth = 0.dp, minHeight = 0.dp) {
+    WatchioCard(modifier = modifier.testTag("live-channel-list"), surfaceRole = WatchioSurfaceRole.Panel, accent = colors.seriesAccent, minWidth = 0.dp, minHeight = 0.dp) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(10.dp).testTag("live-channels"),
@@ -694,7 +698,7 @@ private fun ChannelInfoCard(
 @Composable
 private fun EpgPanel(uiState: LiveTvUiState, compact: Boolean, onRefreshEpg: () -> Unit, modifier: Modifier) {
     val colors = LocalWatchioColors.current
-    WatchioCard(modifier = modifier, accent = colors.seriesAccent, minWidth = 0.dp, minHeight = 0.dp) {
+    WatchioCard(modifier = modifier, surfaceRole = WatchioSurfaceRole.Panel, accent = colors.seriesAccent, minWidth = 0.dp, minHeight = 0.dp) {
         Column(Modifier.fillMaxSize().padding(if (compact) 12.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {
             val channel = uiState.browsedChannel ?: uiState.selectedChannel
             Text("CURRENT PROGRAMME", color = colors.textPrimary, fontWeight = FontWeight.Bold)

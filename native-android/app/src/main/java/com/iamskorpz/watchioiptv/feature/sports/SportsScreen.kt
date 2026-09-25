@@ -45,6 +45,7 @@ import com.iamskorpz.watchioiptv.ui.components.WatchioCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioLoading
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -66,7 +67,7 @@ fun SportsScreen(
 ) {
     val colors = LocalWatchioColors.current
     BackHandler(onBack = if (state.selectedFixture != null) onCloseCandidates else onBack)
-    Box(Modifier.fillMaxSize().background(colors.surfaceBase).testTag("sports-background")) {
+    Box(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).testTag("sports-background")) {
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp).testTag("sports-screen")) {
         WatchioPageHeader(title = "SPORTS", onBack = onBack, testTagPrefix = "sports")
         Spacer(Modifier.height(8.dp))

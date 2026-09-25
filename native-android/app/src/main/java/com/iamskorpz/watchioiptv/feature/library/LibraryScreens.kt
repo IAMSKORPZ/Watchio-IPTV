@@ -41,6 +41,7 @@ import com.iamskorpz.watchioiptv.domain.model.ContentType
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import androidx.compose.foundation.layout.PaddingValues
 
 import androidx.compose.foundation.layout.aspectRatio
@@ -57,6 +58,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
+import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
+import com.iamskorpz.watchioiptv.ui.components.watchioSemanticBorder
+import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioRadii
 import com.iamskorpz.watchioiptv.ui.components.tvSearchInput
 
 import androidx.compose.foundation.text.BasicTextField
@@ -101,6 +105,7 @@ fun GlobalSearchScreen(
             }
             WatchioCard(
                 modifier = Modifier.fillMaxSize(),
+                surfaceRole = WatchioSurfaceRole.Panel,
                 accent = colors.seriesAccent,
                 minWidth = 0.dp,
                 minHeight = 0.dp,
@@ -508,7 +513,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.liveSection(
     item {
         Text(
             text = title,
-            color = Color.White,
+            color = LocalWatchioColors.current.textPrimary,
             fontWeight = FontWeight.Bold,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 2.dp).testTag(groupTag),
@@ -546,7 +551,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.mediaSection(
     item {
         Text(
             text = title,
-            color = Color.White,
+            color = LocalWatchioColors.current.textPrimary,
             fontWeight = FontWeight.Bold,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 2.dp).testTag(groupTag),
@@ -586,12 +591,12 @@ fun MyListScreen(
     val colors = LocalWatchioColors.current
     BackHandler(onBack = onBack)
     if (state.loading) {
-        Box(Modifier.fillMaxSize().background(colors.surfaceBase), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = colors.seriesAccent)
         }
         return
     }
-    LazyColumn(Modifier.fillMaxSize().background(colors.surfaceBase).padding(24.dp).testTag("my-list"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).padding(24.dp).testTag("my-list"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("MY LIST", color = colors.textPrimary, fontWeight = FontWeight.Bold) }
         continueSection(state.data.continueWatching, onContinue)
         favoriteSection("FAVOURITE LIVE TV", state.data.liveFavorites, onFavorite, onRemoveFavorite)
@@ -602,8 +607,8 @@ fun MyListScreen(
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.continueSection(items: List<ContinueWatchingItem>, onClick: (ContinueWatchingItem) -> Unit) {
-    item { Text("CONTINUE WATCHING", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold) }
-    if (items.isEmpty()) item { Text("Nothing to continue watching", color = androidx.compose.ui.graphics.Color.Gray) }
+    item { Text("CONTINUE WATCHING", color = LocalWatchioColors.current.textPrimary, fontWeight = FontWeight.Bold) }
+    if (items.isEmpty()) item { Text("Nothing to continue watching", color = LocalWatchioColors.current.textMuted) }
     items(items, key = { "${it.contentType.persisted}-${it.contentId}-${it.subContentId}" }) {
         ResultRow(it.title, it.subtitle ?: progressText(it.positionMs, it.durationMs), onClick = { onClick(it) })
     }
@@ -615,8 +620,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.favoriteSection(
     onClick: (LibraryFavoriteItem) -> Unit,
     onRemove: (LibraryFavoriteItem) -> Unit,
 ) {
-    item { Text(title, color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold) }
-    if (items.isEmpty()) item { Text("No favourites yet", color = androidx.compose.ui.graphics.Color.Gray) }
+    item { Text(title, color = LocalWatchioColors.current.textPrimary, fontWeight = FontWeight.Bold) }
+    if (items.isEmpty()) item { Text("No favourites yet", color = LocalWatchioColors.current.textMuted) }
     items(items, key = { "${it.contentType.persisted}-${it.contentId}" }) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             Box(Modifier.weight(1f)) { ResultRow(it.title, it.contentType.persisted, onClick = { onClick(it) }) }
@@ -626,8 +631,8 @@ private fun androidx.compose.foundation.lazy.LazyListScope.favoriteSection(
 }
 
 private fun androidx.compose.foundation.lazy.LazyListScope.historySection(items: List<LibraryHistoryItem>, onClick: (LibraryHistoryItem) -> Unit) {
-    item { Text("HISTORY", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold) }
-    if (items.isEmpty()) item { Text("No watch history yet", color = androidx.compose.ui.graphics.Color.Gray) }
+    item { Text("HISTORY", color = LocalWatchioColors.current.textPrimary, fontWeight = FontWeight.Bold) }
+    if (items.isEmpty()) item { Text("No watch history yet", color = LocalWatchioColors.current.textMuted) }
     items(items, key = { "${it.contentType.persisted}-${it.contentId}-${it.subContentId}-${it.lastWatchedAtEpochMs}" }) {
         ResultRow(it.title, it.subtitle ?: it.contentType.persisted, onClick = { onClick(it) })
     }
@@ -638,11 +643,12 @@ private fun ResultRow(title: String, subtitle: String, onClick: () -> Unit) {
     val colors = LocalWatchioColors.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
+    val shape = RoundedCornerShape(LocalWatchioRadii.current.md)
     Column(
         Modifier
             .fillMaxWidth()
-            .background(androidx.compose.ui.graphics.Color.White.copy(alpha = if (focused) 0.12f else 0.05f))
-            .border(if (focused) 3.dp else 1.dp, if (focused) colors.focusBorder else colors.surfaceElevated)
+            .background(if (focused) colors.focusedSurface else colors.cardSurface, shape)
+            .watchioSemanticBorder(WatchioSurfaceRole.Card, shape, focused = focused)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .focusable(interactionSource = interactionSource)
             .padding(14.dp),

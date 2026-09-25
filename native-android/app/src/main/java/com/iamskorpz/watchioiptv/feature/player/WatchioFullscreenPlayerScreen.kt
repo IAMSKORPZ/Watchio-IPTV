@@ -386,7 +386,7 @@ fun PlayerControlItem(
                     color = if (focused) {
                         accent.copy(alpha = if (isPrimary) 0.40f else 0.30f)
                     } else {
-                        Color.White.copy(alpha = if (isPrimary) 0.08f else 0.035f)
+                        colors.buttonSurface.copy(alpha = if (isPrimary) 0.80f else 0.55f)
                     },
                     shape = CircleShape,
                 )
@@ -399,7 +399,7 @@ fun PlayerControlItem(
         ) {
             PlayerIcon(
                 kind = icon,
-                color = if (enabled) (if (focused) Color.White else Color.White.copy(alpha = 0.90f)) else colors.textMuted,
+                color = if (enabled) (if (focused) colors.focusedContent else colors.playerControl) else colors.textMuted,
                 modifier = Modifier.size(iconSize),
             )
         }
@@ -1845,8 +1845,8 @@ private fun UpNextOverlay(
             .widthIn(min = 280.dp, max = 340.dp)
             .testTag("up-next-overlay"),
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF141722).copy(alpha = 0.94f),
-        border = BorderStroke(1.dp, colors.seriesAccent.copy(alpha = 0.40f)),
+        color = colors.dialogSurface.copy(alpha = 0.94f),
+        border = BorderStroke(1.dp, colors.buttonOutline),
         shadowElevation = 8.dp,
     ) {
         Column(

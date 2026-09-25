@@ -113,9 +113,9 @@ object WatchioBuiltInThemes {
             focusGlow = focus, focusedBackground = selected, focusedText = primaryText,
             playerAccent = accent, playerControl = primaryText, playerOverlay = background,
         ),
-        surfaces = WatchioSurfaceStyle(outlineColor = outline, outlineWidthDp = 1f, cornerRadiusDp = 10f),
-        cards = WatchioCardStyle(cornerRadiusDp = 10f, outlineWidthDp = 1f, posterCornerRadiusDp = 10f),
-        controls = WatchioControlStyle(cornerRadiusDp = 10f, outlineWidthDp = 1f),
+        surfaces = WatchioSurfaceStyle(outlineColor = outline, outlineWidthDp = 0f, cornerRadiusDp = 10f),
+        cards = WatchioCardStyle(cornerRadiusDp = 10f, outlineWidthDp = 0f, posterCornerRadiusDp = 10f),
+        controls = WatchioControlStyle(cornerRadiusDp = 10f, outlineWidthDp = 0f),
         focus = WatchioFocusStyle(outlineWidthDp = 3f, glowIntensity = 0.7f, scale = 1.04f),
         effects = WatchioEffectsStyle(elevationDp = 5f),
         background = WatchioBackgroundStyle(overlayColor = background),
@@ -207,7 +207,7 @@ data class WatchioSurfaceStyle(
     val headerOpacity: Float = 1f,
     val navigationOpacity: Float = 1f,
     val outlineColor: Long = 0xFF7437D8,
-    val outlineWidthDp: Float = 1f,
+    val outlineWidthDp: Float = 0f,
     val cornerRadiusDp: Float = 8f,
 ) {
     fun normalized() = copy(
@@ -225,7 +225,7 @@ data class WatchioSurfaceStyle(
 data class WatchioCardStyle(
     val opacity: Float = 1f,
     val cornerRadiusDp: Float = 8f,
-    val outlineWidthDp: Float = 1f,
+    val outlineWidthDp: Float = 0f,
     val posterCornerRadiusDp: Float = 8f,
     val posterOverlayOpacity: Float = 0.65f,
 ) {
@@ -241,7 +241,7 @@ data class WatchioCardStyle(
 @Serializable
 data class WatchioControlStyle(
     val cornerRadiusDp: Float = 8f,
-    val outlineWidthDp: Float = 1f,
+    val outlineWidthDp: Float = 0f,
     val disabledOpacity: Float = 0.45f,
 ) {
     fun normalized() = copy(

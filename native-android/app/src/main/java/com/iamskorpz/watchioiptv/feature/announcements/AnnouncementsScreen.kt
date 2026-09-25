@@ -45,6 +45,7 @@ import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioSpacing
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -74,7 +75,7 @@ fun AnnouncementsScreen(
     Column(
         Modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .padding(horizontal = 18.dp, vertical = 14.dp)
             .testTag("announcements-screen"),
     ) {
@@ -189,7 +190,7 @@ private fun AnnouncementDetails(
     Column(
         Modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .padding(horizontal = 18.dp, vertical = 14.dp)
             .testTag("announcement-details"),
     ) {

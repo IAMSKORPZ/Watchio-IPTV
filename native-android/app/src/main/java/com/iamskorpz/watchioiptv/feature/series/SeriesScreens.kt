@@ -92,15 +92,18 @@ import com.iamskorpz.watchioiptv.feature.movies.formatRuntime
 import com.iamskorpz.watchioiptv.ui.components.ResumePlaybackDialog
 import com.iamskorpz.watchioiptv.ui.components.ResumePlaybackRequest
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
+import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
+import com.iamskorpz.watchioiptv.ui.components.watchioSemanticBorder
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
-import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioBorders
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioRadii
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
+import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioPosterTokens
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
@@ -115,6 +118,7 @@ fun SeriesScreen(
     initialSearchVisible: Boolean = false,
 ) {
     val colors = LocalWatchioColors.current
+    val posterTokens = LocalWatchioPosterTokens.current
     val firstCategoryFocus = remember { FocusRequester() }
     val firstSeriesFocus = remember { FocusRequester() }
     val inputModeManager = LocalInputModeManager.current
@@ -139,7 +143,7 @@ fun SeriesScreen(
         }
     }
     if (state.loading) {
-        Box(Modifier.fillMaxSize().background(colors.surfaceBase), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = colors.seriesAccent)
         }
         return
@@ -155,7 +159,7 @@ fun SeriesScreen(
         targetContentId = state.series.firstOrNull()?.series?.id,
         targetFocusRequester = firstSeriesFocus,
     )
-    Box(Modifier.fillMaxSize().background(colors.surfaceBase).testTag("series-screen")) {
+    Box(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).testTag("series-screen")) {
         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)) {
             WatchioPageHeader(title = "SERIES", onBack = onBack, testTagPrefix = "series") {
                 SeriesSearchIconButton(
@@ -198,6 +202,7 @@ fun SeriesScreen(
                     )
                     WatchioCard(
                         modifier = Modifier.weight(1f).fillMaxHeight().testTag("series-grid-panel"),
+                        surfaceRole = WatchioSurfaceRole.Panel,
                         accent = colors.seriesAccent,
                         minWidth = 0.dp,
                         minHeight = 0.dp,
@@ -225,7 +230,7 @@ fun SeriesScreen(
                             } else {
                                 LazyVerticalGrid(
                                     state = gridState,
-                                    columns = GridCells.Adaptive(minSize = if (compactLandscape) 92.dp else 132.dp),
+                                    columns = GridCells.Adaptive(minSize = if (compactLandscape) posterTokens.gridMinWidth * 0.70f else posterTokens.gridMinWidth),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp),
                                     contentPadding = PaddingValues(bottom = 24.dp),
@@ -280,6 +285,7 @@ private fun SeriesSearchIconButton(accent: Color, onClick: () -> Unit, modifier:
         modifier = modifier
             .size(44.dp)
             .semantics { onClick(label = "Search Series") { onClick(); true } },
+        surfaceRole = WatchioSurfaceRole.Control,
         accent = accent,
         minWidth = 44.dp,
         minHeight = 44.dp,
@@ -328,6 +334,7 @@ private fun SeriesMoreButton(accent: Color, onClick: () -> Unit, modifier: Modif
         modifier = modifier
             .size(44.dp)
             .semantics { onClick(label = "More options") { onClick(); true } },
+        surfaceRole = WatchioSurfaceRole.Control,
         accent = accent,
         minWidth = 44.dp,
         minHeight = 44.dp,
@@ -371,7 +378,7 @@ private fun SeriesCategoryRail(
 ) {
     val colors = LocalWatchioColors.current
     val visible = state.categories
-    WatchioCard(modifier = modifier.testTag("series-category-panel"), accent = colors.seriesAccent, minWidth = 0.dp, minHeight = 0.dp) {
+    WatchioCard(modifier = modifier.testTag("series-category-panel"), surfaceRole = WatchioSurfaceRole.Panel, accent = colors.seriesAccent, minWidth = 0.dp, minHeight = 0.dp) {
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp).testTag("series-categories")) {
             itemsIndexed(visible, key = { _, item -> item.id }) { index, category ->
                 SeriesCategoryRow(
@@ -469,6 +476,7 @@ private fun SeriesSearchOverlay(
     ) {
         WatchioCard(
             modifier = Modifier.fillMaxWidth(0.76f).fillMaxHeight(0.84f).testTag("series-search-panel"),
+            surfaceRole = WatchioSurfaceRole.Panel,
             accent = colors.seriesAccent,
             minWidth = 0.dp,
             minHeight = 0.dp,
@@ -555,14 +563,16 @@ private fun SeriesCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
+    val radii = LocalWatchioRadii.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val formattedRating = item.series.formattedRating ?: formatRating(item.series.rating)
     val showProgress = item.isContinueWatching && item.progress != null && item.progress > 0f
+    val shape = RoundedCornerShape(radii.md)
     Column(
         modifier
-            .border(if (focused) 3.dp else 1.dp, if (focused) colors.focusBorder else Color.Transparent)
-            .background(if (focused) colors.seriesAccent.copy(alpha = 0.12f) else Color.Transparent)
+            .watchioSemanticBorder(WatchioSurfaceRole.Card, shape, focused = focused)
+            .background(if (focused) colors.seriesAccent.copy(alpha = 0.12f) else Color.Transparent, shape)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -717,6 +727,7 @@ fun SeriesDetailsScreen(
                 title = "SERIES",
                 onBack = onBack,
                 testTagPrefix = "series-details",
+                artworkReadability = true,
             )
             Spacer(Modifier.height(14.dp))
             LazyColumn(
@@ -802,7 +813,7 @@ fun SeriesDetailsScreen(
                             ) {
                                 Text(
                                     text = details.title,
-                                    color = colors.textPrimary,
+                                    color = colors.artworkTextPrimary,
                                     style = type.screenTitle,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 2,
@@ -813,7 +824,7 @@ fun SeriesDetailsScreen(
                                 if (metaSummary.isNotBlank()) {
                                     Text(
                                         text = metaSummary,
-                                        color = colors.textSecondary,
+                                        color = colors.artworkTextSecondary,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Medium,
                                         maxLines = 1,
@@ -870,7 +881,7 @@ fun SeriesDetailsScreen(
                                         icon = {
                                             HeartIcon(
                                                 filled = details.series.isFavorite,
-                                                color = if (details.series.isFavorite) colors.seriesAccent else Color.White,
+                                                color = if (details.series.isFavorite) colors.seriesAccent else colors.textPrimary,
                                             )
                                         },
                                         onClick = onFavorite,
@@ -886,7 +897,7 @@ fun SeriesDetailsScreen(
                                 if (!details.plot.isNullOrBlank()) {
                                     Text(
                                         text = details.plot,
-                                        color = colors.textSecondary,
+                                        color = colors.artworkTextSecondary,
                                         fontSize = 13.5.sp,
                                         lineHeight = 18.5.sp,
                                         maxLines = 3,
@@ -907,7 +918,7 @@ fun SeriesDetailsScreen(
                         Spacer(Modifier.height(8.dp))
                         Text(
                             text = details.cast?.takeIf { it.isNotBlank() } ?: "No cast information available",
-                            color = colors.textSecondary,
+                            color = colors.artworkTextSecondary,
                             fontSize = 14.sp,
                             lineHeight = 20.sp,
                             modifier = Modifier.padding(vertical = 8.dp).testTag(if (details.cast.isNullOrBlank()) "series-cast-empty" else "series-cast-content"),
@@ -1031,7 +1042,6 @@ private fun EpisodeCard(
 ) {
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current
-    val borders = LocalWatchioBorders.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val shape = RoundedCornerShape(radii.md)
@@ -1050,12 +1060,13 @@ private fun EpisodeCard(
                 ambientColor = colors.focusGlow,
                 spotColor = colors.focusGlow,
             )
-            .border(
-                BorderStroke(
-                    width = if (focused) borders.focused else if (isTarget) 1.5.dp else borders.normal,
-                    color = if (focused) colors.focusBorder else if (isTarget) colors.seriesAccent else Color.White.copy(alpha = 0.08f),
-                ),
+            .watchioSemanticBorder(
+                role = WatchioSurfaceRole.Card,
                 shape = shape,
+                focused = focused,
+                selected = isTarget,
+                selectedColor = colors.seriesAccent,
+                selectedWidth = 1.5.dp,
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -1082,8 +1093,8 @@ private fun EpisodeCard(
                 modifier = Modifier
                     .width(128.dp)
                     .aspectRatio(16f / 9f)
-                    .background(Color.DarkGray, RoundedCornerShape(radii.sm))
-                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(radii.sm)),
+                    .background(colors.surfaceElevated, RoundedCornerShape(radii.sm))
+                    .border(1.dp, colors.cardOutline, RoundedCornerShape(radii.sm)),
             ) {
                 AsyncImage(
                     model = episode.imageUrl ?: backdropFallback,
@@ -1192,7 +1203,6 @@ private fun SeasonSelectionDialog(
 ) {
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current
-    val borders = LocalWatchioBorders.current
     val selectedFocus = remember { FocusRequester() }
     LaunchedEffect(selectedSeasonNumber) { selectedFocus.requestFocus() }
     DisposableEffect(Unit) {
@@ -1234,12 +1244,12 @@ private fun SeasonSelectionDialog(
                             .fillMaxWidth()
                             .height(48.dp)
                             .then(if (isSelected) Modifier.focusRequester(selectedFocus) else Modifier)
-                            .border(
-                                BorderStroke(
-                                    width = if (focused) borders.focused else borders.normal,
-                                    color = if (focused) colors.focusBorder else if (isSelected) colors.seriesAccent.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.08f),
-                                ),
+                            .watchioSemanticBorder(
+                                role = WatchioSurfaceRole.Control,
                                 shape = shape,
+                                focused = focused,
+                                selected = isSelected,
+                                selectedColor = colors.seriesAccent.copy(alpha = 0.6f),
                             )
                             .clickable(
                                 interactionSource = interactionSource,
@@ -1295,15 +1305,16 @@ private fun SeasonSelectionDialog(
 
 @Composable
 private fun Poster(url: String?, modifier: Modifier = Modifier) {
+    val colors = LocalWatchioColors.current
     val shape = RoundedCornerShape(8.dp)
     Surface(
         modifier = modifier,
         shape = shape,
-        color = Color.DarkGray,
+        color = colors.surfaceElevated,
     ) {
         if (url.isNullOrBlank()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No Image", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+                Text("No Image", color = colors.textSecondary, fontSize = 11.sp)
             }
         } else {
             AsyncImage(
@@ -1318,17 +1329,18 @@ private fun Poster(url: String?, modifier: Modifier = Modifier) {
 
 @Composable
 private fun SeriesDetailsPoster(url: String?, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(10.dp)
+    val colors = LocalWatchioColors.current
+    val shape = RoundedCornerShape(LocalWatchioRadii.current.md)
     Surface(
         modifier = modifier
             .shadow(elevation = 10.dp, shape = shape)
-            .border(1.dp, Color.White.copy(alpha = 0.12f), shape),
+            .watchioSemanticBorder(WatchioSurfaceRole.Card, shape),
         shape = shape,
-        color = Color.DarkGray,
+        color = colors.surfaceElevated,
     ) {
         if (url.isNullOrBlank()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No Image", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                Text("No Image", color = colors.textSecondary, fontSize = 13.sp)
             }
         } else {
             AsyncImage(
@@ -1351,7 +1363,6 @@ private fun SeriesDetailsTabButton(
 ) {
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current
-    val borders = LocalWatchioBorders.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val shape = RoundedCornerShape(radii.sm)
@@ -1361,12 +1372,12 @@ private fun SeriesDetailsTabButton(
     Surface(
         modifier = modifier
             .height(34.dp)
-            .border(
-                BorderStroke(
-                    width = if (focused) borders.focused else borders.normal,
-                    color = if (focused) colors.focusBorder else if (selected) colors.seriesAccent else Color.White.copy(alpha = 0.08f),
-                ),
+            .watchioSemanticBorder(
+                role = WatchioSurfaceRole.Control,
                 shape = shape,
+                focused = focused,
+                selected = selected,
+                selectedColor = colors.seriesAccent,
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -1401,7 +1412,6 @@ private fun SeasonSelectorButton(
 ) {
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current
-    val borders = LocalWatchioBorders.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val shape = RoundedCornerShape(radii.md)
@@ -1415,12 +1425,11 @@ private fun SeasonSelectorButton(
                 ambientColor = colors.focusGlow,
                 spotColor = colors.focusGlow,
             )
-            .border(
-                BorderStroke(
-                    width = if (focused) borders.focused else borders.normal,
-                    color = if (focused) colors.focusBorder else accent.copy(alpha = 0.5f),
-                ),
+            .watchioSemanticBorder(
+                role = WatchioSurfaceRole.Control,
                 shape = shape,
+                focused = focused,
+                normalColor = accent.copy(alpha = 0.5f),
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -1458,7 +1467,6 @@ private fun SeriesDetailsActionButton(
 ) {
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current
-    val borders = LocalWatchioBorders.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val shape = RoundedCornerShape(radii.md)
@@ -1472,12 +1480,10 @@ private fun SeriesDetailsActionButton(
                 ambientColor = colors.focusGlow,
                 spotColor = colors.focusGlow,
             )
-            .border(
-                BorderStroke(
-                    width = if (focused) borders.focused else borders.normal,
-                    color = if (focused) colors.focusBorder else Color.White.copy(alpha = 0.08f),
-                ),
+            .watchioSemanticBorder(
+                role = WatchioSurfaceRole.Control,
                 shape = shape,
+                focused = focused,
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -1527,7 +1533,7 @@ private fun SeriesDetailRow(label: String, value: String?) {
     ) {
         Text(
             text = "$label:",
-            color = colors.textSecondary,
+            color = colors.artworkTextSecondary,
             fontSize = 13.5.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.width(96.dp),
@@ -1535,7 +1541,7 @@ private fun SeriesDetailRow(label: String, value: String?) {
         )
         Text(
             text = value,
-            color = colors.textPrimary,
+            color = colors.artworkTextPrimary,
             fontSize = 13.5.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,

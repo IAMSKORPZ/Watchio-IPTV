@@ -100,7 +100,7 @@ class SettingsMenuComposeTest {
         scrollSettingsCard("settings-appearance")
         composeRule.onNodeWithTag("settings-appearance").performClick()
         composeRule.waitUntilAtLeastOneExists(hasText("APPEARANCE"), 5_000)
-        assertSingleSettingsBack()
+        composeRule.onNodeWithTag("appearance-back").assertIsDisplayed()
         pressBack()
         composeRule.waitUntilAtLeastOneExists(hasText("SETTINGS"), 5_000)
 
