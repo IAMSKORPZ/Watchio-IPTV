@@ -70,17 +70,15 @@ class ProviderFormComposeTest {
         }
         composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
 
+        composeRule.onAllNodesWithTag("xtream-dns-login").assertCountEquals(0)
+
         composeRule.onNodeWithContentDescription("SIGN IN").performKeyInput { pressKey(Key.DirectionDown) }
-        composeRule.onNodeWithContentDescription("DNS LOGIN").assertIsFocused()
-        composeRule.onNodeWithContentDescription("DNS LOGIN").performKeyInput { pressKey(Key.DirectionDown) }
         composeRule.onNodeWithContentDescription("QUICK LOGIN").assertIsFocused()
         composeRule.onNodeWithContentDescription("QUICK LOGIN").performKeyInput { pressKey(Key.DirectionDown) }
         composeRule.onNodeWithContentDescription("Cancel").assertIsFocused()
         composeRule.onNodeWithContentDescription("Cancel").performKeyInput { pressKey(Key.DirectionUp) }
         composeRule.onNodeWithContentDescription("QUICK LOGIN").assertIsFocused()
         composeRule.onNodeWithContentDescription("QUICK LOGIN").performKeyInput { pressKey(Key.DirectionUp) }
-        composeRule.onNodeWithContentDescription("DNS LOGIN").assertIsFocused()
-        composeRule.onNodeWithContentDescription("DNS LOGIN").performKeyInput { pressKey(Key.DirectionUp) }
         composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
 
         composeRule.onNodeWithContentDescription("SIGN IN").performKeyInput { pressKey(Key.DirectionUp) }

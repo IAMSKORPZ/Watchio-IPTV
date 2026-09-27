@@ -893,7 +893,6 @@ fun WatchioNativeApp(
                         }
                     },
                     onQuickLogin = { navController.navigate("quick-login") },
-                    onDnsLogin = { navController.navigate("providers/dns/add") },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -1669,7 +1668,6 @@ internal fun XtreamProviderScreen(
     onPassword: (String) -> Unit,
     onConnect: () -> Unit,
     onQuickLogin: () -> Unit,
-    onDnsLogin: () -> Unit = {},
     onBack: () -> Unit,
     imeVisibleOverride: Boolean? = null,
 ) {
@@ -1681,7 +1679,6 @@ internal fun XtreamProviderScreen(
     val passwordFocus = remember { FocusRequester() }
     val connectFocus = remember { FocusRequester() }
     val quickLoginFocus = remember { FocusRequester() }
-    val dnsLoginFocus = remember { FocusRequester() }
     val cancelFocus = remember { FocusRequester() }
     val connectBringIntoView = remember { BringIntoViewRequester() }
     val quickLoginBringIntoView = remember { BringIntoViewRequester() }
@@ -1786,7 +1783,7 @@ internal fun XtreamProviderScreen(
                     loading = busy,
                     focusRequester = connectFocus,
                     primary = true,
-                    modifier = Modifier.fillMaxWidth().height(56.dp).bringIntoViewRequester(connectBringIntoView).focusProperties { up = passwordFocus; down = dnsLoginFocus }.tvVerticalFocus(up = passwordFocus, down = dnsLoginFocus, downBringIntoView = quickLoginBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-connect"),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).bringIntoViewRequester(connectBringIntoView).focusProperties { up = passwordFocus; down = quickLoginFocus }.tvVerticalFocus(up = passwordFocus, down = quickLoginFocus, downBringIntoView = quickLoginBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-connect"),
                 )
                 if (busy) {
                     val importing = state.importState as XtreamImportState.Importing
@@ -1799,19 +1796,12 @@ internal fun XtreamProviderScreen(
                     Box(Modifier.weight(1f).height(1.dp).background(colors.surfaceElevated))
                 }
                 XtreamLoginAction(
-                    text = "DNS LOGIN",
-                    onClick = onDnsLogin,
-                    focusRequester = dnsLoginFocus,
-                    modifier = Modifier.fillMaxWidth().height(52.dp).focusProperties { up = connectFocus; down = quickLoginFocus }.tvVerticalFocus(up = connectFocus, down = quickLoginFocus).testTag("xtream-dns-login"),
-                )
-                Spacer(Modifier.height(6.dp))
-                XtreamLoginAction(
                     text = "QUICK LOGIN",
                     onClick = onQuickLogin,
                     focusRequester = quickLoginFocus,
-                    modifier = Modifier.fillMaxWidth().height(52.dp).bringIntoViewRequester(quickLoginBringIntoView).focusProperties { up = dnsLoginFocus; down = cancelFocus }.tvVerticalFocus(up = dnsLoginFocus, down = cancelFocus, downBringIntoView = cancelBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-quick-login"),
+                    modifier = Modifier.fillMaxWidth().height(52.dp).bringIntoViewRequester(quickLoginBringIntoView).focusProperties { up = connectFocus; down = cancelFocus }.tvVerticalFocus(up = connectFocus, down = cancelFocus, downBringIntoView = cancelBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-quick-login"),
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 XtreamLoginAction(
                     text = "Cancel",
                     onClick = onBack,
