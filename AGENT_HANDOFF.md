@@ -18,19 +18,18 @@ is historical/stale for current development and **MUST NOT** override this file.
 
 | Area | Status | Current fact |
 |---|---|---|
-| Branch / Base | PASS | `codex/dev-rescue-bridge` at `8dd6ff313ef3002928e92a94833ab80f09268d2b`; `origin/dev` matches |
-| Theme Builder Phase 2 | COMPLETE | Committed and pushed to `origin/dev` (`2384698`) |
+| Branch / Base | PASS | `codex/dev-rescue-bridge` at `eb9aa3e467a39cf7289f9a460410e75a245855fe`; `origin/dev` matches |
+| Icon Redesign & Refinements | IN REVIEW / UNCOMMITTED | Clean category rails, 6-tooth Settings gear, preserved Home colours and search buttons; DO NOT COMMIT OR PUSH |
 | TV Guide / Player / EPG Categories | COMPLETE / PUSHED | Committed (`8dd6ff3`) and pushed to `origin/dev`; accepted by user |
-| Tracked working tree | CLEAN | Source tree clean post-commit; handoff updated in place |
+| Tracked working tree | MODIFIED | Working tree has uncommitted icon refinements awaiting user review |
 | JVM tests | PASS | All unit tests pass (1187 / 1187) |
 | Lint / build gates | PASS | `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, `git diff --check` |
-| S22 automated UITEST (Full Suite) | PASS | 262 / 262 passed (0 failed, 0 errors, 11m 47s) |
-| S22 physical acceptance | PASS | Physically accepted by user: TV Guide redesign, mini-preview, fullscreen, controls, Live/Movie/Series playback, EPG Categories |
+| S22 automated UITEST | PASS | Focused tests pass: `HomeComposeTest` (5/5), `LandscapeResponsiveComposeTest` clean rail assertion (1/1) |
 | Android TV / BRAVIA | DEFERRED / UNTOUCHED | TV unavailable; `192.168.1.49:5555` untouched |
 | Rescue bridge manifest | PROTECTED | SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` verified unchanged |
 | Public stable | UNCHANGED | `v0.1.4` (`a0e5bafce943eebecbaeb03e0122ba7c2e0c62e5`); `origin/main` untouched (`0364d24`) |
 | Next update | PLANNED | Sports Broadcast / Where to Watch |
-| Next action | RESEARCH / AUDIT | Read-only architecture audit for Sports Broadcast |
+| Next action | USER REVIEW | User review of uncommitted icon redesign and category rail refinements |
 
 ---
 
@@ -40,12 +39,12 @@ is historical/stale for current development and **MUST NOT** override this file.
 |---|---|
 | Worktree | `C:\Users\mrsko\.codex\watchio-dev-rescue-worktree` |
 | Branch | `codex/dev-rescue-bridge` |
-| `HEAD` | `8dd6ff313ef3002928e92a94833ab80f09268d2b` |
-| `origin/dev` | `8dd6ff313ef3002928e92a94833ab80f09268d2b` |
+| `HEAD` | `eb9aa3e467a39cf7289f9a460410e75a245855fe` |
+| `origin/dev` | `eb9aa3e467a39cf7289f9a460410e75a245855fe` |
 | `origin/main` | `0364d249ee513f0e814ca8163707e8c2ba47210c` |
-| Latest commit subject | `Complete TV Guide, player and EPG categories improvements` |
-| Tracked working tree | CLEAN (handoff records post-push verification) |
-| Untracked files | Intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*` evidence files |
+| Latest commit subject | `Record Live TV Search removal validation` |
+| Tracked working tree | MODIFIED (uncommitted icon redesign and rail refinements) |
+| Untracked files | Intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*`, `WatchioIcons.kt`, `WatchioIconsTest.kt` |
 
 Untracked `s22-*`, `tvguide-*`, `watchio-*` evidence files are intentional and **MUST NOT** be blindly staged, committed, cleaned, or deleted.
 
@@ -920,3 +919,47 @@ Final pre-commit validation results:
 - `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
 - Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - BRAVIA untouched. Untracked evidence preserved.
+
+## 2026-09-27 - Application icon redesign and category rail refinements (uncommitted)
+
+### Implementation
+
+- Centralized vector icon system in `ui/icons/WatchioIcons.kt`:
+  - Distinct colorful section identities on Home: Live TV blue television (`#2563EB`), Movies purple clapperboard (`#7C3AED`), TV Shows orange panel layout (`#EA580C`).
+  - Football green trophy (`#16A34A`), Settings slate gear (`#64748B`), Favourites red heart (`#DC2626`), Search cyan magnifier (`#0891B2`), Coming Soon pink sparkle (`#DB2777`), History teal clock (`#0D9488`).
+  - Replaced Settings icon with a canonical 6-tooth gear/cogwheel in `WatchioIcons.kt` (`WatchioIconKind.Settings`), and reused it in `WatchioFullscreenPlayerScreen.kt` (`PlayerIconKind.Settings`).
+  - Replaced Home primary cards, Home header actions, TV Guide, Coming Soon, and Settings category cards with reusable icon identities without changing button/card dimensions, actions, focus, navigation, or accessibility descriptions.
+- Removed decorative icons beside category labels throughout:
+  - Live TV (`CategoryRow` in `LiveTvScreens.kt`)
+  - Movies (`MovieCategoryRow` in `MoviesScreens.kt`)
+  - TV Shows (`SeriesCategoryRow` in `SeriesScreens.kt`)
+  - Cleared decorative icons from Favourites, History, Search, and provider categories.
+  - Preserved category text labels, item padding/spacing, selection highlighting, item counts, filtering, and focus transfer navigation intact.
+  - Preserved actual top-right Search buttons and search icons across all screens (`LiveSearchIconButton`, `MoviesSearchIconButton`, `SeriesSearchIconButton`).
+
+### Files changed
+
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/icons/WatchioIcons.kt` (new centralized vector icon system)
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/WatchioNativeApp.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/feature/live/LiveTvScreens.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/feature/movies/MoviesScreens.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/feature/series/SeriesScreens.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/feature/player/WatchioFullscreenPlayerScreen.kt`
+- `native-android/app/src/test/java/com/iamskorpz/watchioiptv/WatchioIconsTest.kt` (new)
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/HomeComposeTest.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/LandscapeResponsiveComposeTest.kt`
+- `AGENT_HANDOFF.md` updated in place.
+
+### Validation
+
+- Unit tests (`WatchioIconsTest`): PASS (2/2; identities, approved colors, and Settings slate identity color).
+- Full JVM test suite (`.\gradlew.bat test`): PASS (1187 / 1187).
+- Lint (`.\gradlew.bat lintDebug`): PASS (zero errors).
+- Build assemblies (`assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`): PASS.
+- S22 connected UITEST:
+  - `HomeComposeTest`: PASS (5/5).
+  - `LandscapeResponsiveComposeTest#categoryRailsInLiveMoviesAndSeriesHaveCleanLabelsWithoutDecorativeIcons`: PASS (1/1; verifies category rails render clean labels without decorative icons and top-right search buttons remain present).
+- `git diff --check`: PASS (zero whitespace/conflict errors).
+- Rescue manifest `update.json` SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` (verified unchanged).
+- BRAVIA device `192.168.1.49:5555`: untouched.
+- Commit: NO. Push: NO. (Held for review per explicit instruction).

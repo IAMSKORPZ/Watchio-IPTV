@@ -176,6 +176,14 @@ fun PlayerIcon(
     color: Color = Color.White,
     modifier: Modifier = Modifier.size(20.dp),
 ) {
+    if (kind == PlayerIconKind.Settings) {
+        com.iamskorpz.watchioiptv.ui.icons.WatchioIcon(
+            kind = com.iamskorpz.watchioiptv.ui.icons.WatchioIconKind.Settings,
+            tint = color,
+            modifier = modifier,
+        )
+        return
+    }
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
@@ -326,13 +334,7 @@ fun PlayerIcon(
                 drawCircle(color, radius = w * 0.08f, center = Offset(w * 0.50f, h * 0.54f))
             }
             PlayerIconKind.Settings -> {
-                drawCircle(color, radius = w * 0.18f, center = Offset(w * 0.50f, h * 0.50f), style = Stroke(width = stroke))
-                for (i in 0 until 6) {
-                    val angle = (i * 60.0) * Math.PI / 180.0
-                    val cx = w * 0.50f + (w * 0.32f * cos(angle)).toFloat()
-                    val cy = h * 0.50f + (h * 0.32f * sin(angle)).toFloat()
-                    drawCircle(color, radius = w * 0.07f, center = Offset(cx, cy))
-                }
+                // Handled above in PlayerIcon via central WatchioIconKind.Settings
             }
             PlayerIconKind.Back -> {
                 drawLine(color, Offset(w * 0.22f, h * 0.50f), Offset(w * 0.78f, h * 0.50f), strokeWidth = stroke, cap = StrokeCap.Round)

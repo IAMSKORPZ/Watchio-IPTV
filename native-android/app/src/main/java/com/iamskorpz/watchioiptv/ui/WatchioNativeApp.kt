@@ -208,6 +208,10 @@ import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.components.WatchioProgressBar
 import com.iamskorpz.watchioiptv.ui.components.WatchioScreenHeader
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIcon
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIconColors
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIconKind
+import com.iamskorpz.watchioiptv.ui.icons.identityColor
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioComponentSizes
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioIconSizes
@@ -1386,9 +1390,9 @@ internal fun HomeScreen(
                         .testTag("home-reference-grid"),
                     horizontalArrangement = Arrangement.spacedBy(spacing.lg),
                 ) {
-                    val liveAction = HomeAction("LIVE TV", "Watch Live TV Channels", formatHomeUpdatedTime(liveRefreshAtEpochMs), HomeIconKind.Live, colors.liveTvAccent, onLiveTv)
-                    val movieAction = HomeAction("MOVIES", "Browse a wide selection", formatHomeUpdatedTime(moviesRefreshAtEpochMs), HomeIconKind.Movie, colors.moviesAccent, onMovies)
-                    val seriesAction = HomeAction("SERIES", "Discover and binge-watch", formatHomeUpdatedTime(seriesRefreshAtEpochMs), HomeIconKind.Series, colors.seriesAccent, onSeries)
+                    val liveAction = HomeAction("LIVE TV", "Watch Live TV Channels", formatHomeUpdatedTime(liveRefreshAtEpochMs), WatchioIconKind.LiveTv, WatchioIconColors.LiveTv, onLiveTv)
+                    val movieAction = HomeAction("MOVIES", "Browse a wide selection", formatHomeUpdatedTime(moviesRefreshAtEpochMs), WatchioIconKind.Movies, WatchioIconColors.Movies, onMovies)
+                    val seriesAction = HomeAction("SERIES", "Discover and binge-watch", formatHomeUpdatedTime(seriesRefreshAtEpochMs), WatchioIconKind.TvShows, WatchioIconColors.TvShows, onSeries)
                     HomePrimaryCard(
                         action = liveAction,
                         refreshing = liveRefreshing,
@@ -1416,7 +1420,7 @@ internal fun HomeScreen(
                                 .testTag("home-movies"),
                         )
                         HomeSecondaryPill(
-                            action = HomeAction("TV Guide", "Now and Next", "", HomeIconKind.Guide, colors.liveTvAccent, onTvGuide),
+                            action = HomeAction("TV Guide", "Now and Next", "", WatchioIconKind.Guide, WatchioIconColors.LiveTv, onTvGuide),
                             modifier = Modifier
                                 .weight(0.28f)
                                 .fillMaxWidth()
@@ -1439,7 +1443,7 @@ internal fun HomeScreen(
                                 .testTag("home-series"),
                         )
                         HomeSecondaryPill(
-                            action = HomeAction("Coming Soon", "More features on the way", "", HomeIconKind.Guide, colors.focusGlow, null),
+                            action = HomeAction("Coming Soon", "More features on the way", "", WatchioIconKind.ComingSoon, WatchioIconColors.ComingSoon, null),
                             modifier = Modifier
                                 .weight(0.28f)
                                 .fillMaxWidth()
@@ -2272,24 +2276,10 @@ private data class HomeAction(
     val title: String,
     val subtitle: String,
     val status: String,
-    val icon: HomeIconKind,
+    val icon: WatchioIconKind,
     val accent: androidx.compose.ui.graphics.Color,
     val onClick: (() -> Unit)?,
 )
-
-private enum class HomeIconKind {
-    Live,
-    Movie,
-    Series,
-    Guide,
-    Settings,
-    List,
-    Search,
-    Provider,
-    Sports,
-    Announcement,
-    Back,
-}
 
 @Composable
 internal fun HomeTopBar(
@@ -2335,12 +2325,12 @@ internal fun HomeTopBar(
                 horizontalArrangement = Arrangement.spacedBy(spacing.xs, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                HomeTopAction("Search", HomeIconKind.Search, colors.textPrimary, onSearch, contentDescription = "Search", testTag = "home-search")
-                HomeTopAction("Sports", HomeIconKind.Sports, colors.liveTvAccent, onSports)
+                HomeTopAction("Search", WatchioIconKind.Search, WatchioIconColors.Search, onSearch, contentDescription = "Search", testTag = "home-search")
+                HomeTopAction("Sports", WatchioIconKind.Football, WatchioIconColors.Football, onSports)
                 HomeTopAction(
                     "Notifications",
-                    HomeIconKind.Announcement,
-                    colors.moviesAccent,
+                    WatchioIconKind.Announcements,
+                    WatchioIconKind.Announcements.identityColor(),
                     onAnnouncements,
                     contentDescription = "Notifications, ${notificationBadgeLabel(announcementUnreadCount)}",
                     testTag = "home-notifications",
@@ -2348,8 +2338,8 @@ internal fun HomeTopBar(
                 )
                 HomeTopAction(
                     "Settings",
-                    HomeIconKind.Settings,
-                    colors.seriesAccent,
+                    WatchioIconKind.Settings,
+                    WatchioIconColors.Settings,
                     onSettings,
                     testTag = "home-settings",
                 )
@@ -2385,7 +2375,7 @@ private fun WatchioLogoMark() {
             .border(1.dp, colors.liveTvAccent.copy(alpha = 0.72f), RoundedCornerShape(radii.lg)),
         contentAlignment = Alignment.Center,
     ) {
-        HomeVectorIcon(HomeIconKind.Live, colors.liveTvAccent, Modifier.size(icons.lg))
+        WatchioIcon(WatchioIconKind.LiveTv, WatchioIconColors.LiveTv, Modifier.size(icons.lg))
     }
 }
 
@@ -2431,7 +2421,7 @@ private fun HomePlaceholderScreen(title: String, message: String, onBack: () -> 
 @Composable
 private fun HomeTopAction(
     label: String,
-    icon: HomeIconKind,
+    icon: WatchioIconKind,
     tint: Color,
     onClick: () -> Unit,
     contentDescription: String = label,
@@ -2455,7 +2445,7 @@ private fun HomeTopAction(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                HomeVectorIcon(icon, tint, Modifier.size(24.dp))
+                WatchioIcon(icon, tint, Modifier.size(24.dp).testTag("home-top-icon-${icon.name}"))
             }
         }
         if (badgeCount > 0) {
@@ -2536,7 +2526,7 @@ private fun HomePrimaryCard(
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            HomeVectorIcon(action.icon, action.accent, Modifier.size(52.dp))
+            WatchioIcon(action.icon, action.accent, Modifier.size(52.dp).testTag("home-icon-${action.icon.name}"))
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(action.title, color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(action.subtitle, color = colors.textSecondary, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2691,7 +2681,7 @@ private fun HomeSecondaryPill(action: HomeAction, modifier: Modifier = Modifier)
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            HomeVectorIcon(action.icon, colors.textPrimary, Modifier.size(32.dp))
+            WatchioIcon(action.icon, action.accent, Modifier.size(32.dp).testTag("home-icon-${action.icon.name}"))
             Spacer(Modifier.width(spacing.md))
             Column {
                 Text(action.title.uppercase(), color = colors.textPrimary, style = type.cardTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2746,108 +2736,6 @@ private fun formatAccountDateTime(epochMs: Long?): String {
     if (epochMs == null || epochMs <= 0L) return "Not available"
     val local = Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()).toLocalDateTime()
     return local.format(DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a"))
-}
-
-@Composable
-private fun HomeVectorIcon(kind: HomeIconKind, tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        val stroke = Stroke(width = size.minDimension * 0.10f, cap = StrokeCap.Round)
-        when (kind) {
-            HomeIconKind.Live, HomeIconKind.Guide -> {
-                drawRoundRect(tint, topLeft = Offset(size.width * 0.16f, size.height * 0.26f), size = Size(size.width * 0.68f, size.height * 0.48f), style = stroke)
-                drawLine(tint, Offset(size.width * 0.36f, size.height * 0.26f), Offset(size.width * 0.26f, size.height * 0.08f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.62f, size.height * 0.26f), Offset(size.width * 0.74f, size.height * 0.08f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                val path = Path().apply {
-                    moveTo(size.width * 0.44f, size.height * 0.40f)
-                    lineTo(size.width * 0.44f, size.height * 0.62f)
-                    lineTo(size.width * 0.62f, size.height * 0.51f)
-                    close()
-                }
-                drawPath(path, tint)
-            }
-            HomeIconKind.Movie -> {
-                val path = Path().apply {
-                    moveTo(size.width * 0.34f, size.height * 0.22f)
-                    lineTo(size.width * 0.34f, size.height * 0.78f)
-                    lineTo(size.width * 0.76f, size.height * 0.50f)
-                    close()
-                }
-                drawPath(path, tint)
-            }
-            HomeIconKind.Search -> {
-                val strokeWidth = size.minDimension * 0.10f
-                val radius = size.width * 0.30f
-                val centerOffset = Offset(size.width * 0.42f, size.height * 0.42f)
-                drawCircle(
-                    color = tint,
-                    radius = radius,
-                    center = centerOffset,
-                    style = Stroke(width = strokeWidth),
-                )
-                val handleStart = Offset(
-                    centerOffset.x + (radius * 0.7071f),
-                    centerOffset.y + (radius * 0.7071f),
-                )
-                val handleEnd = Offset(
-                    size.width * 0.88f,
-                    size.height * 0.88f,
-                )
-                drawLine(
-                    color = tint,
-                    start = handleStart,
-                    end = handleEnd,
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
-            }
-            HomeIconKind.Series -> {
-                drawRoundRect(tint, topLeft = Offset(size.width * 0.18f, size.height * 0.30f), size = Size(size.width * 0.64f, size.height * 0.48f))
-                drawLine(Color.Black.copy(alpha = 0.65f), Offset(size.width * 0.22f, size.height * 0.30f), Offset(size.width * 0.74f, size.height * 0.30f), strokeWidth = size.minDimension * 0.08f)
-                for (i in 0..3) {
-                    drawLine(Color.Black.copy(alpha = 0.65f), Offset(size.width * (0.25f + i * 0.13f), size.height * 0.18f), Offset(size.width * (0.31f + i * 0.13f), size.height * 0.30f), strokeWidth = size.minDimension * 0.06f)
-                }
-            }
-            HomeIconKind.Settings -> {
-                drawCircle(tint, radius = size.minDimension * 0.18f, center = center, style = stroke)
-                for (i in 0..7) {
-                    val angle = Math.toRadians((i * 45).toDouble())
-                    val start = Offset(center.x + kotlin.math.cos(angle).toFloat() * size.minDimension * 0.25f, center.y + kotlin.math.sin(angle).toFloat() * size.minDimension * 0.25f)
-                    val end = Offset(center.x + kotlin.math.cos(angle).toFloat() * size.minDimension * 0.42f, center.y + kotlin.math.sin(angle).toFloat() * size.minDimension * 0.42f)
-                    drawLine(tint, start, end, strokeWidth = stroke.width, cap = StrokeCap.Round)
-                }
-            }
-            HomeIconKind.List, HomeIconKind.Provider -> {
-                for (i in 0..2) {
-                    val y = size.height * (0.30f + i * 0.20f)
-                    drawCircle(tint, radius = size.minDimension * 0.045f, center = Offset(size.width * 0.22f, y))
-                    drawLine(tint, Offset(size.width * 0.34f, y), Offset(size.width * 0.80f, y), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                }
-            }
-            HomeIconKind.Sports -> {
-                drawCircle(tint, radius = size.minDimension * 0.34f, center = center, style = stroke)
-                drawCircle(tint, radius = size.minDimension * 0.08f, center = center)
-                drawLine(tint, Offset(size.width * 0.28f, size.height * 0.32f), Offset(size.width * 0.72f, size.height * 0.68f), strokeWidth = stroke.width * 0.72f, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.72f, size.height * 0.32f), Offset(size.width * 0.28f, size.height * 0.68f), strokeWidth = stroke.width * 0.72f, cap = StrokeCap.Round)
-            }
-            HomeIconKind.Announcement -> {
-                val horn = Path().apply {
-                    moveTo(size.width * 0.20f, size.height * 0.42f)
-                    lineTo(size.width * 0.68f, size.height * 0.24f)
-                    lineTo(size.width * 0.68f, size.height * 0.76f)
-                    lineTo(size.width * 0.20f, size.height * 0.58f)
-                    close()
-                }
-                drawPath(horn, tint, style = stroke)
-                drawLine(tint, Offset(size.width * 0.22f, size.height * 0.58f), Offset(size.width * 0.32f, size.height * 0.82f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.78f, size.height * 0.36f), Offset(size.width * 0.88f, size.height * 0.28f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.80f, size.height * 0.64f), Offset(size.width * 0.90f, size.height * 0.72f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-            }
-            HomeIconKind.Back -> {
-                drawLine(tint, Offset(size.width * 0.72f, size.height * 0.18f), Offset(size.width * 0.28f, size.height * 0.50f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.28f, size.height * 0.50f), Offset(size.width * 0.72f, size.height * 0.82f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-            }
-        }
-    }
 }
 
 @Composable
@@ -2985,18 +2873,18 @@ private fun SettingsRootScreen(
     val firstFocus = remember { FocusRequester() }
     val categories = remember(colors) {
         listOf(
-            SettingsCategory("Provider Management", "Manage IPTV providers", HomeIconKind.Provider, colors.liveTvAccent, onProviderManagement, "settings-provider-management"),
-            SettingsCategory("Account Information", "View your account details", HomeIconKind.Provider, colors.moviesAccent, onAccount, "settings-account-information"),
-            SettingsCategory("Quick Login", "Move your login from phone to TV", HomeIconKind.Provider, colors.seriesAccent, onQuickLogin, "settings-quick-login"),
-            SettingsCategory("Player Settings", "Playback and video settings", HomeIconKind.Movie, colors.seriesAccent, onPlayer, "settings-player-settings"),
-            SettingsCategory("EPG Settings", "Guide and programme settings", HomeIconKind.Guide, colors.liveTvAccent, onEpg, "settings-epg-settings"),
-            SettingsCategory("Football Data", "Configure Sports fixture data", HomeIconKind.Guide, colors.seriesAccent, onFootballData, "settings-football-data"),
-            SettingsCategory("Parental Controls", "Restrict content and settings", HomeIconKind.Settings, colors.moviesAccent, onParental, "settings-parental-controls"),
-            SettingsCategory("Stream Format", "Choose your preferred format", HomeIconKind.List, colors.seriesAccent, onStreamFormat, "settings-stream-format"),
-            SettingsCategory("Input Mode", "Mobile touch or TV remote controls", HomeIconKind.Provider, colors.liveTvAccent, onInputMode, "settings-input-mode"),
-            SettingsCategory("Appearance", "Theme and visual customization", HomeIconKind.Settings, colors.moviesAccent, onAppearance, "settings-appearance"),
-            SettingsCategory("Backup & Restore", "Export and restore application data", HomeIconKind.Provider, colors.seriesAccent, onBackup, "settings-backup-restore"),
-            SettingsCategory("Check for Updates", "Check for a newer Watchio version", HomeIconKind.Announcement, colors.liveTvAccent, onUpdates, "settings-check-updates"),
+            SettingsCategory("Provider Management", "Manage IPTV providers", WatchioIconKind.Provider, WatchioIconKind.Provider.identityColor(), onProviderManagement, "settings-provider-management"),
+            SettingsCategory("Account Information", "View your account details", WatchioIconKind.Account, WatchioIconKind.Account.identityColor(), onAccount, "settings-account-information"),
+            SettingsCategory("Quick Login", "Move your login from phone to TV", WatchioIconKind.QuickLogin, WatchioIconKind.QuickLogin.identityColor(), onQuickLogin, "settings-quick-login"),
+            SettingsCategory("Player Settings", "Playback and video settings", WatchioIconKind.Player, WatchioIconKind.Player.identityColor(), onPlayer, "settings-player-settings"),
+            SettingsCategory("EPG Settings", "Guide and programme settings", WatchioIconKind.Guide, WatchioIconKind.Guide.identityColor(), onEpg, "settings-epg-settings"),
+            SettingsCategory("Football Data", "Configure Sports fixture data", WatchioIconKind.Football, WatchioIconColors.Football, onFootballData, "settings-football-data"),
+            SettingsCategory("Parental Controls", "Restrict content and settings", WatchioIconKind.Parental, WatchioIconKind.Parental.identityColor(), onParental, "settings-parental-controls"),
+            SettingsCategory("Stream Format", "Choose your preferred format", WatchioIconKind.StreamFormat, WatchioIconKind.StreamFormat.identityColor(), onStreamFormat, "settings-stream-format"),
+            SettingsCategory("Input Mode", "Mobile touch or TV remote controls", WatchioIconKind.InputMode, WatchioIconKind.InputMode.identityColor(), onInputMode, "settings-input-mode"),
+            SettingsCategory("Appearance", "Theme and visual customization", WatchioIconKind.Appearance, WatchioIconKind.Appearance.identityColor(), onAppearance, "settings-appearance"),
+            SettingsCategory("Backup & Restore", "Export and restore application data", WatchioIconKind.BackupRestore, WatchioIconKind.BackupRestore.identityColor(), onBackup, "settings-backup-restore"),
+            SettingsCategory("Check for Updates", "Check for a newer Watchio version", WatchioIconKind.Updates, WatchioIconKind.Updates.identityColor(), onUpdates, "settings-check-updates"),
         )
     }
     BackHandler(onBack = onBack)
@@ -3058,7 +2946,7 @@ private fun SettingsCategoryCard(category: SettingsCategory, modifier: Modifier 
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            HomeVectorIcon(category.icon, category.accent, Modifier.size(38.dp))
+            WatchioIcon(category.icon, category.accent, Modifier.size(38.dp).testTag("settings-icon-${category.icon.name}"))
             Spacer(Modifier.height(spacing.sm))
             Text(category.title, color = colors.textPrimary, style = type.cardTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(category.subtitle, color = colors.textSecondary, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -3309,7 +3197,7 @@ private fun SettingsBackIconButton(onClick: () -> Unit) {
         onClick = onClick,
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            HomeVectorIcon(HomeIconKind.Back, colors.textPrimary, Modifier.size(24.dp))
+            WatchioIcon(WatchioIconKind.Back, colors.textPrimary, Modifier.size(24.dp))
         }
     }
 }
@@ -3632,7 +3520,7 @@ private fun EpgSettingsContent(
 private data class SettingsCategory(
     val title: String,
     val subtitle: String,
-    val icon: HomeIconKind,
+    val icon: WatchioIconKind,
     val accent: Color,
     val onClick: () -> Unit,
     val testTag: String,

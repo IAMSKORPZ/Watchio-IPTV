@@ -77,6 +77,9 @@ import com.iamskorpz.watchioiptv.ui.components.WatchioButton
 import com.iamskorpz.watchioiptv.ui.components.WatchioButtonVariant
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIcon
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIconColors
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIconKind
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
@@ -295,32 +298,7 @@ private fun LiveSearchIconButton(accent: Color, onClick: () -> Unit, modifier: M
         onClick = onClick,
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.size(20.dp)) {
-                val strokeWidth = 2.dp.toPx()
-                val radius = size.width * 0.30f
-                val centerOffset = androidx.compose.ui.geometry.Offset(size.width * 0.42f, size.height * 0.42f)
-                drawCircle(
-                    color = colors.textPrimary,
-                    radius = radius,
-                    center = centerOffset,
-                    style = Stroke(width = strokeWidth),
-                )
-                val handleStart = androidx.compose.ui.geometry.Offset(
-                    centerOffset.x + (radius * 0.7071f),
-                    centerOffset.y + (radius * 0.7071f),
-                )
-                val handleEnd = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.88f,
-                    size.height * 0.88f,
-                )
-                drawLine(
-                    color = colors.textPrimary,
-                    start = handleStart,
-                    end = handleEnd,
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
-            }
+            WatchioIcon(WatchioIconKind.Search, WatchioIconColors.Search, Modifier.size(20.dp))
         }
     }
 }

@@ -70,13 +70,18 @@ class HomeComposeTest {
         composeRule.onNodeWithTag("home-live-tv").assertIsDisplayed()
         composeRule.onNodeWithTag("home-movies").assertIsDisplayed()
         composeRule.onNodeWithTag("home-series").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-icon-LiveTv").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-icon-Movies").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-icon-TvShows").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithTag("home-my-list").fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithTag("home-tv-guide").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Search").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Sports").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Notifications, no unread notifications").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-top-icon-Settings").assertIsDisplayed()
         composeRule.onNodeWithTag("home-coming-soon").assertIsDisplayed().assertHasNoClickAction()
+        composeRule.onNodeWithTag("home-icon-ComingSoon").assertIsDisplayed()
     }
 
     @Test

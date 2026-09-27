@@ -2230,6 +2230,36 @@ class LandscapeResponsiveComposeTest {
     }
 
     @Test
+    fun categoryRailsInLiveMoviesAndSeriesHaveCleanLabelsWithoutDecorativeIcons() {
+        val favMovieCategory = MovieCategory("favorites", "FAVOURITES", MovieCategoryKind.Favorites)
+        val histMovieCategory = MovieCategory("history", "HISTORY", MovieCategoryKind.History)
+
+        setLandscapeContent {
+            WatchioTheme {
+                Column(Modifier.fillMaxSize()) {
+                    MoviesScreen(
+                        state = MoviesUiState(
+                            loading = false,
+                            categories = listOf(favMovieCategory, histMovieCategory),
+                            selectedCategory = favMovieCategory,
+                            movies = emptyList(),
+                        ),
+                        onCategory = {},
+                        onCategorySearch = {},
+                        onSearch = {},
+                        onMovie = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("movies-search", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-category-text-favorites", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-category-text-history", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
     fun globalSearchGroupsResultsByLiveMoviesAndSeries() {
         val liveResult = WatchioSearchResult(ProviderId("p1"), ContentType.Live, "ch1", "BBC One HD", "Entertainment", null)
         val movieResult = WatchioSearchResult(ProviderId("p1"), ContentType.Movie, "m1", "Batman Begins", "Action", null)
