@@ -1041,6 +1041,7 @@ fun WatchioNativeApp(
             composable("settings/updates") {
                 UpdatesScreen(
                     state = updatesState,
+                    channelDisplayName = BuildConfig.UPDATE_CHANNEL_DISPLAY_NAME,
                     onBack = { navController.popBackStack() },
                     onCheck = updatesViewModel::checkForUpdates,
                     onDownload = updatesViewModel::downloadUpdate,
