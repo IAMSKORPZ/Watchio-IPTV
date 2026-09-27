@@ -751,3 +751,16 @@ Final pre-commit validation results:
 - `AGENT_HANDOFF.md` updated in place.
 
 **COMMIT/PUSH REQUIRES EXPLICIT USER APPROVAL. No commit and no push were performed.**
+
+## 2026-09-27 — DNS Login and `/2711` migration commit/push verification
+
+- User authorization received.
+- Source commit: `72df69e827952ef6529cd475eb35c0813f8a4c09` — `Complete Watchio remote config migration and DNS login client`.
+- Source commit included 13 intended source, resource, test, and handoff files only.
+- Source commit pushed normally to `origin/dev`; no force push.
+- Follow-up commit updates this handoff with final immutable source commit and push state.
+- `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
+- Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Security review found no real usernames, passwords, provider credentials, private URLs, GitHub tokens, API keys, accidental logs, or local-machine secrets in committed files. Fake test values only.
+- Untracked screenshots, XML files, logs, and evidence remained unmodified and uncommitted.
+- BRAVIA untouched. No release or tag created.
