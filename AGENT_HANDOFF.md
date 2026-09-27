@@ -794,3 +794,11 @@ Final pre-commit validation results:
 - Rescue manifest SHA-256 before implementation: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`; final verification recorded in final report.
 
 **No commit and no push were performed.**
+
+### Keyboard fix commit/push record
+
+- Validated source/test/handoff commit: `8f35f3248abdd84dec40e13bc64fbbfb7fae95d3` — `Fix TV login keyboard dismissal and focus handling`.
+- Push to `origin/dev`: PASS. No force push, rebase, tag, or release.
+- Validation retained: focused S22 tests 7/7 PASS; JVM tests, `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS.
+- Rescue manifest SHA-256 after commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- BRAVIA untouched. S22 app data and saved provider/session preserved.
