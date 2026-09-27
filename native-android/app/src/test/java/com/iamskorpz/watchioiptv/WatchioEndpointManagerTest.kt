@@ -18,10 +18,10 @@ import java.io.IOException
 class WatchioEndpointManagerTest {
     @Test fun productionEndpointsNormalizeInPriorityOrder() {
         val parsed = WatchioEndpointConfigParser.parse(
-            """{"version":1,"remoteConfigUrl":"https://iamskorpz.github.io/Watchio_Website/img/watchio_endpoints.json","endpoints":[{"id":"primary","url":"http://xololive.watch:8880","priority":0,"enabled":true},{"id":"backup","url":"http://mediatitans.live:8880","priority":1,"enabled":true}]}""",
+            """{"version":1,"remoteConfigUrl":"https://raw.githubusercontent.com/IAMSKORPZ/Watchio_Website/main/2711/WCIT/RTA/SREDIVORP/watchio_endpoints.json","endpoints":[{"id":"primary","url":"http://xololive.watch:8880","priority":0,"enabled":true},{"id":"backup","url":"http://mediatitans.live:8880","priority":1,"enabled":true}]}""",
         )
         assertEquals(listOf("http://xololive.watch:8880", "http://mediatitans.live:8880"), parsed.endpoints.map { it.url })
-        assertEquals("https://iamskorpz.github.io/Watchio_Website/img/watchio_endpoints.json", parsed.remoteConfigUrl)
+        assertEquals("https://raw.githubusercontent.com/IAMSKORPZ/Watchio_Website/main/2711/WCIT/RTA/SREDIVORP/watchio_endpoints.json", parsed.remoteConfigUrl)
     }
 
     @Test fun httpProviderEndpointsAcceptedButRemoteConfigRemainsHttpsOnly() {
@@ -247,6 +247,26 @@ class WatchioEndpointManagerTest {
 
     @Test fun noEndpointsFailsSafely() = runBlocking {
         assertTrue(expectFailure<IllegalStateException> { WatchioEndpointManager(source(config())).resolve { it.url } }.message!!.contains("service configuration"))
+    }
+
+    @Test fun dnsIdMapsToEnabledManagedEndpoint() = runBlocking {
+        val manager = WatchioEndpointManager(source(objectConfig(endpoint("primary", "http://provider.test:8880", 0))))
+        assertEquals("http://provider.test:8880", manager.dnsEndpoint("PRIMARY", null).url)
+    }
+
+    @Test fun dnsDisabledOrUnknownIdIsRejected() = runBlocking {
+        val manager = WatchioEndpointManager(source(objectConfig(endpoint("disabled", "https://disabled.test", 0, false))))
+        expectFailure<IllegalArgumentException> { manager.dnsEndpoint("disabled", null) }
+        expectFailure<IllegalArgumentException> { manager.dnsEndpoint("unknown", null) }
+        Unit
+    }
+
+    @Test fun dnsDirectUrlIsNormalizedAndUnsafeUrlRejected() = runBlocking {
+        val manager = WatchioEndpointManager(source(objectConfig()))
+        assertEquals("http://provider.test:8880", manager.dnsEndpoint(null, " HTTP://PROVIDER.TEST:8880/ ").url)
+        expectFailure<IllegalArgumentException> { manager.dnsEndpoint(null, "http://user:pass@provider.test:8880") }
+        expectFailure<IllegalArgumentException> { manager.dnsEndpoint(null, "not a url") }
+        Unit
     }
 
     @Test fun concurrentCallsAreSerialized() = runBlocking {

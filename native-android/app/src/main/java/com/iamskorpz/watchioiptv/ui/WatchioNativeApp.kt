@@ -873,6 +873,29 @@ fun WatchioNativeApp(
                         }
                     },
                     onQuickLogin = { navController.navigate("quick-login") },
+                    onDnsLogin = { navController.navigate("providers/dns/add") },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("providers/dns/add") {
+                val providerViewModel: XtreamProviderViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return XtreamProviderViewModel(
+                                container.xtreamRepository,
+                                container.dnsResolver,
+                                container.endpointManager,
+                            ) as T
+                        }
+                    },
+                )
+                val state by providerViewModel.state.collectAsStateWithLifecycle()
+                DnsLoginScreen(
+                    state = state,
+                    onUsername = providerViewModel::updateUsername,
+                    onPassword = providerViewModel::updatePassword,
+                    onConnect = { providerViewModel.connectDns { navigateHomeAsRoot(navController) } },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -1606,6 +1629,7 @@ internal fun XtreamProviderScreen(
     onPassword: (String) -> Unit,
     onConnect: () -> Unit,
     onQuickLogin: () -> Unit,
+    onDnsLogin: () -> Unit = {},
     onBack: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
@@ -1616,6 +1640,7 @@ internal fun XtreamProviderScreen(
     val passwordFocus = remember { FocusRequester() }
     val connectFocus = remember { FocusRequester() }
     val quickLoginFocus = remember { FocusRequester() }
+    val dnsLoginFocus = remember { FocusRequester() }
     val cancelFocus = remember { FocusRequester() }
     val connectBringIntoView = remember { BringIntoViewRequester() }
     val quickLoginBringIntoView = remember { BringIntoViewRequester() }
@@ -1719,7 +1744,7 @@ internal fun XtreamProviderScreen(
                     loading = busy,
                     focusRequester = connectFocus,
                     primary = true,
-                    modifier = Modifier.fillMaxWidth().height(56.dp).bringIntoViewRequester(connectBringIntoView).focusProperties { up = passwordFocus; down = quickLoginFocus }.tvVerticalFocus(up = passwordFocus, down = quickLoginFocus, downBringIntoView = quickLoginBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-connect"),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).bringIntoViewRequester(connectBringIntoView).focusProperties { up = passwordFocus; down = dnsLoginFocus }.tvVerticalFocus(up = passwordFocus, down = dnsLoginFocus, downBringIntoView = quickLoginBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-connect"),
                 )
                 if (busy) {
                     val importing = state.importState as XtreamImportState.Importing
@@ -1732,10 +1757,17 @@ internal fun XtreamProviderScreen(
                     Box(Modifier.weight(1f).height(1.dp).background(colors.surfaceElevated))
                 }
                 XtreamLoginAction(
+                    text = "DNS LOGIN",
+                    onClick = onDnsLogin,
+                    focusRequester = dnsLoginFocus,
+                    modifier = Modifier.fillMaxWidth().height(52.dp).focusProperties { up = connectFocus; down = quickLoginFocus }.tvVerticalFocus(up = connectFocus, down = quickLoginFocus).testTag("xtream-dns-login"),
+                )
+                Spacer(Modifier.height(6.dp))
+                XtreamLoginAction(
                     text = "QUICK LOGIN",
                     onClick = onQuickLogin,
                     focusRequester = quickLoginFocus,
-                    modifier = Modifier.fillMaxWidth().height(52.dp).bringIntoViewRequester(quickLoginBringIntoView).focusProperties { up = connectFocus; down = cancelFocus }.tvVerticalFocus(up = connectFocus, down = cancelFocus, upBringIntoView = connectBringIntoView, downBringIntoView = cancelBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-quick-login"),
+                    modifier = Modifier.fillMaxWidth().height(52.dp).bringIntoViewRequester(quickLoginBringIntoView).focusProperties { up = dnsLoginFocus; down = cancelFocus }.tvVerticalFocus(up = dnsLoginFocus, down = cancelFocus, downBringIntoView = cancelBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-quick-login"),
                 )
                 Spacer(Modifier.height(6.dp))
                 XtreamLoginAction(
@@ -1746,6 +1778,70 @@ internal fun XtreamProviderScreen(
                     modifier = Modifier.width(160.dp).bringIntoViewRequester(cancelBringIntoView).focusProperties { up = quickLoginFocus }.tvVerticalFocus(up = quickLoginFocus, upBringIntoView = quickLoginBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-cancel"),
                 )
             }
+        }
+    }
+}
+
+@Composable
+internal fun DnsLoginScreen(
+    state: com.iamskorpz.watchioiptv.feature.provider.XtreamProviderFormState,
+    onUsername: (String) -> Unit,
+    onPassword: (String) -> Unit,
+    onConnect: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val colors = LocalWatchioColors.current
+    val type = LocalWatchioTypography.current
+    val radii = LocalWatchioRadii.current
+    val usernameFocus = remember { FocusRequester() }
+    val passwordFocus = remember { FocusRequester() }
+    val loginFocus = remember { FocusRequester() }
+    val backFocus = remember { FocusRequester() }
+    val busy = state.importState is XtreamImportState.Importing
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = colors.textPrimary, unfocusedTextColor = colors.textPrimary,
+        cursorColor = colors.focusBorder, focusedBorderColor = colors.focusBorder,
+        unfocusedBorderColor = colors.textMuted.copy(alpha = 0.55f),
+        focusedLabelColor = colors.textPrimary, unfocusedLabelColor = colors.textSecondary,
+        focusedContainerColor = colors.surfaceElevated.copy(alpha = 0.92f),
+        unfocusedContainerColor = colors.surfaceElevated.copy(alpha = 0.72f),
+    )
+    LaunchedEffect(Unit) { usernameFocus.requestFocus() }
+    Box(
+        Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).verticalScroll(rememberScrollState()).imePadding().padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.widthIn(max = 580.dp).fillMaxWidth().clip(RoundedCornerShape(radii.lg))
+                .background(colors.surfaceCard.copy(alpha = 0.76f)).padding(22.dp).testTag("dns-login-screen"),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            WatchioLogoMark()
+            Text("DNS Login", color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold)
+            Text("Enter your account details. Watchio will find your provider.", color = colors.textSecondary, style = type.body, textAlign = TextAlign.Center)
+            OutlinedTextField(
+                value = state.username, onValueChange = onUsername, label = { Text("Username") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }), colors = fieldColors,
+                modifier = Modifier.fillMaxWidth().height(56.dp).focusRequester(usernameFocus).focusProperties { down = passwordFocus }.tvVerticalFocus(down = passwordFocus).testTag("dns-username"),
+            )
+            OutlinedTextField(
+                value = state.password, onValueChange = onPassword, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onConnect() }), colors = fieldColors,
+                modifier = Modifier.fillMaxWidth().height(56.dp).focusRequester(passwordFocus).focusProperties { up = usernameFocus; down = loginFocus }.tvVerticalFocus(up = usernameFocus, down = loginFocus).testTag("dns-password"),
+            )
+            state.errorMessage?.let { Text(it, color = Color(0xFFFF6B7A), style = type.body, modifier = Modifier.fillMaxWidth().testTag("dns-error")) }
+            XtreamLoginAction(
+                text = if (busy) "SIGNING IN..." else "LOGIN", onClick = onConnect,
+                focusRequester = loginFocus, primary = true, enabled = !busy && state.username.isNotBlank() && state.password.isNotBlank(), loading = busy,
+                modifier = Modifier.fillMaxWidth().height(56.dp).focusProperties { up = passwordFocus; down = backFocus }.tvVerticalFocus(up = passwordFocus, down = backFocus).testTag("dns-connect"),
+            )
+            XtreamLoginAction(
+                text = "Back", onClick = onBack, focusRequester = backFocus, tertiary = true,
+                modifier = Modifier.width(160.dp).focusProperties { up = loginFocus }.tvVerticalFocus(up = loginFocus).testTag("dns-back"),
+            )
         }
     }
 }

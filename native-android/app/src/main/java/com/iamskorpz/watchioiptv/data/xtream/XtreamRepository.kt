@@ -396,7 +396,18 @@ class XtreamRepository(
             .getOrThrow()
     }
 
-    suspend fun addProviderTwoPhase(input: XtreamCredentialsInput): XtreamImportState.Success = withContext(Dispatchers.IO) {
+    suspend fun addProviderTwoPhase(input: XtreamCredentialsInput): XtreamImportState.Success =
+        addProviderTwoPhaseInternal(input, null)
+
+    suspend fun addDnsProviderTwoPhase(
+        input: XtreamCredentialsInput,
+        endpoint: WatchioEndpoint,
+    ): XtreamImportState.Success = addProviderTwoPhaseInternal(input.copy(managed = true), endpoint)
+
+    private suspend fun addProviderTwoPhaseInternal(
+        input: XtreamCredentialsInput,
+        dnsEndpoint: WatchioEndpoint?,
+    ): XtreamImportState.Success = withContext(Dispatchers.IO) {
         val name = input.displayName.trim().takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("Provider name is required.")
         val username = input.username.trim().takeIf { it.isNotBlank() }
@@ -404,13 +415,14 @@ class XtreamRepository(
         val password = input.password.takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("Password is required.")
 
-        val managedSelection = if (input.managed) {
+        val managedSelection = if (input.managed && dnsEndpoint == null) {
             ensureNoManagedDuplicate(username)
             val manager = endpointManager
                 ?: throw IllegalStateException("Watchio couldn't reach the service configuration. Please try again.")
             manager.resolve { endpoint -> authenticateEndpoint(endpoint.url, username, password) }
         } else null
-        val normalizedUrl = managedSelection?.endpoint?.url ?: XtreamUrlNormalizer.normalize(input.serverUrl.orEmpty())
+        if (dnsEndpoint != null) ensureNoManagedDuplicate(username)
+        val normalizedUrl = dnsEndpoint?.url ?: managedSelection?.endpoint?.url ?: XtreamUrlNormalizer.normalize(input.serverUrl.orEmpty())
             ?: throw IllegalArgumentException("Enter a valid server URL.")
         val existing = if (input.managed) null else findExistingProvider(normalizedUrl, username)
         val providerId = existing?.let { ProviderId(it.id) }
@@ -424,6 +436,7 @@ class XtreamRepository(
             QuickLoginBootstrapTrace.mark("quicklogin_auth_started")
             val auth = managedSelection?.value ?: timedRequest("player_api_authentication") { api.playerInfo(username, password) }.toAuthInfo()
             if (!auth.authenticated) throw IllegalArgumentException("Incorrect username or password.")
+            if (dnsEndpoint != null) endpointManager?.activate(dnsEndpoint)
             QuickLoginBootstrapTrace.mark("quicklogin_auth_completed", started)
 
             started = QuickLoginBootstrapTrace.now()

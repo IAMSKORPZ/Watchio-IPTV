@@ -107,7 +107,7 @@ class GitHubAnnouncementRemoteDataSource(
     }
 
     companion object {
-        const val FEED_URL = "https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/main/announcements/announcements.json"
+        const val FEED_URL = "https://raw.githubusercontent.com/IAMSKORPZ/Watchio_Website/main/2711/JFO/YLT/announcements.json"
     }
 }
 

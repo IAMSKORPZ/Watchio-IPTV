@@ -18,19 +18,19 @@ is historical/stale for current development and **MUST NOT** override this file.
 
 | Area | Status | Current fact |
 |---|---|---|
-| Branch / Base | PASS | `codex/dev-rescue-bridge` at `2384698ea94ddea751a9ac896e28c7c9345822e2`; `origin/dev` matches |
+| Branch / Base | PASS | `codex/dev-rescue-bridge` at `8dd6ff313ef3002928e92a94833ab80f09268d2b`; `origin/dev` matches |
 | Theme Builder Phase 2 | COMPLETE | Committed and pushed to `origin/dev` (`2384698`) |
-| TV Guide / Player / EPG Categories | COMPLETE / ACCEPTED | Accepted by user; full regression pass complete; commit + push authorized |
-| Tracked working tree | STAGING | 22 source/test/resource files + `AGENT_HANDOFF.md` |
+| TV Guide / Player / EPG Categories | COMPLETE / PUSHED | Committed (`8dd6ff3`) and pushed to `origin/dev`; accepted by user |
+| Tracked working tree | CLEAN | Source tree clean post-commit; handoff updated in place |
 | JVM tests | PASS | All unit tests pass (1187 / 1187) |
 | Lint / build gates | PASS | `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, `git diff --check` |
 | S22 automated UITEST (Full Suite) | PASS | 262 / 262 passed (0 failed, 0 errors, 11m 47s) |
 | S22 physical acceptance | PASS | Physically accepted by user: TV Guide redesign, mini-preview, fullscreen, controls, Live/Movie/Series playback, EPG Categories |
 | Android TV / BRAVIA | DEFERRED / UNTOUCHED | TV unavailable; `192.168.1.49:5555` untouched |
 | Rescue bridge manifest | PROTECTED | SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` verified unchanged |
-| Public stable | UNCHANGED | `v0.1.4` (`a0e5bafce943eebecbaeb03e0122ba7c2e0c62e5`); `origin/main` untouched |
+| Public stable | UNCHANGED | `v0.1.4` (`a0e5bafce943eebecbaeb03e0122ba7c2e0c62e5`); `origin/main` untouched (`0364d24`) |
 | Next update | PLANNED | Sports Broadcast / Where to Watch |
-| Next action | COMMIT + PUSH | Commit accepted work to dev, push to `origin/dev` |
+| Next action | RESEARCH / AUDIT | Read-only architecture audit for Sports Broadcast |
 
 ---
 
@@ -40,14 +40,14 @@ is historical/stale for current development and **MUST NOT** override this file.
 |---|---|
 | Worktree | `C:\Users\mrsko\.codex\watchio-dev-rescue-worktree` |
 | Branch | `codex/dev-rescue-bridge` |
-| `HEAD` | `2384698ea94ddea751a9ac896e28c7c9345822e2` |
-| `origin/dev` | `2384698ea94ddea751a9ac896e28c7c9345822e2` |
+| `HEAD` | `8dd6ff313ef3002928e92a94833ab80f09268d2b` |
+| `origin/dev` | `8dd6ff313ef3002928e92a94833ab80f09268d2b` |
 | `origin/main` | `0364d249ee513f0e814ca8163707e8c2ba47210c` |
-| Latest commit subject | `Complete application-wide theme integration` |
-| Tracked working tree | DIRTY — TVG-1 + TVG-2 changes pending commit |
-| Untracked files | `AGENT_HANDOFF.md` + intentional `s22-*` test/physical evidence |
+| Latest commit subject | `Complete TV Guide, player and EPG categories improvements` |
+| Tracked working tree | CLEAN (handoff records post-push verification) |
+| Untracked files | Intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*` evidence files |
 
-Untracked `AGENT_HANDOFF.md` and `s22-*` evidence files are intentional and **MUST NOT** be blindly staged, committed, cleaned, or deleted.
+Untracked `s22-*`, `tvguide-*`, `watchio-*` evidence files are intentional and **MUST NOT** be blindly staged, committed, cleaned, or deleted.
 
 ---
 
@@ -436,19 +436,19 @@ Changes implemented:
 
 ```text
 THEME BUILDER PHASE 2:              COMPLETE / COMMITTED / PUSHED (2384698)
-TV GUIDE / PLAYER / EPG CATEGORIES: COMPLETE / ACCEPTED / VALIDATED
-DEV HEAD:                          2384698ea94ddea751a9ac896e28c7c9345822e2
-origin/dev:                        2384698ea94ddea751a9ac896e28c7c9345822e2
-TRACKED WORKING TREE:              STAGING FOR COMMIT
+TV GUIDE / PLAYER / EPG CATEGORIES: COMPLETE / ACCEPTED / COMMITTED / PUSHED (8dd6ff3)
+DEV HEAD:                          8dd6ff313ef3002928e92a94833ab80f09268d2b
+origin/dev:                        8dd6ff313ef3002928e92a94833ab80f09268d2b
+TRACKED WORKING TREE:              CLEAN (handoff records post-push verification)
 S22 AUTOMATED SUITE (FULL):        PASS (262 / 262, 0 failed, 11m 47s)
 S22 PHYSICAL ACCEPTANCE:           PASS (User accepted all TV Guide, Player, EPG flows)
 ANDROID TV PHYSICAL THEME BUILDER: DEFERRED / UNTOUCHED
 RESCUE BRIDGE:                     PROTECTED / UNCHANGED (AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB)
 PUBLIC STABLE:                     UNCHANGED v0.1.4
-NEXT ACTION:                       COMMIT to dev, PUSH to origin/dev
+NEXT ACTION:                       START SPORTS AUDIT (read-only architecture audit)
 NEXT UPDATE:                       SPORTS BROADCAST / WHERE TO WATCH
 SPORTS IMPLEMENTATION:             NOT STARTED
-SAFE TO START SPORTS AUDIT:        YES (after commit+push)
+SAFE TO START SPORTS AUDIT:        YES (clean dev base)
 SAFE TO START SPORTS CODE:         NO (audit and design review required first)
 ```
 
@@ -635,3 +635,119 @@ Final pre-commit validation results:
 - **Public main:** Untouched (`0364d249ee513f0e814ca8163707e8c2ba47210c`)
 - **Evidence files:** Retained untracked
 - **Commit/Push authorization:** Explicitly authorized by user for completed TV Guide / Player / EPG Categories work
+
+### Final Commit & Push Verification
+
+- **Commit SHA:** `8dd6ff313ef3002928e92a94833ab80f09268d2b`
+- **Commit Subject:** `Complete TV Guide, player and EPG categories improvements`
+- **Files Committed:** 23 files (16 tracked modifications, 6 new source/test/resource files, `AGENT_HANDOFF.md`)
+- **Push Target:** `origin/dev`
+- **Push Result:** SUCCESS (`2384698..8dd6ff3 codex/dev-rescue-bridge -> dev`)
+- **HEAD SHA:** `8dd6ff313ef3002928e92a94833ab80f09268d2b`
+- **origin/dev SHA:** `8dd6ff313ef3002928e92a94833ab80f09268d2b` (matches HEAD)
+- **origin/main SHA:** `0364d249ee513f0e814ca8163707e8c2ba47210c` (completely unchanged)
+- **Working Tree:** Source tree clean. Untracked physical evidence preserved.
+- **Public Releases/Tags:** None created.
+- **Rescue Manifest SHA-256:** `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` (verified unchanged after push)
+
+## 2026-09-27 — Watchio DNS Login + managed endpoint relocation (uncommitted)
+
+### Baseline and scope
+
+- Branch remains `codex/dev-rescue-bridge`; HEAD remains `8dd6ff313ef3002928e92a94833ab80f09268d2b`.
+- Existing TV Guide/player/EPG Categories work was preserved.
+- Managed endpoint source changed from `https://iamskorpz.github.io/Watchio_Website/img/watchio_endpoints.json` to `https://raw.githubusercontent.com/IAMSKORPZ/Watchio_Website/main/2711/WCIT/RTA/SREDIVORP/watchio_endpoints.json`.
+- Live check on 2026-09-27: the requested new raw URL returned HTTP 404. It must be published at that exact path before fresh installs can load the catalogue.
+
+### DNS Login architecture
+
+- Added a Watchio-native `DNS LOGIN` option from the existing Xtream screen and a dedicated Username + Password screen with no URL field.
+- Stage 1 resolver contract is strict Watchio JSON: POST `{ "username": "...", "app": "watchio", "platform": "android" }`; entered password is never represented in, or sent by, the resolver API.
+- Accepted responses: version 1 `ok` with managed `endpointId` or `{id,url}`, `not_found`, and safe `error` handling.
+- Managed IDs resolve against the downloaded Watchio endpoint catalogue. Disabled/unknown IDs are rejected. Direct URLs are normalized with the existing endpoint rules; blank, malformed, unsupported, credential-bearing, query-bearing, and fragment-bearing URLs are rejected, while valid ports are preserved.
+- Stage 2 feeds the resolved endpoint into the existing `XtreamRepository` / `player_api.php` authentication and two-phase import. Provider creation and credential storage occur only after successful Xtream authentication. Managed provider IDs, provider isolation, active-provider selection, active-server state, and switch-server behavior remain on the existing architecture.
+- Existing managed Xtream login, Quick Login, M3U URL, local M3U, and saved accounts remain unchanged.
+- No XOLO/no1apps protocol, endpoint, obfuscation, keys, fields, or fallback was added.
+
+### Backend status
+
+- `DYNAMIC WATCHIO DNS RESOLVER BACKEND STILL REQUIRED.`
+- No production resolver URL is configured (`WATCHIO_DNS_RESOLVER_URL` is intentionally empty), so DNS Login fails closed with `DNS Login is not available yet. Please use Xtream login.`
+- Required backend: a real HTTPS POST service implementing the contract above. GitHub/raw GitHub cannot provide it. Do not configure a URL until that service exists and is tested.
+
+### Validation
+
+- Focused resolver/endpoint JVM tests: PASS.
+- Full `test`: PASS.
+- `lintDebug`: PASS, zero errors.
+- `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
+- `git diff --check`: PASS.
+- One Kotlin incremental-cache registration warning occurred during the combined gate run; Gradle fell back to non-incremental compilation and the complete build finished successfully.
+- S22 target: `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp` / `SM-S901B` only.
+- Targeted `ProviderFormComposeTest`: first run found SIGN IN skipped the new DNS button; focus edge fixed. Clean rerun PASS: 5/5.
+- Replacement-installed debug APK on S22 and launched it. Existing saved provider/session remained present, proving app data was preserved. No uninstall or data clear.
+- Automated S22 UI verified username/password-only DNS form, password masking, no URL field, and D-pad traversal. Real successful DNS resolution was not testable because no backend exists. Manual credential entry was intentionally not performed, so keyboard-dismiss and live Xtream login remain physical-user acceptance items.
+- BRAVIA untouched. No credentials captured in evidence or logs.
+- Rescue manifest SHA-256 before/after: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+
+### Modified source/test files in this pass
+
+- `native-android/app/src/main/assets/watchio_endpoints.json`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/core/di/AppContainer.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/data/xtream/WatchioDnsResolver.kt` (new)
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/data/xtream/WatchioEndpointManager.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/data/xtream/XtreamRepository.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/feature/provider/XtreamProviderViewModel.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/WatchioNativeApp.kt`
+- `native-android/app/src/test/java/com/iamskorpz/watchioiptv/WatchioDnsResolverTest.kt` (new)
+- `native-android/app/src/test/java/com/iamskorpz/watchioiptv/WatchioEndpointManagerTest.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/ProviderFormComposeTest.kt`
+- `AGENT_HANDOFF.md` updated in place.
+
+**COMMIT/PUSH REQUIRES EXPLICIT USER APPROVAL. No commit and no push were performed.**
+
+### Commit authorization — 2026-09-27
+
+- User explicitly authorized committing the validated DNS Login client and `/2711` remote configuration migration.
+- Target branch: `origin/dev` from local `codex/dev-rescue-bridge`.
+- `origin/main` must remain `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
+- Rescue manifest SHA-256 verified before staging: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Untracked screenshots, XML, logs, and other evidence remain excluded and preserved.
+
+## 2026-09-27 — `/2711` announcements + managed endpoint locations (uncommitted)
+
+### Canonical production locations
+
+- Announcements: `https://raw.githubusercontent.com/IAMSKORPZ/Watchio_Website/main/2711/JFO/YLT/announcements.json`
+- Managed endpoints: `https://raw.githubusercontent.com/IAMSKORPZ/Watchio_Website/main/2711/WCIT/RTA/SREDIVORP/watchio_endpoints.json`
+- Removed Android use of old announcements location: `https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/main/announcements/announcements.json`.
+- Old GitHub Pages endpoint location remains removed from Android sources.
+
+### Compatibility and HTTP validation
+
+- Both raw URLs returned HTTP 200 on 2026-09-27.
+- Both responses parsed as JSON and were not GitHub HTML pages.
+- Announcement feed matches existing `version` + `announcements[]` parser contract. Existing optional `enabled` and `expiresAt` support remains compatible; UI and cached-feed fallback are unchanged.
+- Endpoint feed matches existing `version` + `endpoints[]` parser contract with `id`, `url`, `priority`, and `enabled`.
+- DNS Login retained unchanged. Endpoint ID lookup continues using the managed endpoint catalogue. Resolver remains fail-closed until a real HTTPS dynamic backend exists. Password never goes to resolver.
+- No GitHub authentication, token, API key, private credentials, or user/provider credentials added.
+
+### Validation
+
+- Focused `AnnouncementRepositoryTest`, `WatchioEndpointManagerTest`, and `WatchioDnsResolverTest`: PASS.
+- Full `test`: PASS.
+- `lintDebug`: PASS, zero errors.
+- `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
+- `git diff --check`: PASS.
+- S22 `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp`: replacement install PASS; app startup PASS; saved `Admin` provider/session preserved; Notifications inbox loaded production announcement entries. No uninstall or data clear.
+- Managed endpoint HTTP/schema validation passed directly. Existing active server remained `MediaTitans`; no credentials were entered or exposed.
+- BRAVIA untouched.
+- Rescue manifest SHA-256 before/after: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+
+### Files added to existing dirty change set by this pass
+
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/data/announcements/AnnouncementData.kt`
+- `native-android/app/src/test/java/com/iamskorpz/watchioiptv/AnnouncementRepositoryTest.kt`
+- `AGENT_HANDOFF.md` updated in place.
+
+**COMMIT/PUSH REQUIRES EXPLICIT USER APPROVAL. No commit and no push were performed.**

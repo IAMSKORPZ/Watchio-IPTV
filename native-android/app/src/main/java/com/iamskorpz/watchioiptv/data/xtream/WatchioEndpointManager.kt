@@ -179,6 +179,24 @@ class WatchioEndpointManager(private val source: WatchioEndpointConfigSource) {
         configured[(currentIndex + 1).mod(configured.size)]
     }
 
+    suspend fun dnsEndpoint(endpointId: String?, directUrl: String?): WatchioEndpoint = mutex.withLock {
+        val configured = candidatesUnlocked()
+        val id = endpointId?.trim()?.takeIf { it.isNotBlank() }
+        if (id != null) {
+            return@withLock configured.firstOrNull { it.id.equals(id, ignoreCase = true) }
+                ?: throw IllegalArgumentException("No provider is available for this account.")
+        }
+        val normalized = directUrl?.let(WatchioEndpointConfigParser::normalize)
+            ?: throw IllegalArgumentException("The login service returned an invalid provider.")
+        WatchioEndpoint(id = "dns", url = normalized)
+    }
+
+    fun activate(endpoint: WatchioEndpoint) {
+        source.saveLastWorking(endpoint.url)
+        _activeEndpoint.value = endpoint
+        _activeEndpointOnline.value = true
+    }
+
     private suspend fun candidatesUnlocked(preferred: String? = null): List<WatchioEndpoint> {
         val config = memoryConfig ?: loadConfig().also { memoryConfig = it }
         _configuredEndpoints.value = config.endpoints

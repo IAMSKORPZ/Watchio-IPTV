@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv
 
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementFeedParser
+import com.iamskorpz.watchioiptv.data.announcements.GitHubAnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementLocalStore
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementRepository
@@ -28,6 +29,14 @@ import org.junit.Test
 
 class AnnouncementRepositoryTest {
     private val parser = AnnouncementFeedParser()
+
+    @Test
+    fun productionFeedUsesNewRawWebsiteLocation() {
+        assertEquals(
+            "https://raw.githubusercontent.com/IAMSKORPZ/Watchio_Website/main/2711/JFO/YLT/announcements.json",
+            GitHubAnnouncementRemoteDataSource.FEED_URL,
+        )
+    }
 
     @Test
     fun parserSkipsBadEntriesAndToleratesUnknownOrMalformedOptionalFields() {

@@ -38,6 +38,8 @@ import com.iamskorpz.watchioiptv.data.xtream.XtreamPlaybackUrlResolver
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
 import com.iamskorpz.watchioiptv.data.xtream.AndroidWatchioEndpointConfigSource
+import com.iamskorpz.watchioiptv.data.xtream.HttpWatchioDnsResolver
+import com.iamskorpz.watchioiptv.data.xtream.WATCHIO_DNS_RESOLVER_URL
 import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlResolver
 import com.iamskorpz.watchioiptv.domain.repository.CatalogRepository
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
@@ -72,6 +74,7 @@ class AppContainer(context: Context) {
     val providerCredentialStore = ProviderCredentialStore(secretStore)
     val networkModule = NetworkModule()
     val endpointManager = WatchioEndpointManager(AndroidWatchioEndpointConfigSource(appContext, networkModule.okHttpClient))
+    val dnsResolver = HttpWatchioDnsResolver(networkModule.okHttpClient, WATCHIO_DNS_RESOLVER_URL)
 
     private val announcementRemote = AppVariantBindings.createAnnouncementRemoteDataSource(
         appContext,

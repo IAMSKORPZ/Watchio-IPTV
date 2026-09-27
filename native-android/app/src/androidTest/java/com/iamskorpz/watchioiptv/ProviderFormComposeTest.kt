@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -27,6 +28,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.iamskorpz.watchioiptv.feature.provider.XtreamProviderFormState
 import com.iamskorpz.watchioiptv.ui.XtreamProviderScreen
+import com.iamskorpz.watchioiptv.ui.DnsLoginScreen
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import org.junit.Rule
 import org.junit.Test
@@ -69,12 +71,16 @@ class ProviderFormComposeTest {
         composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
 
         composeRule.onNodeWithContentDescription("SIGN IN").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.onNodeWithContentDescription("DNS LOGIN").assertIsFocused()
+        composeRule.onNodeWithContentDescription("DNS LOGIN").performKeyInput { pressKey(Key.DirectionDown) }
         composeRule.onNodeWithContentDescription("QUICK LOGIN").assertIsFocused()
         composeRule.onNodeWithContentDescription("QUICK LOGIN").performKeyInput { pressKey(Key.DirectionDown) }
         composeRule.onNodeWithContentDescription("Cancel").assertIsFocused()
         composeRule.onNodeWithContentDescription("Cancel").performKeyInput { pressKey(Key.DirectionUp) }
         composeRule.onNodeWithContentDescription("QUICK LOGIN").assertIsFocused()
         composeRule.onNodeWithContentDescription("QUICK LOGIN").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.onNodeWithContentDescription("DNS LOGIN").assertIsFocused()
+        composeRule.onNodeWithContentDescription("DNS LOGIN").performKeyInput { pressKey(Key.DirectionUp) }
         composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
 
         composeRule.onNodeWithContentDescription("SIGN IN").performKeyInput { pressKey(Key.DirectionUp) }
@@ -171,5 +177,25 @@ class ProviderFormComposeTest {
         val fieldBounds = composeRule.onNodeWithTag("xtream-provider-name").getUnclippedBoundsInRoot()
         assertTrue("field must remain narrower than screen", fieldBounds.right - fieldBounds.left < screenBounds.right - screenBounds.left)
         assertEquals(56f, (fieldBounds.bottom - fieldBounds.top).value, 1f)
+    }
+
+    @Test
+    fun dnsLoginHasOnlyUsernamePasswordAndDpadActions() {
+        composeRule.activity.setContent {
+            WatchioTheme {
+                DnsLoginScreen(
+                    state = XtreamProviderFormState(username = "fake-user", password = "fake-pass"),
+                    onUsername = {}, onPassword = {}, onConnect = {}, onBack = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("dns-username").assertIsFocused()
+        composeRule.onNodeWithTag("dns-username").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.onNodeWithTag("dns-password").assertIsFocused()
+        composeRule.onNodeWithTag("dns-password").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.onNodeWithContentDescription("LOGIN").assertIsFocused()
+        composeRule.onAllNodesWithTag("xtream-server-url").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Provider Name").assertCountEquals(0)
+        assertTrue(composeRule.onNodeWithTag("dns-password").fetchSemanticsNode().config.contains(androidx.compose.ui.semantics.SemanticsProperties.Password))
     }
 }
