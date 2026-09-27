@@ -874,3 +874,11 @@ Final pre-commit validation results:
 - BRAVIA untouched.
 - Rescue manifest SHA-256 remained `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - Commit: NO. Push: NO.
+
+### Home update commit and push record
+
+- Validated source/test/handoff commit: `79f08aa0d3edf8a745af223ab238a7702dc1ee29` - `Update Home header Settings and Coming Soon tile`.
+- Push to `origin/dev`: PASS. No force push, rebase, tag, or release.
+- `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
+- Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- BRAVIA untouched. Untracked evidence preserved.
