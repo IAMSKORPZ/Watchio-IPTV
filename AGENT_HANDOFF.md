@@ -876,7 +876,15 @@ Final pre-commit validation results:
 - Physical playback route was exercised with real provider channels, but sampled channels remained Buffering/Reconnecting; moving-video playback is NOT VERIFIED, not treated as app failure.
 - Physical Back dismissed keyboard first and then closed Search, returning to Live TV with category context intact.
 - Evidence added untracked: `s22-live-no-category-search.png`, `s22-live-search-category-removed-1.png`, `s22-live-search-category-removed-2.png`, `s22-live-search-result-playback.png`.
-- BRAVIA untouched. Rescue manifest unchanged. Ready for approved commit to `origin/dev`; final commit SHA and push verification will be recorded in a handoff-only follow-up commit.
+- BRAVIA untouched. Rescue manifest unchanged.
+
+### Commit and push
+
+- Feature commit: `a2fb414157909a1938c5b0330e57e401ba81ca34` (`Remove redundant Live TV Search category`).
+- Pushed exclusively to `origin/dev`: PASS; `origin/dev` matched feature commit after fetch.
+- `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
+- No force push, rebase, tag, or release. BRAVIA remained untouched.
+- Untracked evidence preserved. Correct Git untracked count: 239; earlier 243 figure included four tracked modifications in total status entries.
 
 ## 2026-09-27 - Home Settings and Coming Soon update (uncommitted)
 
