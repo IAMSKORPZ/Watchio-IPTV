@@ -198,4 +198,53 @@ class ProviderFormComposeTest {
         composeRule.onAllNodesWithText("Provider Name").assertCountEquals(0)
         assertTrue(composeRule.onNodeWithTag("dns-password").fetchSemanticsNode().config.contains(androidx.compose.ui.semantics.SemanticsProperties.Password))
     }
+
+    @Test
+    fun xtreamBackDismissesImeBeforeNavigatingAndRestoresDpadFocus() {
+        var imeVisible by mutableStateOf(true)
+        var backCount = 0
+        composeRule.activity.setContent {
+            WatchioTheme {
+                XtreamProviderScreen(
+                    state = XtreamProviderFormState(providerName = "Test", username = "User", password = "Password"),
+                    onProviderName = {}, onUsername = {}, onPassword = {}, onConnect = {}, onQuickLogin = {},
+                    onBack = { backCount++ },
+                    imeVisibleOverride = imeVisible,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("xtream-username").performClick()
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
+        composeRule.runOnIdle { assertEquals(0, backCount) }
+
+        composeRule.onNodeWithContentDescription("SIGN IN").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.onNodeWithTag("xtream-password").assertIsFocused()
+        composeRule.runOnIdle { imeVisible = false }
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.runOnIdle { assertEquals(1, backCount) }
+    }
+
+    @Test
+    fun dnsBackDismissesImeWithoutLeavingScreen() {
+        var imeVisible by mutableStateOf(true)
+        var backCount = 0
+        composeRule.activity.setContent {
+            WatchioTheme {
+                DnsLoginScreen(
+                    state = XtreamProviderFormState(username = "fake-user", password = "fake-pass"),
+                    onUsername = {}, onPassword = {}, onConnect = {}, onBack = { backCount++ },
+                    imeVisibleOverride = imeVisible,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("dns-password").performClick()
+        // Some TV IMEs consume Back themselves. The insets transition must still
+        // clear the text field and return focus to a remote-friendly action.
+        composeRule.runOnIdle { imeVisible = false }
+        composeRule.onNodeWithContentDescription("LOGIN").assertIsFocused()
+        composeRule.runOnIdle { assertEquals(0, backCount) }
+    }
 }

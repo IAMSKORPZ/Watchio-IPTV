@@ -764,3 +764,33 @@ Final pre-commit validation results:
 - Security review found no real usernames, passwords, provider credentials, private URLs, GitHub tokens, API keys, accidental logs, or local-machine secrets in committed files. Fake test values only.
 - Untracked screenshots, XML files, logs, and evidence remained unmodified and uncommitted.
 - BRAVIA untouched. No release or tag created.
+
+## 2026-09-27 — TV/remote login keyboard dismissal fix (uncommitted)
+
+### Root cause and implementation
+
+- Login forms relied on the platform IME and normal navigation Back handling while leaving the active Compose text field focused. TV/Samsung IMEs can consume Back themselves or keep their IME view reported as present after hiding, leaving remote focus trapped or causing the next Back to be swallowed.
+- Added one shared `DismissImeBeforeNavigationBack` controller for Xtream, DNS Login, M3U URL, and Local M3U forms. It uses actual IME inset height, clears text focus, hides the keyboard, restores focus to the form action, and tracks whether the current IME session has already consumed Back. The next Back then performs normal screen navigation.
+- Quick Login remains unchanged because it has no text entry/IME.
+- Password fields remain masked. No credentials were logged or added to tests.
+
+### Files changed in this pass
+
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/WatchioNativeApp.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/ProviderFormComposeTest.kt`
+- `AGENT_HANDOFF.md` updated in place.
+
+### Validation
+
+- Focused `ProviderFormComposeTest` on authorised S22: PASS, 7/7. Covers Xtream and DNS first-Back IME dismissal, restored D-pad focus, and normal subsequent Back navigation.
+- Full `test`: PASS.
+- `lintDebug`: PASS, zero errors.
+- `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
+- `git diff --check`: PASS before this handoff update; rerun after update required and recorded in final report.
+- S22 `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp`: replacement install PASS; no uninstall/data clear. Existing saved provider/session preserved.
+- Exact final debug build physical Xtream flow: keyboard opened; first Back closed it and stayed on login; focus returned to the form action; keyboard did not immediately reopen; D-pad could re-enter an input and reopen the IME; second Back with the IME closed returned to Provider Management. DNS equivalent covered by the 7/7 connected test and its first-Back physical check.
+- Mobile behavior preserved by scoped form-level handling; normal touch/IME field behavior and existing IME actions were not changed.
+- BRAVIA untouched.
+- Rescue manifest SHA-256 before implementation: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`; final verification recorded in final report.
+
+**No commit and no push were performed.**

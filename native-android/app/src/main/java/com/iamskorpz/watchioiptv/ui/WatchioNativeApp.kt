@@ -22,6 +22,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -34,6 +35,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
@@ -97,6 +100,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.role
@@ -1631,6 +1637,7 @@ internal fun XtreamProviderScreen(
     onQuickLogin: () -> Unit,
     onDnsLogin: () -> Unit = {},
     onBack: () -> Unit,
+    imeVisibleOverride: Boolean? = null,
 ) {
     val colors = LocalWatchioColors.current
     val type = LocalWatchioTypography.current
@@ -1647,6 +1654,7 @@ internal fun XtreamProviderScreen(
     val cancelBringIntoView = remember { BringIntoViewRequester() }
     val formScope = rememberCoroutineScope()
     val busy = state.importState is XtreamImportState.Importing
+    DismissImeBeforeNavigationBack(connectFocus, onBack, imeVisibleOverride)
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary,
         unfocusedTextColor = colors.textPrimary,
@@ -1789,6 +1797,7 @@ internal fun DnsLoginScreen(
     onPassword: (String) -> Unit,
     onConnect: () -> Unit,
     onBack: () -> Unit,
+    imeVisibleOverride: Boolean? = null,
 ) {
     val colors = LocalWatchioColors.current
     val type = LocalWatchioTypography.current
@@ -1798,6 +1807,7 @@ internal fun DnsLoginScreen(
     val loginFocus = remember { FocusRequester() }
     val backFocus = remember { FocusRequester() }
     val busy = state.importState is XtreamImportState.Importing
+    DismissImeBeforeNavigationBack(loginFocus, onBack, imeVisibleOverride)
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary, unfocusedTextColor = colors.textPrimary,
         cursorColor = colors.focusBorder, focusedBorderColor = colors.focusBorder,
@@ -2046,6 +2056,8 @@ private fun M3uUrlProviderScreen(
 ) {
     val colors = LocalWatchioColors.current
     val firstFocus = remember { FocusRequester() }
+    val connectFocus = remember { FocusRequester() }
+    DismissImeBeforeNavigationBack(connectFocus, onBack)
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
     ProviderFormContainer {
         Text("M3U URL", color = colors.textPrimary, fontWeight = FontWeight.Bold)
@@ -2078,7 +2090,7 @@ private fun M3uUrlProviderScreen(
         M3uImportStatus(state)
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.bringIntoViewOnFocus())
+            WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.focusRequester(connectFocus).bringIntoViewOnFocus())
             WatchioFocusableCard("Cancel", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.bringIntoViewOnFocus())
         }
     }
@@ -2095,6 +2107,8 @@ private fun M3uFileProviderScreen(
     val colors = LocalWatchioColors.current
     val context = LocalContext.current
     val firstFocus = remember { FocusRequester() }
+    val chooseFileFocus = remember { FocusRequester() }
+    DismissImeBeforeNavigationBack(chooseFileFocus, onBack)
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         runCatching {
@@ -2123,9 +2137,50 @@ private fun M3uFileProviderScreen(
         M3uImportStatus(state)
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WatchioFocusableCard("Choose File", accent = colors.liveTvAccent, onClick = { launcher.launch(arrayOf("*/*")) }, modifier = Modifier.bringIntoViewOnFocus())
+            WatchioFocusableCard("Choose File", accent = colors.liveTvAccent, onClick = { launcher.launch(arrayOf("*/*")) }, modifier = Modifier.focusRequester(chooseFileFocus).bringIntoViewOnFocus())
             WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.bringIntoViewOnFocus())
             WatchioFocusableCard("Cancel", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.bringIntoViewOnFocus())
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DismissImeBeforeNavigationBack(
+    fallbackFocus: FocusRequester,
+    onNavigateBack: () -> Unit,
+    imeVisibleOverride: Boolean? = null,
+) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val density = LocalDensity.current
+    val imeVisible = imeVisibleOverride ?: (WindowInsets.ime.getBottom(density) > 0)
+    var wasImeVisible by remember { mutableStateOf(false) }
+    var imeDismissed by remember { mutableStateOf(false) }
+
+    fun restoreRemoteFocus() {
+        keyboardController?.hide()
+        focusManager.clearFocus(force = true)
+        fallbackFocus.requestFocus()
+    }
+
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) {
+            if (!wasImeVisible) imeDismissed = false
+            wasImeVisible = true
+        } else if (wasImeVisible) {
+            wasImeVisible = false
+            imeDismissed = true
+            restoreRemoteFocus()
+        }
+    }
+
+    BackHandler {
+        if (imeVisible && !imeDismissed) {
+            imeDismissed = true
+            restoreRemoteFocus()
+        } else {
+            onNavigateBack()
         }
     }
 }
