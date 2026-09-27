@@ -1157,3 +1157,8 @@ Final pre-commit validation results:
 - Release convention audit: current public release is `v0.1.4` / code 17, so the next public release is `v0.1.5` / code 18; canonical asset name remains `Watchio-IPTV.apk`.
 - Expected public signing certificate remains `8A:76:E2:0B:7C:B2:E1:68:12:F5:05:12:75:A3:D1:12:FC:FB:AB:7C:24:24:C5:E8:97:F5:58:87:6B:CC:6F:F0` and must be verified on the final APK before publication.
 - BRAVIA untouched. App data preserved. Untracked evidence preserved.
+
+### Live TV feature commit record
+
+- Feature commit: `b65ad56e7bead82e34074f6c9791484095b96446` - `Add Live TV now next and later programme details`.
+- Intended push target: `origin/dev` only.
