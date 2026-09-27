@@ -19,6 +19,7 @@ is historical/stale for current development and **MUST NOT** override this file.
 | Area | Status | Current fact |
 |---|---|---|
 | Branch / Base | PASS | `codex/dev-rescue-bridge` at `fa7c77bc1b69733c30ea515d18ba84dfd02cf1f7`; `origin/dev` matches |
+| DNS Login Removal | COMPLETE / PUSHED | Committed (`e44923f`) and pushed to `origin/dev` |
 | Settings Gear Refinement | COMPLETE / PUSHED | Committed (`fa7c77b`) and pushed to `origin/dev` |
 | Icon Redesign & Refinements | COMPLETE / PUSHED | Committed (`3789c5f`) and pushed to `origin/dev` |
 | TV Guide / Player / EPG Categories | COMPLETE / PUSHED | Committed (`8dd6ff3`) and pushed to `origin/dev`; accepted by user |
@@ -40,10 +41,10 @@ is historical/stale for current development and **MUST NOT** override this file.
 |---|---|
 | Worktree | `C:\Users\mrsko\.codex\watchio-dev-rescue-worktree` |
 | Branch | `codex/dev-rescue-bridge` |
-| `HEAD` | `fa7c77bc1b69733c30ea515d18ba84dfd02cf1f7` |
-| `origin/dev` | `fa7c77bc1b69733c30ea515d18ba84dfd02cf1f7` |
+| `HEAD` | `e44923f5caf77528b3d0b287f3ba6f689addd288` (feature) |
+| `origin/dev` | `e44923f5caf77528b3d0b287f3ba6f689addd288` |
 | `origin/main` | `0364d249ee513f0e814ca8163707e8c2ba47210c` |
-| Latest commit subject | `Refine Watchio Settings gear icon` |
+| Latest commit subject | `Remove DNS Login button from Xtream login screen` |
 | Tracked working tree | CLEAN (handoff records post-push verification) |
 | Untracked files | Intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*` evidence files |
 
@@ -1003,6 +1004,57 @@ Final pre-commit validation results:
 ### Settings gear refinement commit and push record
 
 - Feature commit: `fa7c77bc1b69733c30ea515d18ba84dfd02cf1f7` - `Refine Watchio Settings gear icon`.
+- Push to `origin/dev`: PASS. No force push, rebase, tag, or release.
+- `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
+- Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- BRAVIA untouched. Untracked evidence preserved.
+
+## 2026-09-27 - Watchio DNS Login button removal from Xtream login screen
+
+### Implementation
+
+- Completely removed the `DNS LOGIN` button from the Xtream login screen (`XtreamProviderScreen` in `ui/WatchioNativeApp.kt`):
+  - Removed `onDnsLogin` callback navigation from `composable("providers/xtream/add")`.
+  - Removed `onDnsLogin: () -> Unit` parameter from `XtreamProviderScreen`.
+  - Removed `dnsLoginFocus` FocusRequester.
+  - Removed `XtreamLoginAction` for `DNS LOGIN` (`testTag("xtream-dns-login")`).
+  - Rewired D-Pad navigation for predictable vertical focus:
+    - `connectFocus` down navigation points directly to `quickLoginFocus`.
+    - `quickLoginFocus` up navigation points directly to `connectFocus`.
+  - Cleaned and balanced button spacing: replaced awkward gap with clean `Spacer(Modifier.height(8.dp))` between `QUICK LOGIN` and `Cancel`.
+- Preserved underlying DNS Login implementation:
+  - `composable("providers/dns/add")` route preserved.
+  - `DnsLoginScreen` composable preserved.
+  - `XtreamProviderViewModel.connectDns` backend logic preserved.
+  - `WatchioDnsResolver` and unit tests in `WatchioDnsResolverTest.kt` preserved.
+  - All saved accounts, credentials, provider configurations, and user data remain intact.
+
+### Files changed
+
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/WatchioNativeApp.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/ProviderFormComposeTest.kt`
+- `AGENT_HANDOFF.md` updated in place.
+
+### Validation
+
+- Full JVM test suite (`.\gradlew.bat test`): PASS (1187 / 1187 passed).
+- Lint (`.\gradlew.bat lintDebug`): PASS (zero errors).
+- Build assembly (`assembleDebug`, `assembleUitest`, `assembleUitestAndroidTest`): PASS.
+- S22 connected UITEST (`connectedUitestAndroidTest`):
+  - `ProviderFormComposeTest`: PASS (7 / 7 passed, 0 failed; asserted absence of `xtream-dns-login` and clean D-pad traversal).
+- S22 physical device verification:
+  - Installed debug APK with `adb install -r native-android\app\build\outputs\apk\debug\app-debug.apk` (no uninstall or data clear).
+  - Captured on-device screenshots (`s22-login-verified.png`, `s22-login-full.png`): confirmed `DNS LOGIN` button is completely removed, "or" divider sits cleanly between `SIGN IN` and `QUICK LOGIN`, and `Cancel` is evenly spaced.
+  - D-pad bidirectional traversal physically verified on S22: `SIGN IN` <-> `QUICK LOGIN` <-> `Cancel` with no skipped steps or stuck focus.
+  - Quick Login navigation verified working on device (`s22-quicklogin-screen.xml`).
+  - Cancel navigation verified returning to Home screen.
+- `git diff --check`: PASS (zero whitespace/conflict errors).
+- Rescue manifest `update.json` SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` (verified unchanged).
+- BRAVIA device `192.168.1.49:5555`: untouched. Untracked evidence preserved.
+
+### DNS login removal commit and push record
+
+- Feature commit: `e44923f5caf77528b3d0b287f3ba6f689addd288` - `Remove DNS Login button from Xtream login screen`.
 - Push to `origin/dev`: PASS. No force push, rebase, tag, or release.
 - `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
 - Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
