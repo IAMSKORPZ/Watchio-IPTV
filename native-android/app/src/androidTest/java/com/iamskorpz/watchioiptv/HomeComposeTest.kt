@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.hasText
@@ -100,7 +101,7 @@ class HomeComposeTest {
         composeRule.onNodeWithTag("live-branding").assertIsDisplayed()
         composeRule.onNodeWithTag("live-title").assertIsDisplayed()
         composeRule.onNodeWithTag("live-clock").assertIsDisplayed()
-        composeRule.onNodeWithTag("live-category-search").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("live-category-search").assertCountEquals(0)
         composeRule.onNodeWithTag("live-channel-list").assertIsDisplayed()
         composeRule.onNodeWithTag("live-preview").assertIsDisplayed()
         composeRule.onNodeWithTag("live-channel-info").assertIsDisplayed()

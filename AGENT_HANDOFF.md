@@ -848,6 +848,36 @@ Final pre-commit validation results:
 - `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
 - BRAVIA untouched. Untracked evidence preserved.
 
+## 2026-09-27 - Remove redundant Live TV category Search
+
+### Root cause and implementation
+
+- The redundant Search item was not a repository or synthetic category. It was a hardcoded `OutlinedTextField` labelled `Search categories` above the Live TV category rail.
+- Removed only that category-filter field and its reserved vertical space. Category rail now renders repository categories directly in existing order.
+- Preserved ALL CHANNELS, FAVOURITES, HISTORY, genuine provider categories, counts/filtering behavior, selection IDs, focus requesters, category-to-content focus transfer, and saved browsing state.
+- Genuine provider categories named `Search` remain visible because no category name or ID filtering/removal was added.
+- Existing top-right `Search Live TV` action and search overlay remain unchanged.
+
+### Files changed
+
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/feature/live/LiveTvScreens.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/LandscapeResponsiveComposeTest.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/HomeComposeTest.kt`
+- `AGENT_HANDOFF.md` updated in place.
+
+### Validation
+
+- Focused `LiveTvBrowsingStateTest`: PASS.
+- Focused S22 UITEST: PASS, 5/5. Covered absent category Search, preserved special/provider categories including provider category named Search, top-right search overlay, whole-catalog results, result selection, category D-pad activation/focus transfer, and Home-to-Live navigation.
+- Full `test`: PASS.
+- `lintDebug`: PASS, zero errors.
+- `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
+- Physical S22 replacement install: PASS; no uninstall/data clear. Existing `Admin` provider/session preserved. Category Search absent; ALL CHANNELS, FAVOURITES, HISTORY, and provider categories visible; top-right Search opened, accepted text, returned real results, selected a result, closed cleanly, and retained ALL CHANNELS context.
+- Physical playback route was exercised with real provider channels, but sampled channels remained Buffering/Reconnecting; moving-video playback is NOT VERIFIED, not treated as app failure.
+- Physical Back dismissed keyboard first and then closed Search, returning to Live TV with category context intact.
+- Evidence added untracked: `s22-live-no-category-search.png`, `s22-live-search-category-removed-1.png`, `s22-live-search-category-removed-2.png`, `s22-live-search-result-playback.png`.
+- BRAVIA untouched. Rescue manifest unchanged. Ready for approved commit to `origin/dev`; final commit SHA and push verification will be recorded in a handoff-only follow-up commit.
+
 ## 2026-09-27 - Home Settings and Coming Soon update (uncommitted)
 
 ### Implementation

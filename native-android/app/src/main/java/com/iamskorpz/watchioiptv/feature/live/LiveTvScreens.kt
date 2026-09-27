@@ -30,7 +30,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -221,7 +220,6 @@ fun LiveTvScreen(
                     CategoryPanel(
                         state = uiState,
                         firstFocus = firstCategoryFocus,
-                        onCategorySearch = onCategorySearch,
                         onCategory = { category, categoryWasFocused ->
                             initialFocusRequested = true
                             contentFocusTransfer.onCategoryActivated(category.id, categoryWasFocused)
@@ -462,14 +460,11 @@ private fun SearchResultRow(channel: LiveTvChannel, selected: Boolean, onClick: 
 private fun CategoryPanel(
     state: LiveTvUiState,
     firstFocus: FocusRequester,
-    onCategorySearch: (String) -> Unit,
     onCategory: (LiveTvCategory, Boolean) -> Unit,
     modifier: Modifier,
 ) {
     val colors = LocalWatchioColors.current
-    val visible = remember(state.categories, state.categorySearchQuery) {
-        state.categories.filter { it.name.contains(state.categorySearchQuery, ignoreCase = true) }
-    }
+    val visible = state.categories
     val listState = rememberLazyListState()
     LaunchedEffect(state.selectedCategory?.id) {
         val index = visible.indexOfFirst { it.id == state.selectedCategory?.id }
@@ -479,14 +474,6 @@ private fun CategoryPanel(
     }
     WatchioCard(modifier = modifier.testTag("live-category-panel"), surfaceRole = WatchioSurfaceRole.Panel, accent = colors.liveTvAccent, minWidth = 0.dp, minHeight = 0.dp) {
         Column(Modifier.fillMaxSize().padding(7.dp)) {
-            OutlinedTextField(
-                value = state.categorySearchQuery,
-                onValueChange = onCategorySearch,
-                singleLine = true,
-                label = { Text("Search categories") },
-                modifier = Modifier.fillMaxWidth().height(52.dp).testTag("live-category-search"),
-            )
-            Spacer(Modifier.height(6.dp))
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize().testTag("live-categories")) {
                 itemsIndexed(visible, key = { _, item -> item.id }) { index, category ->
                     val isSelected = category.id == state.selectedCategory?.id

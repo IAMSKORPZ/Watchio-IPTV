@@ -1354,13 +1354,10 @@ class LandscapeResponsiveComposeTest {
 
         val categoryBounds = composeRule.onAllNodesWithTag("live-category-all", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
         val channelBounds = composeRule.onAllNodesWithTag("live-channel-card", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
-        val searchBounds = composeRule.onNodeWithTag("live-category-search", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val categoryHeight = categoryBounds.bottom - categoryBounds.top
         val channelHeight = channelBounds.bottom - channelBounds.top
-        val searchHeight = searchBounds.bottom - searchBounds.top
         assertTrue("category row must be compact: $categoryHeight", categoryHeight <= 51.dp)
         assertTrue("channel row must be compact: $channelHeight", channelHeight <= 57.dp)
-        assertTrue("category search must be compact: $searchHeight", searchHeight <= 53.dp)
 
         val second = composeRule.onAllNodesWithTag("live-channel-card", useUnmergedTree = true)[1]
         second.performSemanticsAction(SemanticsActions.RequestFocus)
@@ -1373,6 +1370,36 @@ class LandscapeResponsiveComposeTest {
         composeRule.waitForIdle()
         assertEquals(channelB.id, selected.id)
         assertEquals(1, playbackSelections)
+    }
+
+    @Test
+    fun liveCategoryRailHasNoSearchFieldAndPreservesSpecialAndProviderCategories() {
+        val all = LiveTvCategory("all", "ALL CHANNELS", LiveTvCategoryKind.All)
+        val favourites = LiveTvCategory("favorites", "FAVOURITES", LiveTvCategoryKind.Favorites)
+        val providerSearch = LiveTvCategory("provider-search", "Search", LiveTvCategoryKind.Provider, "provider-search")
+        val news = LiveTvCategory("news", "NEWS", LiveTvCategoryKind.Provider, "news")
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                LiveTvScreen(
+                    uiState = LiveTvUiState(
+                        loading = false,
+                        categories = listOf(all, favourites, providerSearch, news),
+                        selectedCategory = all,
+                        channels = listOf(liveChannel("1", "One")),
+                    ),
+                    playerState = WatchioPlayerState.Idle(),
+                    playerManager = FakePlayerManager(),
+                    onCategory = {}, onCategorySearch = {}, onLiveSearch = {}, onChannel = {},
+                    onFavorite = {}, onRetry = {}, onRefreshEpg = {}, onFullscreen = {}, onBack = {},
+                )
+            }
+        }
+
+        composeRule.onAllNodesWithTag("live-category-search").assertCountEquals(0)
+        composeRule.onNodeWithTag("live-category-all", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("live-category-favorites", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("live-category-provider-search", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("live-category-news", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
