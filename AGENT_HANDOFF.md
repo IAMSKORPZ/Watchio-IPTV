@@ -837,3 +837,13 @@ Final pre-commit validation results:
 - TV/Fire classification: covered by pure JVM tests; no physical TV used.
 - Rescue manifest SHA-256 remained `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` before implementation and after S22 validation.
 - BRAVIA untouched. No commit or push.
+
+### Automatic device/input detection commit and push record
+
+- Validated source/test/handoff commit: `9a83d1814d5f402bd92e11589f65f1557b189839` - `Add automatic device and input detection`.
+- Push to `origin/dev`: PASS. No force push, rebase, tag, or release.
+- Validation retained: focused detector/bootstrap JVM tests PASS; S22 device-mode Compose tests 2/2 PASS; full `test`, `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS.
+- S22 replacement install PASS; existing provider/session preserved; no uninstall or data clear.
+- Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
+- BRAVIA untouched. Untracked evidence preserved.
