@@ -34,17 +34,26 @@ data class TvGuideUiState(
     val hasEpgSource: Boolean = false,
     val epgChannelCount: Int = 0,
     val epgProgrammeCount: Int = 0,
+    val previewChannelId: String? = null,
 )
 
 class TvGuideViewModel(
     private val repository: TvGuideRepository,
     private val playerManager: WatchioPlayerManager,
     private val clock: WatchioClock,
+    initialCategoryId: String? = null,
 ) : ViewModel() {
+    constructor(
+        repository: TvGuideRepository,
+        playerManager: WatchioPlayerManager,
+        clock: WatchioClock,
+    ) : this(repository, playerManager, clock, null)
     private val mutableState = MutableStateFlow(TvGuideUiState(nowEpochMs = clock.nowEpochMs()))
     private var ticker: Job? = null
     private var loadJob: Job? = null
-    private var selectedCategoryId: String? = null
+    private var previewJob: Job? = null
+    private var previewChannelId: String? = null
+    private var selectedCategoryId: String? = initialCategoryId
     private val sourceDiscoveryAttempts = mutableSetOf<String>()
     private var activeProviderId: ProviderId? = null
 
@@ -93,28 +102,26 @@ class TvGuideViewModel(
         mutableState.value = mutableState.value.copy(
             selectedChannelId = channel.channelId,
             selectedProgrammeId = programme.programmeId,
-            details = ProgrammeDetails(programme, channel),
+            details = null,
+        )
+    }
+
+    fun focusProgramme(channel: WatchioGuideChannel, programme: WatchioGuideProgramme) {
+        val current = mutableState.value
+        if (current.selectedChannelId == channel.channelId && current.selectedProgrammeId == programme.programmeId) return
+        mutableState.value = current.copy(
+            selectedChannelId = channel.channelId,
+            selectedProgrammeId = programme.programmeId,
         )
     }
 
     fun selectChannel(channel: WatchioGuideChannel) {
+        val programme = mutableState.value.programmes[channel.channelId]?.firstOrNull { it.isLiveNow }
+            ?: mutableState.value.programmes[channel.channelId]?.firstOrNull()
         mutableState.value = mutableState.value.copy(
             selectedChannelId = channel.channelId,
-            selectedProgrammeId = null,
-            details = ProgrammeDetails(
-                programme = WatchioGuideProgramme(
-                    programmeId = "no-info-${channel.channelId}",
-                    channelId = channel.channelId,
-                    epgChannelId = channel.epgChannelId.orEmpty(),
-                    title = "No programme information",
-                    description = null,
-                    startUtcMs = mutableState.value.window.startUtcMs,
-                    endUtcMs = mutableState.value.window.endUtcMs,
-                    progress = 0f,
-                    isLiveNow = false,
-                ),
-                channel = channel,
-            ),
+            selectedProgrammeId = programme?.programmeId,
+            details = null,
         )
     }
 
@@ -124,12 +131,46 @@ class TvGuideViewModel(
 
     fun playLive(onStarted: () -> Unit) {
         val details = mutableState.value.details ?: return
-        val now = clock.nowEpochMs()
-        if (details.programme.programmeId.startsWith("no-info-") || details.programme.isLiveNow || details.programme.startUtcMs <= now && details.programme.endUtcMs > now) {
-            viewModelScope.launch {
-                playerManager.load(repository.playback(details.channel))
-                onStarted()
+        playProgramme(details.channel, details.programme, onStarted)
+    }
+
+    fun previewChannel(channel: WatchioGuideChannel?) {
+        if (channel?.channelId == previewChannelId) return
+        previewJob?.cancel()
+        previewChannelId = channel?.channelId
+        mutableState.value = mutableState.value.copy(previewChannelId = previewChannelId)
+        if (channel == null) {
+            playerManager.stop()
+            return
+        }
+        previewJob = viewModelScope.launch {
+            runCatching { repository.playback(channel) }
+                .onSuccess { playerManager.load(it) }
+                .onFailure {
+                    if (previewChannelId == channel.channelId) {
+                        playerManager.stop()
+                        previewChannelId = null
+                        mutableState.value = mutableState.value.copy(previewChannelId = null)
+                    }
+                }
+        }
+    }
+
+    fun leaveGuide() {
+        previewJob?.cancel()
+        previewChannelId = null
+        mutableState.value = mutableState.value.copy(previewChannelId = null)
+        playerManager.stop()
+    }
+
+    fun playProgramme(channel: WatchioGuideChannel, programme: WatchioGuideProgramme, onStarted: () -> Unit) {
+        viewModelScope.launch {
+            if (previewChannelId != channel.channelId) {
+                playerManager.load(repository.playback(channel))
+                previewChannelId = channel.channelId
+                mutableState.value = mutableState.value.copy(previewChannelId = previewChannelId)
             }
+            onStarted()
         }
     }
 
@@ -173,8 +214,13 @@ class TvGuideViewModel(
                 selectedCategoryId = data.selectedCategory?.id
                 val currentChannel = mutableState.value.selectedChannelId?.takeIf { id -> data.channels.any { it.channelId == id } }
                 val selectedChannelId = currentChannel ?: data.channels.firstOrNull()?.channelId
-                val selectedProgrammeId = mutableState.value.selectedProgrammeId
-                    ?: selectedChannelId?.let { channelId -> data.programmes[channelId]?.firstOrNull { it.isLiveNow }?.programmeId }
+                val selectedProgrammeId = selectedChannelId?.let { channelId ->
+                    val channelProgrammes = data.programmes[channelId].orEmpty()
+                    mutableState.value.selectedProgrammeId?.takeIf { selected ->
+                        channelProgrammes.any { it.programmeId == selected }
+                    } ?: channelProgrammes.firstOrNull { it.isLiveNow }?.programmeId
+                        ?: channelProgrammes.firstOrNull()?.programmeId
+                }
                 mutableState.value = mutableState.value.copy(
                     loading = false,
                     hasProvider = true,
@@ -234,6 +280,8 @@ class TvGuideViewModel(
     override fun onCleared() {
         ticker?.cancel()
         loadJob?.cancel()
+        previewJob?.cancel()
+        playerManager.stop()
         super.onCleared()
     }
 }

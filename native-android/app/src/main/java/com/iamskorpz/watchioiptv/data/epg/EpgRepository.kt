@@ -85,7 +85,8 @@ class EpgRepository(
         database.epgDao().getProgrammes(providerId, epgChannelId, from, to, 500).map { it.toGuide() }
 
     suspend fun guide(providerId: String, channelIds: List<String>, from: Long, to: Long): Map<String, List<GuideProgramme>> =
-        if (channelIds.isEmpty()) emptyMap() else database.epgDao().getGuide(providerId, channelIds, from, to)
+        if (channelIds.isEmpty()) emptyMap() else channelIds.chunked(500)
+            .flatMap { batch -> database.epgDao().getGuide(providerId, batch, from, to) }
             .groupBy { it.epgChannelId }
             .mapValues { (_, rows) -> rows.map { it.toGuide() } }
 

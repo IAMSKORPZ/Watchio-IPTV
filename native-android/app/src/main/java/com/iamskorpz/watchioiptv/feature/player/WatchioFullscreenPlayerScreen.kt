@@ -13,6 +13,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -68,6 +69,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -547,6 +549,25 @@ fun WatchioFullscreenPlayerScreen(
         }
     }
 
+    fun restartAutoHideTimer() {
+        lastInteractionEpochMs = System.currentTimeMillis()
+    }
+
+    fun showControls() {
+        channelHudJob?.cancel()
+        channelHudVisible = false
+        controlsVisible = true
+        restartAutoHideTimer()
+        try {
+            firstFocus.requestFocus()
+        } catch (_: Throwable) {}
+    }
+
+    fun hideControls() {
+        controlsVisible = false
+        restartAutoHideTimer()
+    }
+
     fun triggerChannelSwitch(previous: Boolean) {
         lastInteractionEpochMs = System.currentTimeMillis()
         if (contentContext !is PlayerContentContext.Live) return
@@ -589,7 +610,7 @@ fun WatchioFullscreenPlayerScreen(
         } else if (activeDialog != null) {
             activeDialog = null
         } else if (controlsVisible) {
-            controlsVisible = false
+            hideControls()
         } else if (channelHudVisible) {
             channelHudJob?.cancel()
             channelHudVisible = false
@@ -622,7 +643,7 @@ fun WatchioFullscreenPlayerScreen(
                     } else if (activeDialog != null) {
                         activeDialog = null
                     } else if (controlsVisible) {
-                        controlsVisible = false
+                        hideControls()
                     } else if (channelHudVisible) {
                         channelHudJob?.cancel()
                         channelHudVisible = false
@@ -631,74 +652,118 @@ fun WatchioFullscreenPlayerScreen(
                     }
                     return@onPreviewKeyEvent true
                 }
+                if (!controlsVisible) {
+                    when (event.key) {
+                        Key.DirectionUp -> {
+                            if (contentContext is PlayerContentContext.Live) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    triggerChannelSwitch(previous = true)
+                                }
+                                return@onPreviewKeyEvent true
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    showControls()
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        Key.DirectionDown -> {
+                            if (contentContext is PlayerContentContext.Live) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    triggerChannelSwitch(previous = false)
+                                }
+                                return@onPreviewKeyEvent true
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    showControls()
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        Key.DirectionLeft -> {
+                            if (metadata.isSeekable || contentContext !is PlayerContentContext.Live) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    triggerSeek(-10_000L)
+                                }
+                                return@onPreviewKeyEvent true
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    showControls()
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        Key.DirectionRight -> {
+                            if (metadata.isSeekable || contentContext !is PlayerContentContext.Live) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    triggerSeek(10_000L)
+                                }
+                                return@onPreviewKeyEvent true
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    showControls()
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
+                            if (event.type == KeyEventType.KeyDown) {
+                                showControls()
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+                        else -> return@onPreviewKeyEvent false
+                    }
+                }
+
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                lastInteractionEpochMs = System.currentTimeMillis()
+                restartAutoHideTimer()
                 when (event.key) {
-                    Key.DirectionUp -> {
-                        if (!controlsVisible && contentContext is PlayerContentContext.Live) {
-                            triggerChannelSwitch(previous = true)
-                            true
-                        } else false
-                    }
-                    Key.DirectionDown -> {
-                        if (!controlsVisible && contentContext is PlayerContentContext.Live) {
-                            triggerChannelSwitch(previous = false)
-                            true
-                        } else false
-                    }
-                    Key.DirectionLeft -> {
-                        if (!controlsVisible && (metadata.isSeekable || contentContext !is PlayerContentContext.Live)) {
-                            triggerSeek(-10_000L)
-                            true
-                        } else false
-                    }
-                    Key.DirectionRight -> {
-                        if (!controlsVisible && (metadata.isSeekable || contentContext !is PlayerContentContext.Live)) {
-                            triggerSeek(10_000L)
-                            true
-                        } else false
-                    }
                     Key.Spacebar -> {
                         onPlayPause()
                         true
                     }
-                    Key.DirectionCenter, Key.Enter -> {
-                        if (!controlsVisible) {
-                            channelHudJob?.cancel()
-                            channelHudVisible = false
-                            controlsVisible = true
-                            firstFocus.requestFocus()
-                            true
-                        } else false
-                    }
                     else -> false
-                }
-            }
-            .clickable {
-                lastInteractionEpochMs = System.currentTimeMillis()
-                if (!controlsVisible) {
-                    channelHudJob?.cancel()
-                    channelHudVisible = false
-                    controlsVisible = true
-                } else {
-                    controlsVisible = false
                 }
             },
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> FrameLayout(ctx).also { view ->
-                view.keepScreenOn = shouldKeepScreenOn(playerState)
-                playerManager.attachSurface(view)
+            factory = { ctx -> FrameLayout(ctx).apply {
+                isFocusable = false
+                isFocusableInTouchMode = false
+                descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                keepScreenOn = shouldKeepScreenOn(playerState)
+                playerManager.attachFullscreenSurface(this)
             } },
             update = { view ->
+                view.isFocusable = false
+                view.isFocusableInTouchMode = false
+                view.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 view.keepScreenOn = shouldKeepScreenOn(playerState)
-                playerManager.attachSurface(view)
+                playerManager.attachFullscreenSurface(view)
             },
             onRelease = { view ->
                 view.keepScreenOn = false
                 playerManager.detachSurface(view)
             },
+        )
+
+        // Transparent tap surface to reliably intercept touch events over video
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = {
+                            if (!controlsVisible) {
+                                showControls()
+                            } else {
+                                hideControls()
+                            }
+                        }
+                    )
+                }
         )
 
         // Top-left Lightweight Transient Channel Switch HUD (Surfing mode)

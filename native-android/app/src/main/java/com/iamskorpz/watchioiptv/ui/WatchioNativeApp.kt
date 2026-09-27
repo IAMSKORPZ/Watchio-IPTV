@@ -175,6 +175,8 @@ import com.iamskorpz.watchioiptv.feature.startup.resolveStartupNotification
 import com.iamskorpz.watchioiptv.feature.startup.StartupNotification
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideScreen
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideViewModel
+import com.iamskorpz.watchioiptv.feature.tvguide.EpgCategoriesScreen
+import com.iamskorpz.watchioiptv.feature.tvguide.EpgCategoriesViewModel
 import com.iamskorpz.watchioiptv.feature.sports.SportsScreen
 import com.iamskorpz.watchioiptv.feature.sports.SportsViewModel
 import com.iamskorpz.watchioiptv.core.util.SystemWatchioClock
@@ -221,6 +223,7 @@ import kotlinx.coroutines.delay
 internal enum class LivePlaybackOrigin {
     Live,
     Sports,
+    TvGuide,
 }
 
 internal fun closeLiveFullscreen(
@@ -229,6 +232,10 @@ internal fun closeLiveFullscreen(
 ) {
     if (origin == LivePlaybackOrigin.Sports) {
         if (!navController.popBackStack("sports", inclusive = false)) {
+            navController.popBackStack()
+        }
+    } else if (origin == LivePlaybackOrigin.TvGuide) {
+        if (!navController.popBackStack("tv-guide", inclusive = false)) {
             navController.popBackStack()
         }
     } else {
@@ -381,7 +388,7 @@ fun WatchioNativeApp(
                         livePlaybackOrigin = LivePlaybackOrigin.Live
                         navController.navigate("live")
                     },
-                    onTvGuide = { navController.navigate("tv-guide") },
+                    onTvGuide = { navController.navigate("epg-categories") },
                     onMovies = { navController.navigate("movies") },
                     onSeries = { navController.navigate("series") },
                     onSearch = { navController.navigate("search") },
@@ -797,25 +804,52 @@ fun WatchioNativeApp(
                     },
                 )
             }
-            composable("tv-guide") {
-                val guideViewModel: TvGuideViewModel = viewModel(factory = tvGuideFactory(container))
+            composable("epg-categories") {
+                val categoriesViewModel: EpgCategoriesViewModel = viewModel(factory = epgCategoriesFactory(container))
+                val state by categoriesViewModel.state.collectAsStateWithLifecycle()
+                EpgCategoriesScreen(
+                    state = state,
+                    onCategory = { category -> navController.navigate("tv-guide?categoryId=${Uri.encode(category.id)}") },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = "tv-guide?categoryId={categoryId}",
+                arguments = listOf(navArgument("categoryId") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            ) { backStackEntry ->
+                val initialCategoryId = backStackEntry.arguments?.getString("categoryId")
+                val guideViewModel: TvGuideViewModel = viewModel(factory = tvGuideFactory(container, initialCategoryId))
                 val state by guideViewModel.state.collectAsStateWithLifecycle()
+                val playerState by container.playerManager.state.collectAsStateWithLifecycle()
                 TvGuideScreen(
                     state = state,
+                    playerManager = container.playerManager,
+                    playerState = playerState,
                     onJumpToNow = guideViewModel::jumpToNow,
                     onDay = guideViewModel::selectDay,
                     onCategory = guideViewModel::selectCategory,
                     onRefresh = guideViewModel::refreshEpg,
+                    onPreviewChannel = guideViewModel::previewChannel,
                     onChannel = guideViewModel::selectChannel,
+                    onProgrammeFocused = guideViewModel::focusProgramme,
                     onProgramme = guideViewModel::selectProgramme,
+                    onWatchLive = { channel, programme ->
+                        guideViewModel.playProgramme(channel, programme) {
+                            livePlaybackOrigin = LivePlaybackOrigin.TvGuide
+                            navController.navigate("live/fullscreen")
+                        }
+                    },
                     onPlayLive = {
                         guideViewModel.playLive {
-                            livePlaybackOrigin = LivePlaybackOrigin.Live
+                            livePlaybackOrigin = LivePlaybackOrigin.TvGuide
                             navController.navigate("live/fullscreen")
                         }
                     },
                     onCloseDetails = guideViewModel::closeDetails,
-                    onBack = { navController.popBackStack() },
+                    onBack = {
+                        guideViewModel.leaveGuide()
+                        navController.popBackStack()
+                    },
                 )
             }
             composable("providers/xtream/add") {
@@ -2693,7 +2727,7 @@ private fun myListFactory(container: AppContainer): ViewModelProvider.Factory =
         }
     }
 
-private fun tvGuideFactory(container: AppContainer): ViewModelProvider.Factory =
+private fun tvGuideFactory(container: AppContainer, initialCategoryId: String? = null): ViewModelProvider.Factory =
     object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -2701,8 +2735,16 @@ private fun tvGuideFactory(container: AppContainer): ViewModelProvider.Factory =
                 repository = container.tvGuideRepository,
                 playerManager = container.playerManager,
                 clock = SystemWatchioClock,
+                initialCategoryId = initialCategoryId,
             ) as T
         }
+    }
+
+private fun epgCategoriesFactory(container: AppContainer): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            EpgCategoriesViewModel(container.liveTvRepository) as T
     }
 
 private fun accountInformationFactory(container: AppContainer): ViewModelProvider.Factory =

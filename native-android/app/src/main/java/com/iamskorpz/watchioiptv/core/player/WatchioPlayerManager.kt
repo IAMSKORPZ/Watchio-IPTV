@@ -22,6 +22,8 @@ interface WatchioPlayerManager {
     fun restart()
     fun snapshot(): WatchioPlayerMetadata
     fun attachSurface(container: ViewGroup)
+    fun attachPreviewSurface(container: ViewGroup) = attachSurface(container)
+    fun attachFullscreenSurface(container: ViewGroup) = attachSurface(container)
     fun detachSurface(container: ViewGroup)
     fun release()
 }

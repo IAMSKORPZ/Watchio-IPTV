@@ -1,6 +1,5 @@
 package com.iamskorpz.watchioiptv.feature.live
 
-import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -65,13 +64,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.iamskorpz.watchioiptv.core.player.WatchioPlayerManager
 import com.iamskorpz.watchioiptv.core.player.WatchioPlayerState
-import com.iamskorpz.watchioiptv.core.player.shouldKeepScreenOn
 import com.iamskorpz.watchioiptv.data.live.LiveTvCategory
 import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import com.iamskorpz.watchioiptv.data.live.LiveTvNowNext
@@ -84,6 +81,7 @@ import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
+import com.iamskorpz.watchioiptv.ui.components.WatchioPlayerSurface
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
@@ -602,11 +600,12 @@ private fun RightLivePanel(
                     Modifier.fillMaxWidth().height(compactTopRowHeight),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    PlayerSurface(
+                    WatchioPlayerSurface(
                         playerManager = playerManager,
                         playerState = playerState,
                         modifier = Modifier.weight(0.68f).fillMaxHeight().testTag("live-preview"),
                         onClick = if (uiState.selectedChannel == null) ({}) else onFullscreen,
+                        useFitScaling = true,
                     )
                     ChannelInfoCard(
                         uiState = uiState,
@@ -626,11 +625,12 @@ private fun RightLivePanel(
                 )
             } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                PlayerSurface(
+                WatchioPlayerSurface(
                     playerManager = playerManager,
                     playerState = playerState,
                     modifier = Modifier.weight(1.35f).aspectRatio(16f / 9f).testTag("live-preview"),
                     onClick = onFullscreen,
+                    useFitScaling = true,
                 )
                 ChannelInfoCard(
                     uiState = uiState,
@@ -830,7 +830,7 @@ fun FullscreenPlayerScreen(
                 }
             },
     ) {
-        PlayerSurface(
+        WatchioPlayerSurface(
             playerManager = playerManager,
             playerState = playerState,
             modifier = Modifier.fillMaxSize(),
@@ -943,60 +943,4 @@ private fun programmeTimeRange(startEpochMs: Long?, endEpochMs: Long?): String {
     if (startEpochMs == null || endEpochMs == null) return ""
     val formatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     return "${formatter.format(Instant.ofEpochMilli(startEpochMs))} - ${formatter.format(Instant.ofEpochMilli(endEpochMs))}"
-}
-
-@Composable
-private fun PlayerSurface(
-    playerManager: WatchioPlayerManager,
-    playerState: WatchioPlayerState,
-    modifier: Modifier,
-    onClick: () -> Unit,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    val focused by interaction.collectIsFocusedAsState()
-    val colors = LocalWatchioColors.current
-    Box(
-        modifier
-            .background(Color.Black)
-            .border(if (focused) 2.dp else 0.dp, colors.focusGlow, RoundedCornerShape(6.dp))
-            .semantics { contentDescription = "Open fullscreen player" }
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                when (event.key) {
-                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                        onClick()
-                        true
-                    }
-                    else -> false
-                }
-            }
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .focusable(interactionSource = interaction),
-        contentAlignment = Alignment.Center,
-    ) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                FrameLayout(context).also { view ->
-                    view.keepScreenOn = shouldKeepScreenOn(playerState)
-                    playerManager.attachSurface(view)
-                }
-            },
-            update = { view ->
-                view.keepScreenOn = shouldKeepScreenOn(playerState)
-                playerManager.attachSurface(view)
-            },
-            onRelease = { view ->
-                view.keepScreenOn = false
-                playerManager.detachSurface(view)
-            },
-        )
-        when (playerState) {
-            is WatchioPlayerState.Connecting -> Text("Connecting...", color = Color.White)
-            is WatchioPlayerState.Buffering -> Text("Buffering...", color = Color.White)
-            is WatchioPlayerState.Failed -> Text(playerState.message, color = Color.White)
-            is WatchioPlayerState.Idle -> Text("Select a channel", color = Color.White)
-            else -> Unit
-        }
-    }
 }

@@ -472,7 +472,7 @@ class LandscapeResponsiveComposeTest {
             }
         }
 
-        composeRule.onNodeWithText("Category: All Channels").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("tv-guide-category-selector").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("Sports").assertIsDisplayed()
     }
 

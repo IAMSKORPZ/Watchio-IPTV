@@ -51,6 +51,7 @@ fun WatchioPageHeader(
     modifier: Modifier = Modifier,
     testTagPrefix: String = "page",
     artworkReadability: Boolean = false,
+    leadingIcon: (@Composable () -> Unit)? = null,
     actions: @Composable () -> Unit = {},
 ) {
     val colors = LocalWatchioColors.current
@@ -92,7 +93,9 @@ fun WatchioPageHeader(
             horizontalArrangement = Arrangement.spacedBy(if (isMobile) spacing.xs else spacing.sm),
         ) {
             WatchioHeaderBackButton(onClick = onBack, testTag = "$testTagPrefix-back-icon")
-            if (!isMobile) {
+            if (leadingIcon != null) {
+                leadingIcon()
+            } else if (!isMobile) {
                 WatchioLogoMark(accentColor = accentColor, playColor = primaryColor)
                 if (!isMedium) {
                     Text(

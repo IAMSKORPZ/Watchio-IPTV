@@ -54,35 +54,43 @@ class TvGuideRepository(
             val epgId = matchIndex.match(channel.epgChannelId, channel.name)
             channel.toGuideChannel(index + 1, epgId)
         }
-        val matchedIds = guideChannels.mapNotNull { it.epgChannelId }.distinct()
-        val channelByEpgId = guideChannels
-            .filter { it.epgChannelId != null }
-            .associateBy { it.epgChannelId!! }
+        val channelsByEpgId = guideChannels
+            .filter { !it.epgChannelId.isNullOrBlank() }
+            .groupBy { it.epgChannelId!! }
+        val matchedIds = channelsByEpgId.keys.toList()
         val programmes = if (matchedIds.isEmpty()) {
             emptyMap()
         } else {
-            epgRepository.guide(providerId.value, matchedIds, window.startUtcMs, window.endUtcMs)
-                .mapKeys { (epgId, _) -> channelByEpgId[epgId]?.channelId ?: epgId }
-                .mapValues { (channelId, rows) ->
-                    val epgId = guideChannels.firstOrNull { it.channelId == channelId }?.epgChannelId.orEmpty()
-                    rows.asSequence()
-                        .filter { it.endEpochMs > it.startEpochMs }
-                        .sortedBy { it.startEpochMs }
-                        .map {
-                            WatchioGuideProgramme(
-                                programmeId = it.programmeId,
-                                channelId = channelId,
-                                epgChannelId = epgId,
-                                title = it.title.ifBlank { "Untitled" },
-                                description = it.description?.takeIf(String::isNotBlank),
-                                startUtcMs = it.startEpochMs,
-                                endUtcMs = it.endEpochMs,
-                                progress = TvGuideTimeline.progress(nowEpochMs, it.startEpochMs, it.endEpochMs),
-                                isLiveNow = it.startEpochMs <= nowEpochMs && it.endEpochMs > nowEpochMs,
+            val epgGuide = epgRepository.guide(providerId.value, matchedIds, window.startUtcMs, window.endUtcMs)
+            buildMap<String, List<WatchioGuideProgramme>> {
+                epgGuide.forEach { (epgId, rows) ->
+                    val matchingGuideChannels = channelsByEpgId[epgId].orEmpty()
+                    if (matchingGuideChannels.isNotEmpty()) {
+                        val validRows = rows.asSequence()
+                            .filter { it.endEpochMs > it.startEpochMs }
+                            .sortedBy { it.startEpochMs }
+                            .toList()
+                        matchingGuideChannels.forEach { guideChannel ->
+                            put(
+                                guideChannel.channelId,
+                                validRows.map {
+                                    WatchioGuideProgramme(
+                                        programmeId = it.programmeId,
+                                        channelId = guideChannel.channelId,
+                                        epgChannelId = epgId,
+                                        title = it.title.ifBlank { "Untitled" },
+                                        description = it.description?.takeIf(String::isNotBlank),
+                                        startUtcMs = it.startEpochMs,
+                                        endUtcMs = it.endEpochMs,
+                                        progress = TvGuideTimeline.progress(nowEpochMs, it.startEpochMs, it.endEpochMs),
+                                        isLiveNow = it.startEpochMs <= nowEpochMs && it.endEpochMs > nowEpochMs,
+                                    )
+                                },
                             )
                         }
-                        .toList()
+                    }
                 }
+            }
         }
         TvGuideData(
             providerId = providerId,
@@ -135,9 +143,13 @@ class TvGuideRepository(
         private val byExactId = channels.associateBy { it.epgChannelId }
         private val byLowerId = channels.associateBy { it.epgChannelId.lowercase() }
         private val byExactName = channels.associateBy { it.displayName }
+        private val byLowerName = channels.associateBy { it.displayName.lowercase() }
         private val byNormalizedName = channels.associateBy { it.normalizedName }
         private val byCompactName = channels
             .groupBy { matcher.compact(it.displayName) }
+            .mapValues { (_, rows) -> rows.singleOrNull()?.epgChannelId }
+        private val byCompactId = channels
+            .groupBy { matcher.compactId(it.epgChannelId) }
             .mapValues { (_, rows) -> rows.singleOrNull()?.epgChannelId }
 
         fun match(primaryId: String?, displayName: String): String? {
@@ -147,8 +159,14 @@ class TvGuideRepository(
                 byLowerId[id.lowercase()]?.let { return it.epgChannelId }
             }
             byExactName[displayName]?.let { return it.epgChannelId }
+            byLowerName[displayName.lowercase()]?.let { return it.epgChannelId }
             byNormalizedName[com.iamskorpz.watchioiptv.core.util.TextNormalizer.normalizeForSearch(displayName)]?.let { return it.epgChannelId }
-            return byCompactName[matcher.compact(displayName)]
+            val compact = matcher.compact(displayName)
+            if (compact.isNotBlank()) {
+                byCompactName[compact]?.let { return it }
+                byCompactId[compact]?.let { return it }
+            }
+            return null
         }
     }
 }

@@ -40,6 +40,13 @@ class EpgTimeAndMatcherTest {
         assertEquals("bbc.one", matcher.match(null, "BBC One", channels))
         assertEquals("bbc.one", matcher.match(null, "bbc one", channels))
         assertNull(matcher.match(null, "UK | 4 Seven HD", channels))
+
+        val channelsWithId = listOf(
+            channel("foxbusiness.us", "Fox Business"),
+            channel("skypremier.uk", "Sky Cinema Premiere"),
+        )
+        assertEquals("foxbusiness.us", matcher.match(null, "Fox Business HD US", channelsWithId))
+        assertEquals("skypremier.uk", matcher.match(null, "UK | SKY CINEMA PREMIERE FHD", channelsWithId))
     }
 
     @Test

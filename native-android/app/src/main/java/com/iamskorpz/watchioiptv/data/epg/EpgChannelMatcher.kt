@@ -19,16 +19,27 @@ class EpgChannelMatcher {
             channels.firstOrNull { it.epgChannelId.equals(id, ignoreCase = true) }?.let { return it.epgChannelId }
         }
         channels.firstOrNull { it.displayName == displayName }?.let { return it.epgChannelId }
+        channels.firstOrNull { it.displayName.equals(displayName, ignoreCase = true) }?.let { return it.epgChannelId }
         val normalized = TextNormalizer.normalizeForSearch(displayName)
         channels.firstOrNull { it.normalizedName == normalized }?.let { return it.epgChannelId }
         val compact = compact(displayName)
-        val matches = channels.filter { compact(it.displayName) == compact }
-        return matches.singleOrNull()?.epgChannelId
+        if (compact.isNotBlank()) {
+            val nameMatches = channels.filter { compact(it.displayName) == compact }
+            nameMatches.singleOrNull()?.let { return it.epgChannelId }
+            val idMatches = channels.filter { compactId(it.epgChannelId) == compact }
+            idMatches.singleOrNull()?.let { return it.epgChannelId }
+        }
+        return null
     }
 
     fun compact(value: String): String =
         TextNormalizer.normalizeForSearch(value)
-            .replace(Regex("\\b(uk|us|ca|fr|de|es|it|tr|ar)\\b"), "")
-            .replace(Regex("\\b(fhd|uhd|hd|sd|vip|vm|4k|backup|raw)\\b"), "")
+            .replace(Regex("\\b(uk|us|ca|fr|de|es|it|tr|ar|ie|au|nz|pl|ex|al|nl|be|pt|gr)\\b"), "")
+            .replace(Regex("\\b(fhd|uhd|hd|sd|vip|vm|4k|backup|raw|1080p|720p|50fps|h265|hevc|reloc)\\b"), "")
+            .replace(Regex("[^a-z0-9]"), "")
+
+    fun compactId(value: String): String =
+        value.lowercase()
+            .replace(Regex("\\.(uk|us|ca|fr|de|es|it|tr|ar|ie|au|nz|pl|ex|al|nl|be|pt|gr)$"), "")
             .replace(Regex("[^a-z0-9]"), "")
 }

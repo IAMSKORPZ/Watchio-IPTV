@@ -1,7 +1,9 @@
 package com.iamskorpz.watchioiptv.core.player
 
 import android.content.Context
+import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -17,6 +19,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.iamskorpz.watchioiptv.R
 import com.iamskorpz.watchioiptv.domain.repository.PlayerSettings
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
 import com.iamskorpz.watchioiptv.domain.repository.VideoScalingMode
@@ -38,6 +41,7 @@ class Media3WatchioPlayerManager(
 ) : WatchioPlayerManager {
     private var player: ExoPlayer? = null
     private var playerView: PlayerView? = null
+    private var fullscreenContainer: ViewGroup? = null
     private var lastMedia: PlaybackMedia? = null
     private var currentMetadata = WatchioPlayerMetadata(sessionId = SESSION_ID.incrementAndGet())
     private var loadGeneration = 0L
@@ -372,24 +376,39 @@ class Media3WatchioPlayerManager(
         }
     }
 
-    override fun attachSurface(container: ViewGroup) {
+    override fun attachSurface(container: ViewGroup) = attachSurface(container, currentVideoScalingMode)
+
+    override fun attachPreviewSurface(container: ViewGroup) {
+        if (fullscreenContainer != null && fullscreenContainer !== container) return
+        attachSurface(container, VideoScalingMode.Fit)
+    }
+
+    override fun attachFullscreenSurface(container: ViewGroup) {
+        fullscreenContainer = container
+        attachSurface(container, currentVideoScalingMode)
+    }
+
+    private fun attachSurface(container: ViewGroup, scalingMode: VideoScalingMode) {
         val exoPlayer = ensurePlayer()
-        val view = playerView ?: PlayerView(context).also {
+        val view = playerView ?: (LayoutInflater.from(context)
+            .inflate(R.layout.watchio_player_view, container, false) as PlayerView).also {
             it.useController = false
             it.setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-            it.resizeMode = currentVideoScalingMode.toResizeMode()
+            it.resizeMode = scalingMode.toResizeMode()
+            it.isFocusable = false
+            it.isFocusableInTouchMode = false
+            it.isClickable = false
             it.player = exoPlayer
             playerView = it
         }
+        val matchParentParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        )
         if (view.parent !== container) {
             (view.parent as? ViewGroup)?.removeView(view)
-            container.addView(
-                view,
-                ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ),
-            )
+            container.removeAllViews()
+            container.addView(view, matchParentParams)
             // Essential on Android TV: reparenting SurfaceView requires resetting player on PlayerView
             // so ExoPlayer reattaches to the newly created SurfaceHolder.
             view.player = null
@@ -397,12 +416,21 @@ class Media3WatchioPlayerManager(
         } else if (view.player !== exoPlayer) {
             view.player = exoPlayer
         }
+        // PlayerView is shared by preview and fullscreen. Never retain measured preview bounds.
+        view.layoutParams = matchParentParams
+        view.resizeMode = scalingMode.toResizeMode()
+        container.requestLayout()
+        view.requestLayout()
+        container.invalidate()
+        view.invalidate()
     }
 
     override fun detachSurface(container: ViewGroup) {
+        if (fullscreenContainer === container) fullscreenContainer = null
         val view = playerView ?: return
         if (view.parent === container) {
             container.removeView(view)
+            view.requestLayout()
         }
     }
 
@@ -410,6 +438,7 @@ class Media3WatchioPlayerManager(
         retryJob?.cancel()
         playerView?.player = null
         playerView = null
+        fullscreenContainer = null
         player?.release()
         player = null
         currentMetadata = WatchioPlayerMetadata(sessionId = SESSION_ID.incrementAndGet())
