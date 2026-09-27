@@ -102,11 +102,13 @@ fun WatchioIcon(kind: WatchioIconKind, tint: Color, modifier: Modifier = Modifie
                 line(.50f, .65f, .50f, .78f); line(.35f, .84f, .65f, .84f)
             }
             WatchioIconKind.Settings -> {
-                val rOuter = unit * 0.42f
-                val rRoot = unit * 0.28f
-                val toothHalfAngle = Math.toRadians(10.0)
-                val flankAngle = Math.toRadians(6.0)
+                val rOuter = unit * 0.44f
+                val rRoot = unit * 0.31f
+                val rHole = unit * 0.14f
+                val toothHalfAngle = Math.toRadians(11.0)
+                val flankAngle = Math.toRadians(6.5)
                 val gear = Path().apply {
+                    fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd
                     for (i in 0 until 6) {
                         val centerAngle = -Math.PI / 2 + i * (Math.PI / 3)
                         val a1 = centerAngle - toothHalfAngle
@@ -129,9 +131,9 @@ fun WatchioIcon(kind: WatchioIconKind, tint: Color, modifier: Modifier = Modifie
                         lineTo(x4, y4)
                     }
                     close()
+                    addOval(androidx.compose.ui.geometry.Rect(center.x - rHole, center.y - rHole, center.x + rHole, center.y + rHole))
                 }
-                drawPath(gear, tint, style = stroke)
-                drawCircle(tint, unit * 0.13f, center, style = stroke)
+                drawPath(gear, tint, style = androidx.compose.ui.graphics.drawscope.Fill)
             }
             WatchioIconKind.Favourite -> {
                 val heart = Path().apply { moveTo(size.width * .50f, size.height * .82f); cubicTo(size.width * .16f, size.height * .62f, size.width * .10f, size.height * .34f, size.width * .29f, size.height * .22f); cubicTo(size.width * .40f, size.height * .15f, size.width * .48f, size.height * .23f, size.width * .50f, size.height * .30f); cubicTo(size.width * .52f, size.height * .23f, size.width * .60f, size.height * .15f, size.width * .71f, size.height * .22f); cubicTo(size.width * .90f, size.height * .34f, size.width * .84f, size.height * .62f, size.width * .50f, size.height * .82f); close() }
