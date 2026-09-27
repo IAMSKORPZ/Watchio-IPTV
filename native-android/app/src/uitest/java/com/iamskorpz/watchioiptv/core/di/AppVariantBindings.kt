@@ -19,7 +19,7 @@ internal object AppVariantBindings {
         context = context,
         okHttpClient = client,
         manifestUrl = BuildConfig.UPDATE_MANIFEST_URL,
-        expectedChannel = BuildConfig.UPDATE_CHANNEL,
+        expectedChannel = "dev",
         localManifest = { installed -> Json.encodeToString(StartupNotificationFixture(context).updateManifest(installed)) },
         artifactDownloadsEnabled = fixtureArtifactDownloadsEnabled(),
     )
