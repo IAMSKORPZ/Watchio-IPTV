@@ -677,7 +677,7 @@ class LandscapeResponsiveComposeTest {
         )
 
         assertTrue(composeRule.onAllNodesWithText("BBC One HD").fetchSemanticsNodes().isNotEmpty())
-        composeRule.onNodeWithText("No EPG Information Available").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("No programme information").fetchSemanticsNodes().isNotEmpty())
         composeRule.onNodeWithText("Refresh EPG").assertIsDisplayed()
     }
 

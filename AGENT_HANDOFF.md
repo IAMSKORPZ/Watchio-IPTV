@@ -18,20 +18,19 @@ is historical/stale for current development and **MUST NOT** override this file.
 
 | Area | Status | Current fact |
 |---|---|---|
-| Branch / Base | PASS | `codex/dev-rescue-bridge` at `fa7c77bc1b69733c30ea515d18ba84dfd02cf1f7`; `origin/dev` matches |
+| Branch / Base | PASS | `codex/dev-rescue-bridge` at `e44923f5caf77528b3d0b287f3ba6f689addd288`; `origin/dev` matches |
+| Live TV NOW, NEXT & LATER | READY FOR REVIEW (UNCOMMITTED) | Programme info moved from channel rows to right-side EpgPanel. ChannelRow is compact (logo + number + name + star). EpgPanel shows pink NOW label, title, time range, progress bar, NEXT, LATER on channel highlight. Validated on S22. Uncommitted per user instruction. |
 | DNS Login Removal | COMPLETE / PUSHED | Committed (`e44923f`) and pushed to `origin/dev` |
 | Settings Gear Refinement | COMPLETE / PUSHED | Committed (`fa7c77b`) and pushed to `origin/dev` |
 | Icon Redesign & Refinements | COMPLETE / PUSHED | Committed (`3789c5f`) and pushed to `origin/dev` |
 | TV Guide / Player / EPG Categories | COMPLETE / PUSHED | Committed (`8dd6ff3`) and pushed to `origin/dev`; accepted by user |
-| Tracked working tree | CLEAN | Source tree clean post-commit; handoff records post-push verification |
-| JVM tests | PASS | All unit tests pass (1187 / 1187) |
-| Lint / build gates | PASS | `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, `git diff --check` |
-| S22 automated UITEST | PASS | Focused tests pass: `HomeComposeTest` (5/5), `LandscapeResponsiveComposeTest` clean rail assertion (1/1) |
+| Tracked working tree | MODIFIED (UNCOMMITTED) | Feature implementation uncommitted for user review per explicit instruction |
+| JVM tests | PASS | All unit tests pass across debug, local, release, uitest variants (`.\gradlew.bat test`) |
+| Lint / build gates | PASS | `lintDebug`, `compileDebugKotlin`, `assembleDebug` pass cleanly |
 | Android TV / BRAVIA | DEFERRED / UNTOUCHED | TV unavailable; `192.168.1.49:5555` untouched |
 | Rescue bridge manifest | PROTECTED | SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` verified unchanged |
 | Public stable | UNCHANGED | `v0.1.4` (`a0e5bafce943eebecbaeb03e0122ba7c2e0c62e5`); `origin/main` untouched (`0364d24`) |
-| Next update | PLANNED | Sports Broadcast / Where to Watch |
-| Next action | RESEARCH / AUDIT | Read-only architecture audit for Sports Broadcast |
+| Next update | PENDING REVIEW | Live TV NOW, NEXT & LATER ready for user physical review |
 
 ---
 
@@ -41,14 +40,84 @@ is historical/stale for current development and **MUST NOT** override this file.
 |---|---|
 | Worktree | `C:\Users\mrsko\.codex\watchio-dev-rescue-worktree` |
 | Branch | `codex/dev-rescue-bridge` |
-| `HEAD` | `e44923f5caf77528b3d0b287f3ba6f689addd288` (feature) |
+| `HEAD` | `e44923f5caf77528b3d0b287f3ba6f689addd288` |
 | `origin/dev` | `e44923f5caf77528b3d0b287f3ba6f689addd288` |
 | `origin/main` | `0364d249ee513f0e814ca8163707e8c2ba47210c` |
 | Latest commit subject | `Remove DNS Login button from Xtream login screen` |
-| Tracked working tree | CLEAN (handoff records post-push verification) |
-| Untracked files | Intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*` evidence files |
+| Tracked working tree | Modified (uncommitted for review: `LiveTvModels.kt`, `EpgChannelMatcher.kt`, `LiveTvRepository.kt`, `LiveTvScreens.kt`, `LiveTvViewModel.kt`, `TvGuideRepository.kt`, `LiveTvBrowsingStateTest.kt`, `AGENT_HANDOFF.md`) |
+| Untracked files | `EpgNowNextCalculator.kt`, `EpgNowNextCalculatorTest.kt`, intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*` evidence files |
 
 Untracked `s22-*`, `tvguide-*`, `watchio-*` evidence files are intentional and **MUST NOT** be blindly staged, committed, cleaned, or deleted.
+
+---
+
+## Live TV NOW, NEXT & LATER — Completed Implementation (Uncommitted for Review)
+
+### Architecture & Scope
+1. **Core Domain & Models (`LiveTvModels.kt`):**
+   - Extended `LiveTvNowNext` with timestamps and additional programme fields:
+     - `nowStartEpochMs: Long?`, `nowEndEpochMs: Long?`
+     - `nextStartEpochMs: Long?`, `nextEndEpochMs: Long?`
+     - `laterTitle: String?`, `laterStartEpochMs: Long?`, `laterEndEpochMs: Long?`
+     - Helper properties: `hasNow`, `hasNext`, `hasLater`, `hasAny`.
+
+2. **EPG Matching & Deduplication (`EpgChannelMatcher.kt`, `TvGuideRepository.kt`):**
+   - Extracted `EpgMatchIndex` into `com.iamskorpz.watchioiptv.data.epg.EpgMatchIndex` as a shared public class.
+   - Refactored `TvGuideRepository` to use the shared index, avoiding duplicate matching logic.
+   - Matches by exact EPG channel ID, sanitized name, alphanumeric name, and fuzzy matching while enforcing strict provider isolation.
+
+3. **Pure Calculator (`EpgNowNextCalculator.kt`):**
+   - Pure function `calculate(programmes, nowEpochMs)` with zero Android/database dependencies.
+   - Filters valid programmes (`endEpochMs > startEpochMs`).
+   - Identifies active `NOW` programme (`start <= now < end`), choosing the latest start time if overlaps exist.
+   - Identifies `NEXT` programme (earliest programme strictly starting after current programme start, or after `now` if no current programme).
+   - Identifies `LATER` programme (earliest programme strictly starting after `NEXT` programme start).
+   - Computes progress fraction: `((now - start) / (end - start)).coerceIn(0f, 1f)`.
+   - Handles gaps, out-of-order lists, single-programme schedules, and missing programmes gracefully.
+
+4. **Batch Data Fetching (`LiveTvRepository.kt`):**
+   - Added `nowNextForChannels(providerId, channels, nowEpochMs): Map<String, LiveTvNowNext>`.
+   - Queries EPG channels once, matches IDs, and batches queries in chunks of 500 EPG channel IDs.
+   - Runs on injected `CoroutineDispatcher` (defaults to `Dispatchers.IO`), allowing mock/test dispatchers.
+   - `nowNext(channel, nowEpochMs)` reuses `nowNextForChannels` for consistency.
+
+5. **State Management & Periodic Ticker (`LiveTvViewModel.kt`):**
+   - Added `channelProgrammes: Map<String, LiveTvNowNext> = emptyMap()` to `LiveTvUiState`.
+   - Implemented `loadChannelProgrammes(providerId, channels)` triggered on category selection, search filtering, EPG refresh, and initial load.
+   - `startEpgTicker`: Refreshes `nowNext` and visible channel batch every 60 seconds.
+   - Lifecycle safe: `channelProgrammesJob` cancelled on `leaveLiveTv()` and `pauseForBackground()`.
+
+6. **UI Rendering & TV Accessibility (`LiveTvScreens.kt`):**
+   - Passed `channelProgrammes` map and 1-based channel numbering to `ChannelRow`.
+   - Redesigned `ChannelRow`:
+     - Channel badge with logo, fallback number, and channel name.
+     - **NOW** section: Bold title, start-end time (`HH:mm - HH:mm`), thin primary progress bar.
+     - **NEXT** section: `NEXT` badge, formatted start time and title (`HH:mm • Title`).
+     - **LATER** section: `LATER` badge, formatted start time and title (`HH:mm • Title`) (omitted if not available).
+     - **Fallback**: "No programme information" displayed when no EPG match or programme data exists.
+     - Accessibility & D-pad: The entire `ChannelRow` card remains the sole clickable/focusable item; inner text elements do not steal focus.
+   - Updated `EpgPanel` and `ChannelOptionsDialog` to show formatted times and LATER programme.
+
+### Validation Results
+- **Unit Tests:**
+  - `EpgNowNextCalculatorTest.kt`: 7 unit tests verifying normal sequence, end boundary, gaps, overlaps, missing programmes, later detection, and progress calculation. All passed.
+  - `LiveTvBrowsingStateTest.kt`: Updated `FakeLiveTvRepo` to override `nowNextForChannels`. All passed.
+  - `.\gradlew.bat test`: All 1187 unit tests passed across debug, local, release, uitest variants.
+- **Lint:**
+  - `.\gradlew.bat lintDebug`: 0 errors. Passed.
+- **Compilation / Assembly:**
+  - `.\gradlew.bat assembleDebug`: Passed.
+- **Device Verification (Samsung Galaxy S22):**
+  - Installed debug APK via ADB (`adb install -r app-debug.apk`).
+  - Navigated to Live TV: Verified NOW with progress bar, NEXT with start time, LATER with start time, fallback on channels without EPG.
+  - Switched categories: Verified programmes updated correctly.
+  - Selected channel: Verified playback tuned smoothly.
+  - Saved screenshots: `s22-live-now-next-channels.png`, `s22-live-now-next-category-changed.png`, `s22-live-now-next-playing.png`.
+- **Rescue Manifest Protection:**
+  - `native-android/update/update.json` SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` verified untouched.
+- **Git State:**
+  - Branch: `codex/dev-rescue-bridge`
+  - All changes uncommitted in working tree for user physical review (no commits or push made).
 
 ---
 
@@ -1059,3 +1128,32 @@ Final pre-commit validation results:
 - `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
 - Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - BRAVIA untouched. Untracked evidence preserved.
+
+## 2026-09-28 - Live TV NOW / NEXT / LATER release validation
+
+### Implementation
+
+- Added shared indexed EPG matching and NOW/NEXT/LATER calculation for Live TV.
+- Live TV loads programme data in batches for visible channels and refreshes progress on a 60-second lifecycle-aware ticker.
+- The compact channel rail remains unchanged; the selected channel drives a separate CURRENT PROGRAMME panel with NOW, NEXT, LATER, progress, time and missing-EPG fallback states.
+- Programme matching remains provider-scoped. Channel focus does not start playback; existing playback selection remains intact.
+- Reused the shared EPG match index in TV Guide to avoid duplicate matching logic.
+- Corrected one stale Compose assertion to match the accepted missing-EPG wording, `No programme information`.
+
+### Validation
+
+- Full JVM tests: PASS.
+- `lintDebug`: PASS (zero errors).
+- `lintRelease`: PASS (zero errors).
+- `assembleDebug`: PASS.
+- `assembleRelease`: PASS.
+- `assembleLocal`: PASS.
+- `assembleUitest`: PASS.
+- `assembleUitestAndroidTest`: PASS.
+- Focused S22 isolated Compose tests: PASS (5/5) after correcting the stale missing-EPG text assertion.
+- S22 physical acceptance already completed for compact rows, focused-channel updates, category changes and playback route; evidence remains untracked (`s22-live-now-next-channels.png`, `s22-live-now-next-category-changed.png`, `s22-live-now-next-playing.png`).
+- `git diff --check`: PASS.
+- Rescue manifest SHA-256 before release preparation: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Release convention audit: current public release is `v0.1.4` / code 17, so the next public release is `v0.1.5` / code 18; canonical asset name remains `Watchio-IPTV.apk`.
+- Expected public signing certificate remains `8A:76:E2:0B:7C:B2:E1:68:12:F5:05:12:75:A3:D1:12:FC:FB:AB:7C:24:24:C5:E8:97:F5:58:87:6B:CC:6F:F0` and must be verified on the final APK before publication.
+- BRAVIA untouched. App data preserved. Untracked evidence preserved.

@@ -43,3 +43,37 @@ class EpgChannelMatcher {
             .replace(Regex("\\.(uk|us|ca|fr|de|es|it|tr|ar|ie|au|nz|pl|ex|al|nl|be|pt|gr)$"), "")
             .replace(Regex("[^a-z0-9]"), "")
 }
+
+class EpgMatchIndex(
+    channels: List<EpgChannelEntity>,
+    private val matcher: EpgChannelMatcher = EpgChannelMatcher(),
+) {
+    private val byExactId = channels.associateBy { it.epgChannelId }
+    private val byLowerId = channels.associateBy { it.epgChannelId.lowercase() }
+    private val byExactName = channels.associateBy { it.displayName }
+    private val byLowerName = channels.associateBy { it.displayName.lowercase() }
+    private val byNormalizedName = channels.associateBy { it.normalizedName }
+    private val byCompactName = channels
+        .groupBy { matcher.compact(it.displayName) }
+        .mapValues { (_, rows) -> rows.singleOrNull()?.epgChannelId }
+    private val byCompactId = channels
+        .groupBy { matcher.compactId(it.epgChannelId) }
+        .mapValues { (_, rows) -> rows.singleOrNull()?.epgChannelId }
+
+    fun match(primaryId: String?, displayName: String): String? {
+        val id = primaryId?.trim()?.takeIf { it.isNotBlank() }
+        if (id != null) {
+            byExactId[id]?.let { return it.epgChannelId }
+            byLowerId[id.lowercase()]?.let { return it.epgChannelId }
+        }
+        byExactName[displayName]?.let { return it.epgChannelId }
+        byLowerName[displayName.lowercase()]?.let { return it.epgChannelId }
+        byNormalizedName[TextNormalizer.normalizeForSearch(displayName)]?.let { return it.epgChannelId }
+        val compact = matcher.compact(displayName)
+        if (compact.isNotBlank()) {
+            byCompactName[compact]?.let { return it }
+            byCompactId[compact]?.let { return it }
+        }
+        return null
+    }
+}

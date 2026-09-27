@@ -197,6 +197,12 @@ class LiveTvBrowsingStateTest {
 
         override suspend fun nowNext(channel: LiveTvChannel, nowEpochMs: Long): LiveTvNowNext =
             LiveTvNowNext("Now on ${channel.name}", "Next on ${channel.name}", 0.5f)
+
+        override suspend fun nowNextForChannels(
+            providerId: ProviderId,
+            channels: List<LiveTvChannel>,
+            nowEpochMs: Long,
+        ): Map<String, LiveTvNowNext> = channels.associate { it.id to nowNext(it, nowEpochMs) }
     }
 
     private class FakeEpgCoordinator : EpgRefreshCoordinator() {

@@ -63,6 +63,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
@@ -529,14 +530,15 @@ private fun ChannelListPanel(
             state = listState,
             modifier = Modifier.fillMaxSize().padding(10.dp).testTag("live-channels"),
         ) {
-            items(channels, key = { it.id }) { channel ->
+            itemsIndexed(channels, key = { _, item -> item.id }) { index, channel ->
                 ChannelRow(
                     channel = channel,
+                    channelNumber = (index + 1).toString(),
                     selected = channel.id == selectedChannel?.id,
                     onChannel = onChannel,
                     onChannelOptions = onChannelOptions,
                     onChannelBrowsed = onChannelBrowsed,
-                    modifier = if (channel.id == selectedChannel?.id) Modifier.focusRequester(contentFocus) else Modifier,
+                    modifier = if (channel.id == (selectedChannel?.id ?: channels.firstOrNull()?.id)) Modifier.focusRequester(contentFocus) else Modifier,
                 )
             }
         }
@@ -670,7 +672,7 @@ private fun EpgPanel(uiState: LiveTvUiState, compact: Boolean, onRefreshEpg: () 
             if (channel == null) {
                 Text("No programme selected", color = colors.textSecondary)
             } else if (uiState.nowNext.currentTitle == null) {
-                Text("No EPG Information Available", color = colors.textSecondary)
+                Text("No programme information", color = colors.textSecondary)
                 uiState.epgRefreshMessage?.takeIf { it.isNotBlank() }?.let {
                     Text(it, color = colors.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -688,6 +690,7 @@ private fun EpgPanel(uiState: LiveTvUiState, compact: Boolean, onRefreshEpg: () 
                     )
                 }
             } else {
+                Text("NOW", color = colors.liveTvAccent, fontWeight = FontWeight.Bold, maxLines = 1)
                 Text(uiState.nowNext.currentTitle, color = colors.textPrimary, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val range = programmeTimeRange(uiState.nowNext.currentStartEpochMs, uiState.nowNext.currentEndEpochMs)
                 if (range.isNotBlank()) Text(range, color = colors.textSecondary)
@@ -695,10 +698,16 @@ private fun EpgPanel(uiState: LiveTvUiState, compact: Boolean, onRefreshEpg: () 
                 uiState.nowNext.nextTitle?.let {
                     Spacer(Modifier.height(if (compact) 4.dp else 6.dp))
                     Text("NEXT", color = colors.textMuted, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text(it, color = colors.textSecondary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val nextTime = formatStartTime(uiState.nowNext.nextStartEpochMs)
+                    val nextLabel = if (nextTime.isNotBlank()) "$nextTime • $it" else it
+                    Text(nextLabel, color = colors.textSecondary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                uiState.nowNext.currentDescription?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, color = colors.textSecondary, maxLines = if (compact) 1 else 3, overflow = TextOverflow.Ellipsis)
+                uiState.nowNext.laterTitle?.let {
+                    Spacer(Modifier.height(if (compact) 3.dp else 4.dp))
+                    Text("LATER", color = colors.textMuted, fontWeight = FontWeight.Bold, maxLines = 1)
+                    val laterTime = formatStartTime(uiState.nowNext.laterStartEpochMs)
+                    val laterLabel = if (laterTime.isNotBlank()) "$laterTime • $it" else it
+                    Text(laterLabel, color = colors.textSecondary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -724,7 +733,16 @@ private fun ChannelOptionsDialog(
                 val range = programmeTimeRange(nowNext.currentStartEpochMs, nowNext.currentEndEpochMs)
                 if (range.isNotBlank()) Text(range)
                 nowNext.currentDescription?.takeIf { it.isNotBlank() }?.let { Text(it, maxLines = 3, overflow = TextOverflow.Ellipsis) }
-                nowNext.nextTitle?.let { Text("Next: $it") }
+                nowNext.nextTitle?.let {
+                    val nextTime = formatStartTime(nowNext.nextStartEpochMs)
+                    val label = if (nextTime.isNotBlank()) "Next: $nextTime • $it" else "Next: $it"
+                    Text(label)
+                }
+                nowNext.laterTitle?.let {
+                    val laterTime = formatStartTime(nowNext.laterStartEpochMs)
+                    val label = if (laterTime.isNotBlank()) "Later: $laterTime • $it" else "Later: $it"
+                    Text(label)
+                }
             }
         },
         confirmButton = {
@@ -831,6 +849,7 @@ fun FullscreenPlayerScreen(
 @Composable
 private fun ChannelRow(
     channel: LiveTvChannel,
+    channelNumber: String,
     selected: Boolean,
     onChannel: (LiveTvChannel) -> Unit,
     onChannelOptions: (LiveTvChannel) -> Unit,
@@ -846,7 +865,7 @@ private fun ChannelRow(
         contentDescription = channel.name,
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 5.dp)
+            .padding(bottom = 6.dp)
             .onFocusChanged { if (it.isFocused) onChannelBrowsed(channel) }
             .combinedClickable(
                 onClick = { onChannel(channel) },
@@ -862,14 +881,28 @@ private fun ChannelRow(
         ) {
             ChannelLogo(channel.logoUrl)
             Column(Modifier.weight(1f)) {
-                Text(
-                    channel.name,
-                    color = colors.textPrimary,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (channel.isFavorite) Text("Favourite", color = colors.liveTvAccent, maxLines = 1)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = channelNumber,
+                        color = colors.textMuted,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = channel.name,
+                        color = colors.textPrimary,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (channel.isFavorite) {
+                        Text("★", color = colors.liveTvAccent, fontSize = 11.sp)
+                    }
+                }
             }
         }
     }
@@ -908,4 +941,10 @@ private fun programmeTimeRange(startEpochMs: Long?, endEpochMs: Long?): String {
     if (startEpochMs == null || endEpochMs == null) return ""
     val formatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     return "${formatter.format(Instant.ofEpochMilli(startEpochMs))} - ${formatter.format(Instant.ofEpochMilli(endEpochMs))}"
+}
+
+private fun formatStartTime(startEpochMs: Long?): String {
+    if (startEpochMs == null) return ""
+    val formatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+    return formatter.format(Instant.ofEpochMilli(startEpochMs))
 }

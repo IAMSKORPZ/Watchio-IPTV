@@ -45,4 +45,14 @@ data class LiveTvNowNext(
     val currentDescription: String? = null,
     val currentStartEpochMs: Long? = null,
     val currentEndEpochMs: Long? = null,
-)
+    val nextStartEpochMs: Long? = null,
+    val nextEndEpochMs: Long? = null,
+    val laterTitle: String? = null,
+    val laterStartEpochMs: Long? = null,
+    val laterEndEpochMs: Long? = null,
+) {
+    val hasNow: Boolean get() = !currentTitle.isNullOrBlank()
+    val hasNext: Boolean get() = !nextTitle.isNullOrBlank()
+    val hasLater: Boolean get() = !laterTitle.isNullOrBlank()
+    val hasAny: Boolean get() = hasNow || hasNext || hasLater
+}

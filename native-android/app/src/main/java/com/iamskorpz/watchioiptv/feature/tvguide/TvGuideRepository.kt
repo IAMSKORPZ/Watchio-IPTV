@@ -4,6 +4,7 @@ import com.iamskorpz.watchioiptv.core.database.WatchioDatabase
 import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.core.player.PlaybackMedia
 import com.iamskorpz.watchioiptv.data.epg.EpgChannelMatcher
+import com.iamskorpz.watchioiptv.data.epg.EpgMatchIndex
 import com.iamskorpz.watchioiptv.data.epg.EpgRefreshCoordinator
 import com.iamskorpz.watchioiptv.data.epg.EpgRepository
 import com.iamskorpz.watchioiptv.data.live.LiveTvCategoryKind
@@ -135,38 +136,4 @@ class TvGuideRepository(
             epgChannelId = matchedEpgId,
             liveChannel = this,
         )
-
-    private class EpgMatchIndex(
-        channels: List<com.iamskorpz.watchioiptv.core.database.EpgChannelEntity>,
-        private val matcher: EpgChannelMatcher,
-    ) {
-        private val byExactId = channels.associateBy { it.epgChannelId }
-        private val byLowerId = channels.associateBy { it.epgChannelId.lowercase() }
-        private val byExactName = channels.associateBy { it.displayName }
-        private val byLowerName = channels.associateBy { it.displayName.lowercase() }
-        private val byNormalizedName = channels.associateBy { it.normalizedName }
-        private val byCompactName = channels
-            .groupBy { matcher.compact(it.displayName) }
-            .mapValues { (_, rows) -> rows.singleOrNull()?.epgChannelId }
-        private val byCompactId = channels
-            .groupBy { matcher.compactId(it.epgChannelId) }
-            .mapValues { (_, rows) -> rows.singleOrNull()?.epgChannelId }
-
-        fun match(primaryId: String?, displayName: String): String? {
-            val id = primaryId?.trim()?.takeIf { it.isNotBlank() }
-            if (id != null) {
-                byExactId[id]?.let { return it.epgChannelId }
-                byLowerId[id.lowercase()]?.let { return it.epgChannelId }
-            }
-            byExactName[displayName]?.let { return it.epgChannelId }
-            byLowerName[displayName.lowercase()]?.let { return it.epgChannelId }
-            byNormalizedName[com.iamskorpz.watchioiptv.core.util.TextNormalizer.normalizeForSearch(displayName)]?.let { return it.epgChannelId }
-            val compact = matcher.compact(displayName)
-            if (compact.isNotBlank()) {
-                byCompactName[compact]?.let { return it }
-                byCompactId[compact]?.let { return it }
-            }
-            return null
-        }
-    }
 }
