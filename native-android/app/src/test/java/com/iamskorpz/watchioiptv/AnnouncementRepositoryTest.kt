@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv
 
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementFeedParser
+import com.iamskorpz.watchioiptv.data.announcements.GitHubAnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementLocalStore
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementRepository
@@ -28,6 +29,14 @@ import org.junit.Test
 
 class AnnouncementRepositoryTest {
     private val parser = AnnouncementFeedParser()
+
+    @Test
+    fun productionFeedUsesNewRawWebsiteLocation() {
+        assertEquals(
+            "https://raw.githubusercontent.com/IAMSKORPZ/Watchio_Website/main/2711/JFO/YLT/announcements.json",
+            GitHubAnnouncementRemoteDataSource.FEED_URL,
+        )
+    }
 
     @Test
     fun parserSkipsBadEntriesAndToleratesUnknownOrMalformedOptionalFields() {
@@ -100,7 +109,11 @@ class AnnouncementRepositoryTest {
         repository.dismiss("two")
         snapshot = repository.snapshot.first()
         assertTrue(snapshot.items.first { it.announcement.id == "two" }.isDismissed)
-        assertTrue(snapshot.items.first { it.announcement.id == "two" }.isRead)
+        assertFalse(snapshot.items.first { it.announcement.id == "two" }.isRead)
+        assertEquals(1, snapshot.unreadCount)
+
+        repository.markAllRead(setOf("one", "two"))
+        snapshot = repository.snapshot.first()
         assertEquals(0, snapshot.unreadCount)
     }
 
@@ -266,8 +279,8 @@ private class FakeAnnouncementStore(initialFeed: String? = null) : AnnouncementL
 
     override suspend fun saveFeed(raw: String) { cachedFeed.value = raw }
     override suspend fun markSeen(id: String) { seenIds.value += id }
+    override suspend fun markSeen(ids: Set<String>) { seenIds.value += ids }
     override suspend fun dismiss(id: String) {
-        seenIds.value += id
         dismissedIds.value += id
     }
 }

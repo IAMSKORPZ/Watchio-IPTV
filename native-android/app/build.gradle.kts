@@ -43,8 +43,8 @@ android {
         applicationId = "com.iamskorpz.watchioiptv"
         minSdk = 24
         targetSdk = 36
-        versionCode = 17
-        versionName = "0.1.4"
+        versionCode = 18
+        versionName = "0.1.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val tmdbApiKey = providers.gradleProperty("WATCHIO_TMDB_API_KEY")
             .orElse(providers.environmentVariable("WATCHIO_TMDB_API_KEY"))

@@ -45,10 +45,12 @@ import com.iamskorpz.watchioiptv.data.updates.UpdateManifest
 import com.iamskorpz.watchioiptv.ui.components.WatchioButton
 import com.iamskorpz.watchioiptv.ui.components.WatchioButtonVariant
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
+import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioSpacing
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import java.io.File
 
 // ---------------------------------------------------------------------------
@@ -70,7 +72,7 @@ fun UpdatesScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .padding(horizontal = 18.dp, vertical = 14.dp)
             .testTag("updates-screen"),
     ) {
@@ -320,6 +322,7 @@ private fun UpdateActionPanel(
         UpdateStatus.UpdateAvailable -> {
             LaunchedEffect(Unit) { primaryFocus.requestFocus() }
             WatchioCard(
+                surfaceRole = WatchioSurfaceRole.Panel,
                 accent = colors.moviesAccent,
                 minHeight = 0.dp,
                 contentDescription = "Update action",
@@ -369,6 +372,7 @@ private fun UpdateActionPanel(
             LaunchedEffect(Unit) { primaryFocus.requestFocus() }
             val needsPermission = !context.canInstallUnknownApps()
             WatchioCard(
+                surfaceRole = WatchioSurfaceRole.Panel,
                 accent = colors.seriesAccent,
                 minHeight = 0.dp,
                 contentDescription = "Install action",
@@ -421,6 +425,7 @@ private fun UpdateActionPanel(
         UpdateStatus.UpToDate, UpdateStatus.DevelopmentBuildNewer -> {
             LaunchedEffect(Unit) { primaryFocus.requestFocus() }
             WatchioCard(
+                surfaceRole = WatchioSurfaceRole.Panel,
                 accent = colors.seriesAccent,
                 minHeight = 0.dp,
                 contentDescription = "Up to date",
@@ -470,6 +475,7 @@ private fun UpdateActionPanel(
         UpdateStatus.Error -> {
             LaunchedEffect(Unit) { primaryFocus.requestFocus() }
             WatchioCard(
+                surfaceRole = WatchioSurfaceRole.Panel,
                 accent = colors.liveTvAccent,
                 minHeight = 0.dp,
                 contentDescription = "Update error",
@@ -505,6 +511,7 @@ private fun UpdateActionPanel(
         UpdateStatus.Idle -> {
             LaunchedEffect(Unit) { primaryFocus.requestFocus() }
             WatchioCard(
+                surfaceRole = WatchioSurfaceRole.Panel,
                 accent = colors.liveTvAccent,
                 minHeight = 0.dp,
                 contentDescription = "Check for updates",

@@ -22,6 +22,7 @@ import com.iamskorpz.watchioiptv.data.RoomHistoryRepository
 import com.iamskorpz.watchioiptv.data.RoomProviderRepository
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementRepository
 import com.iamskorpz.watchioiptv.data.announcements.DataStoreAnnouncementLocalStore
+import com.iamskorpz.watchioiptv.data.announcements.GitHubAnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.epg.EpgRepository
 import com.iamskorpz.watchioiptv.data.epg.EpgRefreshCoordinator
 import com.iamskorpz.watchioiptv.data.epg.EpgAutoRefreshScheduler
@@ -32,10 +33,13 @@ import com.iamskorpz.watchioiptv.data.library.SearchRepository
 import com.iamskorpz.watchioiptv.data.m3u.M3uRepository
 import com.iamskorpz.watchioiptv.data.movies.MoviesRepository
 import com.iamskorpz.watchioiptv.data.series.SeriesRepository
+import com.iamskorpz.watchioiptv.data.updates.UpdateRepository
 import com.iamskorpz.watchioiptv.data.xtream.XtreamPlaybackUrlResolver
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
 import com.iamskorpz.watchioiptv.data.xtream.AndroidWatchioEndpointConfigSource
+import com.iamskorpz.watchioiptv.data.xtream.HttpWatchioDnsResolver
+import com.iamskorpz.watchioiptv.data.xtream.WATCHIO_DNS_RESOLVER_URL
 import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlResolver
 import com.iamskorpz.watchioiptv.domain.repository.CatalogRepository
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
@@ -70,6 +74,7 @@ class AppContainer(context: Context) {
     val providerCredentialStore = ProviderCredentialStore(secretStore)
     val networkModule = NetworkModule()
     val endpointManager = WatchioEndpointManager(AndroidWatchioEndpointConfigSource(appContext, networkModule.okHttpClient))
+    val dnsResolver = HttpWatchioDnsResolver(networkModule.okHttpClient, WATCHIO_DNS_RESOLVER_URL)
 
     private val announcementRemote = AppVariantBindings.createAnnouncementRemoteDataSource(
         appContext,

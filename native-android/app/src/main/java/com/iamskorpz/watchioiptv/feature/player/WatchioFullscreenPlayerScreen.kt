@@ -1,9 +1,6 @@
 package com.iamskorpz.watchioiptv.feature.player
 
-import android.app.UiModeManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -13,6 +10,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -68,6 +66,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -84,6 +83,8 @@ import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import com.iamskorpz.watchioiptv.core.player.WatchioAudioTrack
 import com.iamskorpz.watchioiptv.core.player.WatchioPlayerManager
+import com.iamskorpz.watchioiptv.core.device.detectDeviceInput
+import com.iamskorpz.watchioiptv.domain.model.InputMode
 import com.iamskorpz.watchioiptv.core.player.WatchioPlayerMetadata
 import com.iamskorpz.watchioiptv.core.player.WatchioPlayerState
 import com.iamskorpz.watchioiptv.core.player.shouldKeepScreenOn
@@ -175,6 +176,14 @@ fun PlayerIcon(
     color: Color = Color.White,
     modifier: Modifier = Modifier.size(20.dp),
 ) {
+    if (kind == PlayerIconKind.Settings) {
+        com.iamskorpz.watchioiptv.ui.icons.WatchioIcon(
+            kind = com.iamskorpz.watchioiptv.ui.icons.WatchioIconKind.Settings,
+            tint = color,
+            modifier = modifier,
+        )
+        return
+    }
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
@@ -325,13 +334,7 @@ fun PlayerIcon(
                 drawCircle(color, radius = w * 0.08f, center = Offset(w * 0.50f, h * 0.54f))
             }
             PlayerIconKind.Settings -> {
-                drawCircle(color, radius = w * 0.18f, center = Offset(w * 0.50f, h * 0.50f), style = Stroke(width = stroke))
-                for (i in 0 until 6) {
-                    val angle = (i * 60.0) * Math.PI / 180.0
-                    val cx = w * 0.50f + (w * 0.32f * cos(angle)).toFloat()
-                    val cy = h * 0.50f + (h * 0.32f * sin(angle)).toFloat()
-                    drawCircle(color, radius = w * 0.07f, center = Offset(cx, cy))
-                }
+                // Handled above in PlayerIcon via central WatchioIconKind.Settings
             }
             PlayerIconKind.Back -> {
                 drawLine(color, Offset(w * 0.22f, h * 0.50f), Offset(w * 0.78f, h * 0.50f), strokeWidth = stroke, cap = StrokeCap.Round)
@@ -386,7 +389,7 @@ fun PlayerControlItem(
                     color = if (focused) {
                         accent.copy(alpha = if (isPrimary) 0.40f else 0.30f)
                     } else {
-                        Color.White.copy(alpha = if (isPrimary) 0.08f else 0.035f)
+                        colors.buttonSurface.copy(alpha = if (isPrimary) 0.80f else 0.55f)
                     },
                     shape = CircleShape,
                 )
@@ -399,7 +402,7 @@ fun PlayerControlItem(
         ) {
             PlayerIcon(
                 kind = icon,
-                color = if (enabled) (if (focused) Color.White else Color.White.copy(alpha = 0.90f)) else colors.textMuted,
+                color = if (enabled) (if (focused) colors.focusedContent else colors.playerControl) else colors.textMuted,
                 modifier = Modifier.size(iconSize),
             )
         }
@@ -490,9 +493,7 @@ fun WatchioFullscreenPlayerScreen(
     val context = LocalContext.current
     val colors = LocalWatchioColors.current
     val isTvDevice = remember(context) {
-        val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
-        uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
-            context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        context.detectDeviceInput().inputMode == InputMode.TvRemote
     }
 
     var controlsVisible by remember { mutableStateOf(true) }
@@ -547,6 +548,25 @@ fun WatchioFullscreenPlayerScreen(
         }
     }
 
+    fun restartAutoHideTimer() {
+        lastInteractionEpochMs = System.currentTimeMillis()
+    }
+
+    fun showControls() {
+        channelHudJob?.cancel()
+        channelHudVisible = false
+        controlsVisible = true
+        restartAutoHideTimer()
+        try {
+            firstFocus.requestFocus()
+        } catch (_: Throwable) {}
+    }
+
+    fun hideControls() {
+        controlsVisible = false
+        restartAutoHideTimer()
+    }
+
     fun triggerChannelSwitch(previous: Boolean) {
         lastInteractionEpochMs = System.currentTimeMillis()
         if (contentContext !is PlayerContentContext.Live) return
@@ -589,7 +609,7 @@ fun WatchioFullscreenPlayerScreen(
         } else if (activeDialog != null) {
             activeDialog = null
         } else if (controlsVisible) {
-            controlsVisible = false
+            hideControls()
         } else if (channelHudVisible) {
             channelHudJob?.cancel()
             channelHudVisible = false
@@ -622,7 +642,7 @@ fun WatchioFullscreenPlayerScreen(
                     } else if (activeDialog != null) {
                         activeDialog = null
                     } else if (controlsVisible) {
-                        controlsVisible = false
+                        hideControls()
                     } else if (channelHudVisible) {
                         channelHudJob?.cancel()
                         channelHudVisible = false
@@ -631,74 +651,118 @@ fun WatchioFullscreenPlayerScreen(
                     }
                     return@onPreviewKeyEvent true
                 }
+                if (!controlsVisible) {
+                    when (event.key) {
+                        Key.DirectionUp -> {
+                            if (contentContext is PlayerContentContext.Live) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    triggerChannelSwitch(previous = true)
+                                }
+                                return@onPreviewKeyEvent true
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    showControls()
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        Key.DirectionDown -> {
+                            if (contentContext is PlayerContentContext.Live) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    triggerChannelSwitch(previous = false)
+                                }
+                                return@onPreviewKeyEvent true
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    showControls()
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        Key.DirectionLeft -> {
+                            if (metadata.isSeekable || contentContext !is PlayerContentContext.Live) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    triggerSeek(-10_000L)
+                                }
+                                return@onPreviewKeyEvent true
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    showControls()
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        Key.DirectionRight -> {
+                            if (metadata.isSeekable || contentContext !is PlayerContentContext.Live) {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    triggerSeek(10_000L)
+                                }
+                                return@onPreviewKeyEvent true
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    showControls()
+                                }
+                                return@onPreviewKeyEvent true
+                            }
+                        }
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
+                            if (event.type == KeyEventType.KeyDown) {
+                                showControls()
+                            }
+                            return@onPreviewKeyEvent true
+                        }
+                        else -> return@onPreviewKeyEvent false
+                    }
+                }
+
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                lastInteractionEpochMs = System.currentTimeMillis()
+                restartAutoHideTimer()
                 when (event.key) {
-                    Key.DirectionUp -> {
-                        if (!controlsVisible && contentContext is PlayerContentContext.Live) {
-                            triggerChannelSwitch(previous = true)
-                            true
-                        } else false
-                    }
-                    Key.DirectionDown -> {
-                        if (!controlsVisible && contentContext is PlayerContentContext.Live) {
-                            triggerChannelSwitch(previous = false)
-                            true
-                        } else false
-                    }
-                    Key.DirectionLeft -> {
-                        if (!controlsVisible && (metadata.isSeekable || contentContext !is PlayerContentContext.Live)) {
-                            triggerSeek(-10_000L)
-                            true
-                        } else false
-                    }
-                    Key.DirectionRight -> {
-                        if (!controlsVisible && (metadata.isSeekable || contentContext !is PlayerContentContext.Live)) {
-                            triggerSeek(10_000L)
-                            true
-                        } else false
-                    }
                     Key.Spacebar -> {
                         onPlayPause()
                         true
                     }
-                    Key.DirectionCenter, Key.Enter -> {
-                        if (!controlsVisible) {
-                            channelHudJob?.cancel()
-                            channelHudVisible = false
-                            controlsVisible = true
-                            firstFocus.requestFocus()
-                            true
-                        } else false
-                    }
                     else -> false
-                }
-            }
-            .clickable {
-                lastInteractionEpochMs = System.currentTimeMillis()
-                if (!controlsVisible) {
-                    channelHudJob?.cancel()
-                    channelHudVisible = false
-                    controlsVisible = true
-                } else {
-                    controlsVisible = false
                 }
             },
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> FrameLayout(ctx).also { view ->
-                view.keepScreenOn = shouldKeepScreenOn(playerState)
-                playerManager.attachSurface(view)
+            factory = { ctx -> FrameLayout(ctx).apply {
+                isFocusable = false
+                isFocusableInTouchMode = false
+                descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                keepScreenOn = shouldKeepScreenOn(playerState)
+                playerManager.attachFullscreenSurface(this)
             } },
             update = { view ->
+                view.isFocusable = false
+                view.isFocusableInTouchMode = false
+                view.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 view.keepScreenOn = shouldKeepScreenOn(playerState)
-                playerManager.attachSurface(view)
+                playerManager.attachFullscreenSurface(view)
             },
             onRelease = { view ->
                 view.keepScreenOn = false
                 playerManager.detachSurface(view)
             },
+        )
+
+        // Transparent tap surface to reliably intercept touch events over video
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onTap = {
+                            if (!controlsVisible) {
+                                showControls()
+                            } else {
+                                hideControls()
+                            }
+                        }
+                    )
+                }
         )
 
         // Top-left Lightweight Transient Channel Switch HUD (Surfing mode)
@@ -1845,8 +1909,8 @@ private fun UpNextOverlay(
             .widthIn(min = 280.dp, max = 340.dp)
             .testTag("up-next-overlay"),
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFF141722).copy(alpha = 0.94f),
-        border = BorderStroke(1.dp, colors.seriesAccent.copy(alpha = 0.40f)),
+        color = colors.dialogSurface.copy(alpha = 0.94f),
+        border = BorderStroke(1.dp, colors.buttonOutline),
         shadowElevation = 8.dp,
     ) {
         Column(

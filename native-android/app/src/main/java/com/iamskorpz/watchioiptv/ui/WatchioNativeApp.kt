@@ -2,10 +2,7 @@ package com.iamskorpz.watchioiptv.ui
 
 import android.content.Intent
 import android.app.Activity
-import android.app.UiModeManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.net.Uri
 import android.os.SystemClock
 import com.iamskorpz.watchioiptv.core.diagnostics.QuickLoginBootstrapTrace
@@ -22,6 +19,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -34,6 +32,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
@@ -95,8 +95,13 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.InputMode as ComposeInputMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.role
@@ -124,6 +129,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.iamskorpz.watchioiptv.core.di.AppContainer
+import com.iamskorpz.watchioiptv.core.device.DeviceInputDetection
+import com.iamskorpz.watchioiptv.core.device.detectDeviceInput
+import com.iamskorpz.watchioiptv.core.device.label
 import com.iamskorpz.watchioiptv.data.epg.EpgRefreshInterval
 import com.iamskorpz.watchioiptv.data.m3u.M3uImportState
 import com.iamskorpz.watchioiptv.data.xtream.XtreamImportState
@@ -162,6 +170,8 @@ import com.iamskorpz.watchioiptv.feature.settings.AccountInformationUiState
 import com.iamskorpz.watchioiptv.feature.settings.AccountInformationViewModel
 import com.iamskorpz.watchioiptv.feature.settings.SettingsUiState
 import com.iamskorpz.watchioiptv.feature.settings.SettingsViewModel
+import com.iamskorpz.watchioiptv.feature.settings.AppearanceScreen
+import com.iamskorpz.watchioiptv.feature.settings.AppearanceViewModel
 import com.iamskorpz.watchioiptv.feature.settings.FootballDataConnectionStatus
 import com.iamskorpz.watchioiptv.feature.settings.FootballDataSettingsUiState
 import com.iamskorpz.watchioiptv.feature.settings.FootballDataSettingsViewModel
@@ -173,6 +183,8 @@ import com.iamskorpz.watchioiptv.feature.startup.resolveStartupNotification
 import com.iamskorpz.watchioiptv.feature.startup.StartupNotification
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideScreen
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideViewModel
+import com.iamskorpz.watchioiptv.feature.tvguide.EpgCategoriesScreen
+import com.iamskorpz.watchioiptv.feature.tvguide.EpgCategoriesViewModel
 import com.iamskorpz.watchioiptv.feature.sports.SportsScreen
 import com.iamskorpz.watchioiptv.feature.sports.SportsViewModel
 import com.iamskorpz.watchioiptv.core.util.SystemWatchioClock
@@ -196,6 +208,10 @@ import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.components.WatchioProgressBar
 import com.iamskorpz.watchioiptv.ui.components.WatchioScreenHeader
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIcon
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIconColors
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIconKind
+import com.iamskorpz.watchioiptv.ui.icons.identityColor
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioComponentSizes
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioIconSizes
@@ -204,6 +220,10 @@ import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioSpacing
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeState
+import com.iamskorpz.watchioiptv.ui.theme.WatchioThemeDefinition
+import com.iamskorpz.watchioiptv.ui.theme.WatchioAppBackground
+import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioAppearance
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -215,6 +235,7 @@ import kotlinx.coroutines.delay
 internal enum class LivePlaybackOrigin {
     Live,
     Sports,
+    TvGuide,
 }
 
 internal fun closeLiveFullscreen(
@@ -223,6 +244,10 @@ internal fun closeLiveFullscreen(
 ) {
     if (origin == LivePlaybackOrigin.Sports) {
         if (!navController.popBackStack("sports", inclusive = false)) {
+            navController.popBackStack()
+        }
+    } else if (origin == LivePlaybackOrigin.TvGuide) {
+        if (!navController.popBackStack("tv-guide", inclusive = false)) {
             navController.popBackStack()
         }
     } else {
@@ -243,9 +268,12 @@ fun WatchioNativeApp(
     navController: NavHostController = rememberNavController(),
 ) {
     val themeState by container.settingsRepository.theme.collectAsStateWithLifecycle(initialValue = com.iamskorpz.watchioiptv.ui.theme.WatchioThemeState())
+    val activeAppearance by container.settingsRepository.activeAppearance.collectAsStateWithLifecycle(initialValue = WatchioThemeDefinition.WatchioDefault)
     val inputMode by container.settingsRepository.inputMode.collectAsStateWithLifecycle(initialValue = InputMode.Auto)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val context = LocalContext.current
+    val detectedDeviceInput = remember(context) { context.detectDeviceInput() }
+    val effectiveInputMode = if (inputMode == InputMode.Auto) detectedDeviceInput.inputMode else inputMode
     val announcementsViewModel: AnnouncementsViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -267,14 +295,15 @@ fun WatchioNativeApp(
     )
     TvRootExitBackHandler(
         enabled = shouldRequireTvDoubleBackExit(
-            inputMode = inputMode,
+            inputMode = effectiveInputMode,
             route = currentBackStackEntry?.destination?.route,
             hasPreviousBackStackEntry = navController.previousBackStackEntry != null,
         ),
         onExit = { (context as? Activity)?.finish() },
     )
-    WatchioTheme(themeState = themeState) {
+    WatchioTheme(themeState = themeState, appearance = activeAppearance) {
         Box(Modifier.fillMaxSize()) {
+        WatchioAppBackground(activeAppearance)
         NavHost(
             navController = navController,
             startDestination = "bootstrap",
@@ -285,7 +314,11 @@ fun WatchioNativeApp(
                     factory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return BootstrapViewModel(container.providerRepository, container.settingsRepository) as T
+                            return BootstrapViewModel(
+                                container.providerRepository,
+                                container.settingsRepository,
+                                detectedDeviceInput.inputMode,
+                            ) as T
                         }
                     },
                 )
@@ -302,6 +335,8 @@ fun WatchioNativeApp(
                 when (destination) {
                     BootstrapDestination.Loading -> BootstrapLoadingScreen()
                     BootstrapDestination.NeedsDeviceMode -> DeviceModeScreen(
+                        detection = detectedDeviceInput,
+                        onAutomatic = bootstrapViewModel::chooseAutomatic,
                         onMobile = bootstrapViewModel::chooseMobile,
                         onTv = bootstrapViewModel::chooseTv,
                     )
@@ -373,7 +408,7 @@ fun WatchioNativeApp(
                         livePlaybackOrigin = LivePlaybackOrigin.Live
                         navController.navigate("live")
                     },
-                    onTvGuide = { navController.navigate("tv-guide") },
+                    onTvGuide = { navController.navigate("epg-categories") },
                     onMovies = { navController.navigate("movies") },
                     onSeries = { navController.navigate("series") },
                     onSearch = { navController.navigate("search") },
@@ -421,15 +456,14 @@ fun WatchioNativeApp(
                     onRefresh = announcementsViewModel::refresh,
                     onOpen = announcementsViewModel::open,
                     onCloseDetails = announcementsViewModel::closeDetails,
-                    onDismiss = announcementsViewModel::dismiss,
-                    onToggleArchived = announcementsViewModel::toggleArchived,
+                    onMarkAllRead = announcementsViewModel::markAllRead,
                     onAction = { action ->
                         when (action) {
                             is AnnouncementAction.OpenUpdater -> navController.navigate("settings/updates")
                             is AnnouncementAction.OpenScreen -> navController.navigate(action.screen.route) { launchSingleTop = true }
                             is AnnouncementAction.OpenUrl -> runCatching {
                                 val uri = Uri.parse(action.url)
-                                require(uri.scheme == "https" || uri.scheme == "http")
+                                require(uri.scheme == "https")
                                 context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                             }
                         }
@@ -790,25 +824,52 @@ fun WatchioNativeApp(
                     },
                 )
             }
-            composable("tv-guide") {
-                val guideViewModel: TvGuideViewModel = viewModel(factory = tvGuideFactory(container))
+            composable("epg-categories") {
+                val categoriesViewModel: EpgCategoriesViewModel = viewModel(factory = epgCategoriesFactory(container))
+                val state by categoriesViewModel.state.collectAsStateWithLifecycle()
+                EpgCategoriesScreen(
+                    state = state,
+                    onCategory = { category -> navController.navigate("tv-guide?categoryId=${Uri.encode(category.id)}") },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = "tv-guide?categoryId={categoryId}",
+                arguments = listOf(navArgument("categoryId") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            ) { backStackEntry ->
+                val initialCategoryId = backStackEntry.arguments?.getString("categoryId")
+                val guideViewModel: TvGuideViewModel = viewModel(factory = tvGuideFactory(container, initialCategoryId))
                 val state by guideViewModel.state.collectAsStateWithLifecycle()
+                val playerState by container.playerManager.state.collectAsStateWithLifecycle()
                 TvGuideScreen(
                     state = state,
+                    playerManager = container.playerManager,
+                    playerState = playerState,
                     onJumpToNow = guideViewModel::jumpToNow,
                     onDay = guideViewModel::selectDay,
                     onCategory = guideViewModel::selectCategory,
                     onRefresh = guideViewModel::refreshEpg,
+                    onPreviewChannel = guideViewModel::previewChannel,
                     onChannel = guideViewModel::selectChannel,
+                    onProgrammeFocused = guideViewModel::focusProgramme,
                     onProgramme = guideViewModel::selectProgramme,
+                    onWatchLive = { channel, programme ->
+                        guideViewModel.playProgramme(channel, programme) {
+                            livePlaybackOrigin = LivePlaybackOrigin.TvGuide
+                            navController.navigate("live/fullscreen")
+                        }
+                    },
                     onPlayLive = {
                         guideViewModel.playLive {
-                            livePlaybackOrigin = LivePlaybackOrigin.Live
+                            livePlaybackOrigin = LivePlaybackOrigin.TvGuide
                             navController.navigate("live/fullscreen")
                         }
                     },
                     onCloseDetails = guideViewModel::closeDetails,
-                    onBack = { navController.popBackStack() },
+                    onBack = {
+                        guideViewModel.leaveGuide()
+                        navController.popBackStack()
+                    },
                 )
             }
             composable("providers/xtream/add") {
@@ -832,6 +893,28 @@ fun WatchioNativeApp(
                         }
                     },
                     onQuickLogin = { navController.navigate("quick-login") },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("providers/dns/add") {
+                val providerViewModel: XtreamProviderViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return XtreamProviderViewModel(
+                                container.xtreamRepository,
+                                container.dnsResolver,
+                                container.endpointManager,
+                            ) as T
+                        }
+                    },
+                )
+                val state by providerViewModel.state.collectAsStateWithLifecycle()
+                DnsLoginScreen(
+                    state = state,
+                    onUsername = providerViewModel::updateUsername,
+                    onPassword = providerViewModel::updatePassword,
+                    onConnect = { providerViewModel.connectDns { navigateHomeAsRoot(navController) } },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -958,7 +1041,6 @@ fun WatchioNativeApp(
             composable("settings/updates") {
                 UpdatesScreen(
                     state = updatesState,
-                    channelDisplayName = BuildConfig.UPDATE_CHANNEL_DISPLAY_NAME,
                     onBack = { navController.popBackStack() },
                     onCheck = updatesViewModel::checkForUpdates,
                     onDownload = updatesViewModel::downloadUpdate,
@@ -966,11 +1048,21 @@ fun WatchioNativeApp(
                 )
             }
             composable("settings/appearance") {
-                val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory(container))
-                val state by settingsViewModel.state.collectAsStateWithLifecycle()
-                SettingsDetailScreen("Appearance", onBack = { navController.popBackStack() }) {
-                    AppearanceSettingsContent(state = state, onTheme = settingsViewModel::setTheme)
-                }
+                val appearanceViewModel: AppearanceViewModel = viewModel(factory = appearanceFactory(container))
+                val state by appearanceViewModel.state.collectAsStateWithLifecycle()
+                AppearanceScreen(
+                    state = state,
+                    onBack = { navController.popBackStack() },
+                    onUpdate = appearanceViewModel::update,
+                    onSelect = appearanceViewModel::select,
+                    onApply = appearanceViewModel::apply,
+                    onDiscard = appearanceViewModel::discard,
+                    onResetSection = appearanceViewModel::resetSection,
+                    onResetAll = appearanceViewModel::resetAll,
+                    onDuplicate = appearanceViewModel::duplicate,
+                    onRename = appearanceViewModel::rename,
+                    onDelete = appearanceViewModel::delete,
+                )
             }
             composable("settings/input-mode") {
                 val settingsViewModel: SettingsViewModel = viewModel(factory = settingsFactory(container))
@@ -1034,7 +1126,6 @@ fun WatchioNativeApp(
             )
             is StartupNotification.RemoteAnnouncement -> {
                 val announcement = startupNotification.announcement
-                LaunchedEffect(announcement.id) { announcementsViewModel.markRead(announcement.id) }
                 StartupAnnouncementModal(
                     announcement = announcement,
                     onDismiss = {
@@ -1080,7 +1171,7 @@ private fun BootstrapLoadingScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1096,36 +1187,56 @@ private fun BootstrapLoadingScreen() {
 }
 
 @Composable
-private fun DeviceModeScreen(
+internal fun DeviceModeScreen(
+    detection: DeviceInputDetection,
+    onAutomatic: () -> Unit,
     onMobile: () -> Unit,
     onTv: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
-    val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { firstFocus.requestFocus() }
+    val mobileFocus = remember { FocusRequester() }
+    val tvFocus = remember { FocusRequester() }
+    val inputModeManager = LocalInputModeManager.current
+    LaunchedEffect(detection.inputMode, inputModeManager.inputMode) {
+        if (inputModeManager.inputMode == ComposeInputMode.Keyboard) {
+            if (detection.inputMode == InputMode.Touch) mobileFocus.requestFocus() else tvFocus.requestFocus()
+        }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .padding(32.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("How will you use Watchio?", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(spacing.sm))
+            Text("Detected: ${detection.label()}", color = colors.textSecondary)
             Spacer(Modifier.height(spacing.lg))
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.lg)) {
                 WatchioFocusableCard(
-                    title = "MOBILE / TOUCH\nPhones & Tablets",
-                    accent = colors.liveTvAccent,
-                    modifier = Modifier.width(300.dp).height(180.dp).focusRequester(firstFocus).testTag("device-mode-mobile"),
-                    onClick = onMobile,
+                    title = if (detection.inputMode == InputMode.Touch) "MOBILE / TOUCH\nDetected • Phones & Tablets" else "MOBILE / TOUCH\nPhones & Tablets",
+                    accent = if (detection.inputMode == InputMode.Touch) colors.focusGlow else colors.liveTvAccent,
+                    modifier = Modifier
+                        .width(300.dp)
+                        .height(180.dp)
+                        .focusRequester(mobileFocus)
+                        .focusProperties { right = tvFocus }
+                        .testTag("device-mode-mobile"),
+                    onClick = if (detection.inputMode == InputMode.Touch) onAutomatic else onMobile,
                 )
                 WatchioFocusableCard(
-                    title = "TV / REMOTE\nAndroid TV, Fire TV & Remote",
-                    accent = colors.seriesAccent,
-                    modifier = Modifier.width(340.dp).height(180.dp).testTag("device-mode-tv"),
-                    onClick = onTv,
+                    title = if (detection.inputMode == InputMode.TvRemote) "TV / REMOTE\nDetected • Android TV, Fire TV & Remote" else "TV / REMOTE\nAndroid TV, Fire TV & Remote",
+                    accent = if (detection.inputMode == InputMode.TvRemote) colors.focusGlow else colors.seriesAccent,
+                    modifier = Modifier
+                        .width(340.dp)
+                        .height(180.dp)
+                        .focusRequester(tvFocus)
+                        .focusProperties { left = mobileFocus }
+                        .testTag("device-mode-tv"),
+                    onClick = if (detection.inputMode == InputMode.TvRemote) onAutomatic else onTv,
                 )
             }
         }
@@ -1144,7 +1255,7 @@ private fun ProviderTypeSetupScreen(
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
     Column(
-        modifier = Modifier.fillMaxSize().background(colors.surfaceBase).padding(32.dp),
+        modifier = Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -1245,7 +1356,6 @@ internal fun HomeScreen(
             .fillMaxSize()
             .testTag("home-screen"),
     ) {
-        WatchioHomeBackground()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1260,7 +1370,7 @@ internal fun HomeScreen(
                 onSearch = onSearch,
                 onSports = onSports,
                 onAnnouncements = onAnnouncements,
-                onProviders = onProviders,
+                onSettings = onSettings,
                 announcementUnreadCount = announcementUnreadCount,
             )
             Spacer(Modifier.height(spacing.md))
@@ -1279,9 +1389,9 @@ internal fun HomeScreen(
                         .testTag("home-reference-grid"),
                     horizontalArrangement = Arrangement.spacedBy(spacing.lg),
                 ) {
-                    val liveAction = HomeAction("LIVE TV", "Watch Live TV Channels", formatHomeUpdatedTime(liveRefreshAtEpochMs), HomeIconKind.Live, colors.liveTvAccent, onLiveTv)
-                    val movieAction = HomeAction("MOVIES", "Browse a wide selection", formatHomeUpdatedTime(moviesRefreshAtEpochMs), HomeIconKind.Movie, colors.moviesAccent, onMovies)
-                    val seriesAction = HomeAction("SERIES", "Discover and binge-watch", formatHomeUpdatedTime(seriesRefreshAtEpochMs), HomeIconKind.Series, colors.seriesAccent, onSeries)
+                    val liveAction = HomeAction("LIVE TV", "Watch Live TV Channels", formatHomeUpdatedTime(liveRefreshAtEpochMs), WatchioIconKind.LiveTv, WatchioIconColors.LiveTv, onLiveTv)
+                    val movieAction = HomeAction("MOVIES", "Browse a wide selection", formatHomeUpdatedTime(moviesRefreshAtEpochMs), WatchioIconKind.Movies, WatchioIconColors.Movies, onMovies)
+                    val seriesAction = HomeAction("SERIES", "Discover and binge-watch", formatHomeUpdatedTime(seriesRefreshAtEpochMs), WatchioIconKind.TvShows, WatchioIconColors.TvShows, onSeries)
                     HomePrimaryCard(
                         action = liveAction,
                         refreshing = liveRefreshing,
@@ -1309,7 +1419,7 @@ internal fun HomeScreen(
                                 .testTag("home-movies"),
                         )
                         HomeSecondaryPill(
-                            action = HomeAction("TV Guide", "Now and Next", "", HomeIconKind.Guide, colors.liveTvAccent, onTvGuide),
+                            action = HomeAction("TV Guide", "Now and Next", "", WatchioIconKind.Guide, WatchioIconColors.LiveTv, onTvGuide),
                             modifier = Modifier
                                 .weight(0.28f)
                                 .fillMaxWidth()
@@ -1332,11 +1442,11 @@ internal fun HomeScreen(
                                 .testTag("home-series"),
                         )
                         HomeSecondaryPill(
-                            action = HomeAction("Settings", "App Preferences", "", HomeIconKind.Settings, colors.focusGlow, onSettings),
+                            action = HomeAction("Coming Soon", "More features on the way", "", WatchioIconKind.ComingSoon, WatchioIconColors.ComingSoon, null),
                             modifier = Modifier
                                 .weight(0.28f)
                                 .fillMaxWidth()
-                                .testTag("home-settings"),
+                                .testTag("home-coming-soon"),
                         )
                     }
                 }
@@ -1375,7 +1485,7 @@ internal fun ProviderManagementScreen(
     val firstFocus = remember { FocusRequester() }
     BackHandler(onBack = onBack)
     Column(
-        modifier = Modifier.fillMaxSize().background(colors.surfaceBase).padding(32.dp),
+        modifier = Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).padding(32.dp),
     ) {
         WatchioPageHeader(title = "PROVIDER MANAGEMENT", onBack = onBack, testTagPrefix = "providers")
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
@@ -1559,6 +1669,7 @@ internal fun XtreamProviderScreen(
     onConnect: () -> Unit,
     onQuickLogin: () -> Unit,
     onBack: () -> Unit,
+    imeVisibleOverride: Boolean? = null,
 ) {
     val colors = LocalWatchioColors.current
     val type = LocalWatchioTypography.current
@@ -1574,6 +1685,7 @@ internal fun XtreamProviderScreen(
     val cancelBringIntoView = remember { BringIntoViewRequester() }
     val formScope = rememberCoroutineScope()
     val busy = state.importState is XtreamImportState.Importing
+    DismissImeBeforeNavigationBack(connectFocus, onBack, imeVisibleOverride)
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary,
         unfocusedTextColor = colors.textPrimary,
@@ -1588,7 +1700,7 @@ internal fun XtreamProviderScreen(
     )
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().background(colors.surfaceBase).testTag("xtream-login-screen"),
+        modifier = Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).testTag("xtream-login-screen"),
     ) {
         val compact = maxWidth < 600.dp
         Column(
@@ -1687,9 +1799,9 @@ internal fun XtreamProviderScreen(
                     text = "QUICK LOGIN",
                     onClick = onQuickLogin,
                     focusRequester = quickLoginFocus,
-                    modifier = Modifier.fillMaxWidth().height(52.dp).bringIntoViewRequester(quickLoginBringIntoView).focusProperties { up = connectFocus; down = cancelFocus }.tvVerticalFocus(up = connectFocus, down = cancelFocus, upBringIntoView = connectBringIntoView, downBringIntoView = cancelBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-quick-login"),
+                    modifier = Modifier.fillMaxWidth().height(52.dp).bringIntoViewRequester(quickLoginBringIntoView).focusProperties { up = connectFocus; down = cancelFocus }.tvVerticalFocus(up = connectFocus, down = cancelFocus, downBringIntoView = cancelBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-quick-login"),
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
                 XtreamLoginAction(
                     text = "Cancel",
                     onClick = onBack,
@@ -1698,6 +1810,72 @@ internal fun XtreamProviderScreen(
                     modifier = Modifier.width(160.dp).bringIntoViewRequester(cancelBringIntoView).focusProperties { up = quickLoginFocus }.tvVerticalFocus(up = quickLoginFocus, upBringIntoView = quickLoginBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-cancel"),
                 )
             }
+        }
+    }
+}
+
+@Composable
+internal fun DnsLoginScreen(
+    state: com.iamskorpz.watchioiptv.feature.provider.XtreamProviderFormState,
+    onUsername: (String) -> Unit,
+    onPassword: (String) -> Unit,
+    onConnect: () -> Unit,
+    onBack: () -> Unit,
+    imeVisibleOverride: Boolean? = null,
+) {
+    val colors = LocalWatchioColors.current
+    val type = LocalWatchioTypography.current
+    val radii = LocalWatchioRadii.current
+    val usernameFocus = remember { FocusRequester() }
+    val passwordFocus = remember { FocusRequester() }
+    val loginFocus = remember { FocusRequester() }
+    val backFocus = remember { FocusRequester() }
+    val busy = state.importState is XtreamImportState.Importing
+    DismissImeBeforeNavigationBack(loginFocus, onBack, imeVisibleOverride)
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = colors.textPrimary, unfocusedTextColor = colors.textPrimary,
+        cursorColor = colors.focusBorder, focusedBorderColor = colors.focusBorder,
+        unfocusedBorderColor = colors.textMuted.copy(alpha = 0.55f),
+        focusedLabelColor = colors.textPrimary, unfocusedLabelColor = colors.textSecondary,
+        focusedContainerColor = colors.surfaceElevated.copy(alpha = 0.92f),
+        unfocusedContainerColor = colors.surfaceElevated.copy(alpha = 0.72f),
+    )
+    LaunchedEffect(Unit) { usernameFocus.requestFocus() }
+    Box(
+        Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).verticalScroll(rememberScrollState()).imePadding().padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.widthIn(max = 580.dp).fillMaxWidth().clip(RoundedCornerShape(radii.lg))
+                .background(colors.surfaceCard.copy(alpha = 0.76f)).padding(22.dp).testTag("dns-login-screen"),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            WatchioLogoMark()
+            Text("DNS Login", color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold)
+            Text("Enter your account details. Watchio will find your provider.", color = colors.textSecondary, style = type.body, textAlign = TextAlign.Center)
+            OutlinedTextField(
+                value = state.username, onValueChange = onUsername, label = { Text("Username") }, singleLine = true,
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }), colors = fieldColors,
+                modifier = Modifier.fillMaxWidth().height(56.dp).focusRequester(usernameFocus).focusProperties { down = passwordFocus }.tvVerticalFocus(down = passwordFocus).testTag("dns-username"),
+            )
+            OutlinedTextField(
+                value = state.password, onValueChange = onPassword, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onConnect() }), colors = fieldColors,
+                modifier = Modifier.fillMaxWidth().height(56.dp).focusRequester(passwordFocus).focusProperties { up = usernameFocus; down = loginFocus }.tvVerticalFocus(up = usernameFocus, down = loginFocus).testTag("dns-password"),
+            )
+            state.errorMessage?.let { Text(it, color = Color(0xFFFF6B7A), style = type.body, modifier = Modifier.fillMaxWidth().testTag("dns-error")) }
+            XtreamLoginAction(
+                text = if (busy) "SIGNING IN..." else "LOGIN", onClick = onConnect,
+                focusRequester = loginFocus, primary = true, enabled = !busy && state.username.isNotBlank() && state.password.isNotBlank(), loading = busy,
+                modifier = Modifier.fillMaxWidth().height(56.dp).focusProperties { up = passwordFocus; down = backFocus }.tvVerticalFocus(up = passwordFocus, down = backFocus).testTag("dns-connect"),
+            )
+            XtreamLoginAction(
+                text = "Back", onClick = onBack, focusRequester = backFocus, tertiary = true,
+                modifier = Modifier.width(160.dp).focusProperties { up = loginFocus }.tvVerticalFocus(up = loginFocus).testTag("dns-back"),
+            )
         }
     }
 }
@@ -1860,9 +2038,7 @@ private fun QuickLoginScreen(
 }
 
 private fun Context.isTelevisionDevice(): Boolean {
-    val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
-    return uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
-        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    return detectDeviceInput().inputMode == InputMode.TvRemote
 }
 
 @Composable
@@ -1902,6 +2078,8 @@ private fun M3uUrlProviderScreen(
 ) {
     val colors = LocalWatchioColors.current
     val firstFocus = remember { FocusRequester() }
+    val connectFocus = remember { FocusRequester() }
+    DismissImeBeforeNavigationBack(connectFocus, onBack)
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
     ProviderFormContainer {
         Text("M3U URL", color = colors.textPrimary, fontWeight = FontWeight.Bold)
@@ -1934,7 +2112,7 @@ private fun M3uUrlProviderScreen(
         M3uImportStatus(state)
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.bringIntoViewOnFocus())
+            WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.focusRequester(connectFocus).bringIntoViewOnFocus())
             WatchioFocusableCard("Cancel", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.bringIntoViewOnFocus())
         }
     }
@@ -1951,6 +2129,8 @@ private fun M3uFileProviderScreen(
     val colors = LocalWatchioColors.current
     val context = LocalContext.current
     val firstFocus = remember { FocusRequester() }
+    val chooseFileFocus = remember { FocusRequester() }
+    DismissImeBeforeNavigationBack(chooseFileFocus, onBack)
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         runCatching {
@@ -1979,9 +2159,50 @@ private fun M3uFileProviderScreen(
         M3uImportStatus(state)
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WatchioFocusableCard("Choose File", accent = colors.liveTvAccent, onClick = { launcher.launch(arrayOf("*/*")) }, modifier = Modifier.bringIntoViewOnFocus())
+            WatchioFocusableCard("Choose File", accent = colors.liveTvAccent, onClick = { launcher.launch(arrayOf("*/*")) }, modifier = Modifier.focusRequester(chooseFileFocus).bringIntoViewOnFocus())
             WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.bringIntoViewOnFocus())
             WatchioFocusableCard("Cancel", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.bringIntoViewOnFocus())
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DismissImeBeforeNavigationBack(
+    fallbackFocus: FocusRequester,
+    onNavigateBack: () -> Unit,
+    imeVisibleOverride: Boolean? = null,
+) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val density = LocalDensity.current
+    val imeVisible = imeVisibleOverride ?: (WindowInsets.ime.getBottom(density) > 0)
+    var wasImeVisible by remember { mutableStateOf(false) }
+    var imeDismissed by remember { mutableStateOf(false) }
+
+    fun restoreRemoteFocus() {
+        keyboardController?.hide()
+        focusManager.clearFocus(force = true)
+        fallbackFocus.requestFocus()
+    }
+
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) {
+            if (!wasImeVisible) imeDismissed = false
+            wasImeVisible = true
+        } else if (wasImeVisible) {
+            wasImeVisible = false
+            imeDismissed = true
+            restoreRemoteFocus()
+        }
+    }
+
+    BackHandler {
+        if (imeVisible && !imeDismissed) {
+            imeDismissed = true
+            restoreRemoteFocus()
+        } else {
+            onNavigateBack()
         }
     }
 }
@@ -1997,7 +2218,7 @@ private fun ProviderFormContainer(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.surfaceBase)
+            .background(watchioScreenBackgroundColor())
             .verticalScroll(scrollState)
             .imePadding()
             .padding(32.dp),
@@ -2045,65 +2266,10 @@ private data class HomeAction(
     val title: String,
     val subtitle: String,
     val status: String,
-    val icon: HomeIconKind,
+    val icon: WatchioIconKind,
     val accent: androidx.compose.ui.graphics.Color,
-    val onClick: () -> Unit,
+    val onClick: (() -> Unit)?,
 )
-
-private enum class HomeIconKind {
-    Live,
-    Movie,
-    Series,
-    Guide,
-    Settings,
-    List,
-    Search,
-    Provider,
-    Sports,
-    Announcement,
-    Back,
-}
-
-@Composable
-private fun WatchioHomeBackground() {
-    val colors = LocalWatchioColors.current
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        colors.surfaceBase,
-                        colors.surfaceCard,
-                        colors.surfaceBase,
-                    ),
-                ),
-            ),
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            drawCircle(colors.liveTvAccent.copy(alpha = 0.22f), radius = size.minDimension * 0.42f, center = Offset(size.width * 0.12f, size.height * 0.46f))
-            drawCircle(colors.moviesAccent.copy(alpha = 0.22f), radius = size.minDimension * 0.46f, center = Offset(size.width * 0.46f, size.height * 0.36f))
-            drawCircle(colors.seriesAccent.copy(alpha = 0.20f), radius = size.minDimension * 0.42f, center = Offset(size.width * 0.88f, size.height * 0.46f))
-            drawCircle(colors.liveTvAccent.copy(alpha = 0.12f), radius = size.minDimension * 0.22f, center = Offset(size.width * 0.02f, size.height * 0.18f))
-            drawCircle(colors.seriesAccent.copy(alpha = 0.11f), radius = size.minDimension * 0.24f, center = Offset(size.width * 0.98f, size.height * 0.24f))
-            for (index in 0..10) {
-                val y = size.height * (0.18f + index * 0.08f)
-                drawLine(
-                    color = when (index % 3) {
-                        0 -> colors.liveTvAccent
-                        1 -> colors.moviesAccent
-                        else -> colors.seriesAccent
-                    }.copy(alpha = 0.06f),
-                    start = Offset(0f, y),
-                    end = Offset(size.width, y + (index % 3 - 1) * 54f),
-                    strokeWidth = 3f,
-                    cap = StrokeCap.Round,
-                )
-            }
-            drawRect(Color.Black.copy(alpha = 0.58f), size = size)
-        }
-    }
-}
 
 @Composable
 internal fun HomeTopBar(
@@ -2113,7 +2279,7 @@ internal fun HomeTopBar(
     onSearch: () -> Unit,
     onSports: () -> Unit,
     onAnnouncements: () -> Unit,
-    onProviders: () -> Unit,
+    onSettings: () -> Unit,
     announcementUnreadCount: Int = 0,
 ) {
     val colors = LocalWatchioColors.current
@@ -2149,10 +2315,24 @@ internal fun HomeTopBar(
                 horizontalArrangement = Arrangement.spacedBy(spacing.xs, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                HomeTopAction("Search", HomeIconKind.Search, colors.textPrimary, onSearch, contentDescription = "Search", testTag = "home-search")
-                HomeTopAction("Sports", HomeIconKind.Sports, colors.liveTvAccent, onSports)
-                HomeTopAction("Announcements", HomeIconKind.Announcement, colors.moviesAccent, onAnnouncements, badgeCount = announcementUnreadCount)
-                HomeTopAction("Playlist", HomeIconKind.Provider, colors.seriesAccent, onProviders)
+                HomeTopAction("Search", WatchioIconKind.Search, WatchioIconColors.Search, onSearch, contentDescription = "Search", testTag = "home-search")
+                HomeTopAction("Sports", WatchioIconKind.Football, WatchioIconColors.Football, onSports)
+                HomeTopAction(
+                    "Notifications",
+                    WatchioIconKind.Announcements,
+                    WatchioIconKind.Announcements.identityColor(),
+                    onAnnouncements,
+                    contentDescription = "Notifications, ${notificationBadgeLabel(announcementUnreadCount)}",
+                    testTag = "home-notifications",
+                    badgeCount = announcementUnreadCount,
+                )
+                HomeTopAction(
+                    "Settings",
+                    WatchioIconKind.Settings,
+                    WatchioIconColors.Settings,
+                    onSettings,
+                    testTag = "home-settings",
+                )
             }
         }
         if (activeServerLabel != null) {
@@ -2185,7 +2365,7 @@ private fun WatchioLogoMark() {
             .border(1.dp, colors.liveTvAccent.copy(alpha = 0.72f), RoundedCornerShape(radii.lg)),
         contentAlignment = Alignment.Center,
     ) {
-        HomeVectorIcon(HomeIconKind.Live, colors.liveTvAccent, Modifier.size(icons.lg))
+        WatchioIcon(WatchioIconKind.LiveTv, WatchioIconColors.LiveTv, Modifier.size(icons.lg))
     }
 }
 
@@ -2218,7 +2398,7 @@ private fun NoProviderHome(
 private fun HomePlaceholderScreen(title: String, message: String, onBack: () -> Unit) {
     val colors = LocalWatchioColors.current
     Column(
-        modifier = Modifier.fillMaxSize().background(colors.surfaceBase).padding(32.dp),
+        modifier = Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -2231,7 +2411,7 @@ private fun HomePlaceholderScreen(title: String, message: String, onBack: () -> 
 @Composable
 private fun HomeTopAction(
     label: String,
-    icon: HomeIconKind,
+    icon: WatchioIconKind,
     tint: Color,
     onClick: () -> Unit,
     contentDescription: String = label,
@@ -2243,6 +2423,7 @@ private fun HomeTopAction(
     Box(Modifier.size(52.dp)) {
         WatchioCard(
             modifier = Modifier.fillMaxSize().testTag(testTag),
+            surfaceRole = com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole.Control,
             accent = tint,
             minWidth = 0.dp,
             minHeight = 44.dp,
@@ -2254,7 +2435,7 @@ private fun HomeTopAction(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                HomeVectorIcon(icon, tint, Modifier.size(24.dp))
+                WatchioIcon(icon, tint, Modifier.size(24.dp).testTag("home-top-icon-${icon.name}"))
             }
         }
         if (badgeCount > 0) {
@@ -2262,13 +2443,13 @@ private fun HomeTopAction(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .size(20.dp)
-                    .background(colors.moviesAccent, CircleShape)
+                    .background(colors.badgeSurface, CircleShape)
                     .testTag("home-announcements-badge"),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = if (badgeCount > 9) "9+" else badgeCount.toString(),
-                    color = colors.surfaceBase,
+                    color = colors.badgeText,
                     fontWeight = FontWeight.Bold,
                     style = LocalWatchioTypography.current.label,
                 )
@@ -2335,7 +2516,7 @@ private fun HomePrimaryCard(
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            HomeVectorIcon(action.icon, action.accent, Modifier.size(52.dp))
+            WatchioIcon(action.icon, action.accent, Modifier.size(52.dp).testTag("home-icon-${action.icon.name}"))
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(action.title, color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(action.subtitle, color = colors.textSecondary, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2344,7 +2525,7 @@ private fun HomePrimaryCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
-                    .background(Color.Black.copy(alpha = 0.22f))
+                    .background(colors.surfaceElevated.copy(alpha = 0.72f))
                     .padding(horizontal = spacing.lg),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -2386,7 +2567,7 @@ internal fun HomeRefreshModal(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.72f))
+            .background(colors.playerOverlay.copy(alpha = 0.72f))
             .focusRequester(focusRequester)
             .onPreviewKeyEvent { true }
             .clickable(interactionSource = interactionSource, indication = null, onClick = {})
@@ -2449,6 +2630,7 @@ internal fun HomeRefreshControl(
             .height(34.dp)
             .testTag("home-${title.lowercase().replace(' ', '-')}-refresh")
             .then(focusModifier),
+        surfaceRole = com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole.Control,
         accent = accent,
         enabled = !refreshing,
         minWidth = 44.dp,
@@ -2477,6 +2659,7 @@ private fun HomeSecondaryPill(action: HomeAction, modifier: Modifier = Modifier)
     val type = LocalWatchioTypography.current
     WatchioCard(
         modifier = modifier,
+        surfaceRole = com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole.Control,
         accent = action.accent,
         minWidth = 0.dp,
         minHeight = 0.dp,
@@ -2488,7 +2671,7 @@ private fun HomeSecondaryPill(action: HomeAction, modifier: Modifier = Modifier)
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            HomeVectorIcon(action.icon, colors.textPrimary, Modifier.size(32.dp))
+            WatchioIcon(action.icon, action.accent, Modifier.size(32.dp).testTag("home-icon-${action.icon.name}"))
             Spacer(Modifier.width(spacing.md))
             Column {
                 Text(action.title.uppercase(), color = colors.textPrimary, style = type.cardTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2511,6 +2694,12 @@ private fun HomeFooter(providerSummary: String, providerExpiryEpochMs: Long?) {
         Text(formatHomeVersion(BuildConfig.VERSION_NAME), color = colors.textMuted, style = type.body)
         Text("Active Provider: $providerSummary", color = colors.textSecondary, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 300.dp))
     }
+}
+
+internal fun notificationBadgeLabel(count: Int): String = when {
+    count <= 0 -> "no unread notifications"
+    count == 1 -> "1 unread notification"
+    else -> "$count unread notifications"
 }
 
 internal fun formatHomeVersion(versionName: String): String = "v$versionName"
@@ -2537,108 +2726,6 @@ private fun formatAccountDateTime(epochMs: Long?): String {
     if (epochMs == null || epochMs <= 0L) return "Not available"
     val local = Instant.ofEpochMilli(epochMs).atZone(ZoneId.systemDefault()).toLocalDateTime()
     return local.format(DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a"))
-}
-
-@Composable
-private fun HomeVectorIcon(kind: HomeIconKind, tint: Color, modifier: Modifier = Modifier) {
-    Canvas(modifier) {
-        val stroke = Stroke(width = size.minDimension * 0.10f, cap = StrokeCap.Round)
-        when (kind) {
-            HomeIconKind.Live, HomeIconKind.Guide -> {
-                drawRoundRect(tint, topLeft = Offset(size.width * 0.16f, size.height * 0.26f), size = Size(size.width * 0.68f, size.height * 0.48f), style = stroke)
-                drawLine(tint, Offset(size.width * 0.36f, size.height * 0.26f), Offset(size.width * 0.26f, size.height * 0.08f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.62f, size.height * 0.26f), Offset(size.width * 0.74f, size.height * 0.08f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                val path = Path().apply {
-                    moveTo(size.width * 0.44f, size.height * 0.40f)
-                    lineTo(size.width * 0.44f, size.height * 0.62f)
-                    lineTo(size.width * 0.62f, size.height * 0.51f)
-                    close()
-                }
-                drawPath(path, tint)
-            }
-            HomeIconKind.Movie -> {
-                val path = Path().apply {
-                    moveTo(size.width * 0.34f, size.height * 0.22f)
-                    lineTo(size.width * 0.34f, size.height * 0.78f)
-                    lineTo(size.width * 0.76f, size.height * 0.50f)
-                    close()
-                }
-                drawPath(path, tint)
-            }
-            HomeIconKind.Search -> {
-                val strokeWidth = size.minDimension * 0.10f
-                val radius = size.width * 0.30f
-                val centerOffset = Offset(size.width * 0.42f, size.height * 0.42f)
-                drawCircle(
-                    color = tint,
-                    radius = radius,
-                    center = centerOffset,
-                    style = Stroke(width = strokeWidth),
-                )
-                val handleStart = Offset(
-                    centerOffset.x + (radius * 0.7071f),
-                    centerOffset.y + (radius * 0.7071f),
-                )
-                val handleEnd = Offset(
-                    size.width * 0.88f,
-                    size.height * 0.88f,
-                )
-                drawLine(
-                    color = tint,
-                    start = handleStart,
-                    end = handleEnd,
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
-            }
-            HomeIconKind.Series -> {
-                drawRoundRect(tint, topLeft = Offset(size.width * 0.18f, size.height * 0.30f), size = Size(size.width * 0.64f, size.height * 0.48f))
-                drawLine(Color.Black.copy(alpha = 0.65f), Offset(size.width * 0.22f, size.height * 0.30f), Offset(size.width * 0.74f, size.height * 0.30f), strokeWidth = size.minDimension * 0.08f)
-                for (i in 0..3) {
-                    drawLine(Color.Black.copy(alpha = 0.65f), Offset(size.width * (0.25f + i * 0.13f), size.height * 0.18f), Offset(size.width * (0.31f + i * 0.13f), size.height * 0.30f), strokeWidth = size.minDimension * 0.06f)
-                }
-            }
-            HomeIconKind.Settings -> {
-                drawCircle(tint, radius = size.minDimension * 0.18f, center = center, style = stroke)
-                for (i in 0..7) {
-                    val angle = Math.toRadians((i * 45).toDouble())
-                    val start = Offset(center.x + kotlin.math.cos(angle).toFloat() * size.minDimension * 0.25f, center.y + kotlin.math.sin(angle).toFloat() * size.minDimension * 0.25f)
-                    val end = Offset(center.x + kotlin.math.cos(angle).toFloat() * size.minDimension * 0.42f, center.y + kotlin.math.sin(angle).toFloat() * size.minDimension * 0.42f)
-                    drawLine(tint, start, end, strokeWidth = stroke.width, cap = StrokeCap.Round)
-                }
-            }
-            HomeIconKind.List, HomeIconKind.Provider -> {
-                for (i in 0..2) {
-                    val y = size.height * (0.30f + i * 0.20f)
-                    drawCircle(tint, radius = size.minDimension * 0.045f, center = Offset(size.width * 0.22f, y))
-                    drawLine(tint, Offset(size.width * 0.34f, y), Offset(size.width * 0.80f, y), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                }
-            }
-            HomeIconKind.Sports -> {
-                drawCircle(tint, radius = size.minDimension * 0.34f, center = center, style = stroke)
-                drawCircle(tint, radius = size.minDimension * 0.08f, center = center)
-                drawLine(tint, Offset(size.width * 0.28f, size.height * 0.32f), Offset(size.width * 0.72f, size.height * 0.68f), strokeWidth = stroke.width * 0.72f, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.72f, size.height * 0.32f), Offset(size.width * 0.28f, size.height * 0.68f), strokeWidth = stroke.width * 0.72f, cap = StrokeCap.Round)
-            }
-            HomeIconKind.Announcement -> {
-                val horn = Path().apply {
-                    moveTo(size.width * 0.20f, size.height * 0.42f)
-                    lineTo(size.width * 0.68f, size.height * 0.24f)
-                    lineTo(size.width * 0.68f, size.height * 0.76f)
-                    lineTo(size.width * 0.20f, size.height * 0.58f)
-                    close()
-                }
-                drawPath(horn, tint, style = stroke)
-                drawLine(tint, Offset(size.width * 0.22f, size.height * 0.58f), Offset(size.width * 0.32f, size.height * 0.82f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.78f, size.height * 0.36f), Offset(size.width * 0.88f, size.height * 0.28f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.80f, size.height * 0.64f), Offset(size.width * 0.90f, size.height * 0.72f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-            }
-            HomeIconKind.Back -> {
-                drawLine(tint, Offset(size.width * 0.72f, size.height * 0.18f), Offset(size.width * 0.28f, size.height * 0.50f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(tint, Offset(size.width * 0.28f, size.height * 0.50f), Offset(size.width * 0.72f, size.height * 0.82f), strokeWidth = stroke.width, cap = StrokeCap.Round)
-            }
-        }
-    }
 }
 
 @Composable
@@ -2703,7 +2790,7 @@ private fun myListFactory(container: AppContainer): ViewModelProvider.Factory =
         }
     }
 
-private fun tvGuideFactory(container: AppContainer): ViewModelProvider.Factory =
+private fun tvGuideFactory(container: AppContainer, initialCategoryId: String? = null): ViewModelProvider.Factory =
     object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -2711,8 +2798,16 @@ private fun tvGuideFactory(container: AppContainer): ViewModelProvider.Factory =
                 repository = container.tvGuideRepository,
                 playerManager = container.playerManager,
                 clock = SystemWatchioClock,
+                initialCategoryId = initialCategoryId,
             ) as T
         }
+    }
+
+private fun epgCategoriesFactory(container: AppContainer): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            EpgCategoriesViewModel(container.liveTvRepository) as T
     }
 
 private fun accountInformationFactory(container: AppContainer): ViewModelProvider.Factory =
@@ -2768,24 +2863,23 @@ private fun SettingsRootScreen(
     val firstFocus = remember { FocusRequester() }
     val categories = remember(colors) {
         listOf(
-            SettingsCategory("Provider Management", "Manage IPTV providers", HomeIconKind.Provider, colors.liveTvAccent, onProviderManagement, "settings-provider-management"),
-            SettingsCategory("Account Information", "View your account details", HomeIconKind.Provider, colors.moviesAccent, onAccount, "settings-account-information"),
-            SettingsCategory("Quick Login", "Move your login from phone to TV", HomeIconKind.Provider, colors.seriesAccent, onQuickLogin, "settings-quick-login"),
-            SettingsCategory("Player Settings", "Playback and video settings", HomeIconKind.Movie, colors.seriesAccent, onPlayer, "settings-player-settings"),
-            SettingsCategory("EPG Settings", "Guide and programme settings", HomeIconKind.Guide, colors.liveTvAccent, onEpg, "settings-epg-settings"),
-            SettingsCategory("Football Data", "Configure Sports fixture data", HomeIconKind.Guide, colors.seriesAccent, onFootballData, "settings-football-data"),
-            SettingsCategory("Parental Controls", "Restrict content and settings", HomeIconKind.Settings, colors.moviesAccent, onParental, "settings-parental-controls"),
-            SettingsCategory("Stream Format", "Choose your preferred format", HomeIconKind.List, colors.seriesAccent, onStreamFormat, "settings-stream-format"),
-            SettingsCategory("Input Mode", "Mobile touch or TV remote controls", HomeIconKind.Provider, colors.liveTvAccent, onInputMode, "settings-input-mode"),
-            SettingsCategory("Appearance", "Theme and visual customization", HomeIconKind.Settings, colors.moviesAccent, onAppearance, "settings-appearance"),
-            SettingsCategory("Backup & Restore", "Export and restore application data", HomeIconKind.Provider, colors.seriesAccent, onBackup, "settings-backup-restore"),
-            SettingsCategory("Check for Updates", "Check for a newer Watchio version", HomeIconKind.Announcement, colors.liveTvAccent, onUpdates, "settings-check-updates"),
+            SettingsCategory("Provider Management", "Manage IPTV providers", WatchioIconKind.Provider, WatchioIconKind.Provider.identityColor(), onProviderManagement, "settings-provider-management"),
+            SettingsCategory("Account Information", "View your account details", WatchioIconKind.Account, WatchioIconKind.Account.identityColor(), onAccount, "settings-account-information"),
+            SettingsCategory("Quick Login", "Move your login from phone to TV", WatchioIconKind.QuickLogin, WatchioIconKind.QuickLogin.identityColor(), onQuickLogin, "settings-quick-login"),
+            SettingsCategory("Player Settings", "Playback and video settings", WatchioIconKind.Player, WatchioIconKind.Player.identityColor(), onPlayer, "settings-player-settings"),
+            SettingsCategory("EPG Settings", "Guide and programme settings", WatchioIconKind.Guide, WatchioIconKind.Guide.identityColor(), onEpg, "settings-epg-settings"),
+            SettingsCategory("Football Data", "Configure Sports fixture data", WatchioIconKind.Football, WatchioIconColors.Football, onFootballData, "settings-football-data"),
+            SettingsCategory("Parental Controls", "Restrict content and settings", WatchioIconKind.Parental, WatchioIconKind.Parental.identityColor(), onParental, "settings-parental-controls"),
+            SettingsCategory("Stream Format", "Choose your preferred format", WatchioIconKind.StreamFormat, WatchioIconKind.StreamFormat.identityColor(), onStreamFormat, "settings-stream-format"),
+            SettingsCategory("Input Mode", "Mobile touch or TV remote controls", WatchioIconKind.InputMode, WatchioIconKind.InputMode.identityColor(), onInputMode, "settings-input-mode"),
+            SettingsCategory("Appearance", "Theme and visual customization", WatchioIconKind.Appearance, WatchioIconKind.Appearance.identityColor(), onAppearance, "settings-appearance"),
+            SettingsCategory("Backup & Restore", "Export and restore application data", WatchioIconKind.BackupRestore, WatchioIconKind.BackupRestore.identityColor(), onBackup, "settings-backup-restore"),
+            SettingsCategory("Check for Updates", "Check for a newer Watchio version", WatchioIconKind.Updates, WatchioIconKind.Updates.identityColor(), onUpdates, "settings-check-updates"),
         )
     }
     BackHandler(onBack = onBack)
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
     Box(Modifier.fillMaxSize().testTag("settings-root")) {
-        WatchioHomeBackground()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -2842,7 +2936,7 @@ private fun SettingsCategoryCard(category: SettingsCategory, modifier: Modifier 
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            HomeVectorIcon(category.icon, category.accent, Modifier.size(38.dp))
+            WatchioIcon(category.icon, category.accent, Modifier.size(38.dp).testTag("settings-icon-${category.icon.name}"))
             Spacer(Modifier.height(spacing.sm))
             Text(category.title, color = colors.textPrimary, style = type.cardTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(category.subtitle, color = colors.textSecondary, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2855,7 +2949,6 @@ private fun SettingsDetailScreen(title: String, onBack: () -> Unit, content: @Co
     val colors = LocalWatchioColors.current
     BackHandler(onBack = onBack)
     Box(Modifier.fillMaxSize().testTag("settings-detail")) {
-        WatchioHomeBackground()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -3086,6 +3179,7 @@ private fun SettingsBackIconButton(onClick: () -> Unit) {
         modifier = Modifier
             .size(48.dp)
             .testTag("settings-back-icon"),
+        surfaceRole = com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole.Control,
         accent = colors.liveTvAccent,
         minWidth = 48.dp,
         minHeight = 48.dp,
@@ -3093,7 +3187,7 @@ private fun SettingsBackIconButton(onClick: () -> Unit) {
         onClick = onClick,
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            HomeVectorIcon(HomeIconKind.Back, colors.textPrimary, Modifier.size(24.dp))
+            WatchioIcon(WatchioIconKind.Back, colors.textPrimary, Modifier.size(24.dp))
         }
     }
 }
@@ -3136,7 +3230,10 @@ private fun InputModeSettingsContent(
     onInputMode: (InputMode) -> Unit,
 ) {
     val colors = LocalWatchioColors.current
+    val context = LocalContext.current
+    val detection = remember(context) { context.detectDeviceInput() }
     Text("Input mode", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+    Text("Detected: ${detection.label()}", color = colors.textSecondary)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val columns = if (maxWidth < 720.dp) 2 else InputMode.entries.size
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -3413,7 +3510,7 @@ private fun EpgSettingsContent(
 private data class SettingsCategory(
     val title: String,
     val subtitle: String,
-    val icon: HomeIconKind,
+    val icon: WatchioIconKind,
     val accent: Color,
     val onClick: () -> Unit,
     val testTag: String,
@@ -3457,6 +3554,13 @@ private fun settingsFactory(container: AppContainer): ViewModelProvider.Factory 
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return SettingsViewModel(container.settingsRepository, container.epgRefreshCoordinator) as T
         }
+    }
+
+private fun appearanceFactory(container: AppContainer): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            AppearanceViewModel(container.settingsRepository) as T
     }
 
 private fun liveTvFactory(container: AppContainer, initialChannel: LiveTvChannel? = null): ViewModelProvider.Factory =

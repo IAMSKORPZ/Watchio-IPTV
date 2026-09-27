@@ -38,6 +38,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -84,6 +85,39 @@ class TvGuideViewModelInstrumentedTest {
         assertFalse(state.refreshing)
         assertTrue(state.channels.map { it.channelId }.contains("ch-1"))
         assertTrue(state.errorMessage.orEmpty().isNotBlank())
+    }
+
+    @Test
+    fun previewLoadsOncePerChannelAndStopsWhenGuideLeaves() = runBlocking {
+        val providerId = ProviderId("p1")
+        database.providerDao().upsert(ProviderEntity("p1", "Provider", "m3u_url", "http://example.invalid/list.m3u", 1, 1, null, true))
+        database.m3uItemDao().upsertAll(
+            listOf(
+                item("p1", "ch-1", "Channel One", "channel.one"),
+                item("p1", "ch-2", "Channel Two", "channel.two"),
+            ),
+        )
+        val player = FakePlayerManager()
+        val viewModel = TvGuideViewModel(tvGuideRepository(providerId), player, FixedClock)
+        repeat(40) {
+            if (!viewModel.state.value.loading && viewModel.state.value.channels.size == 2) return@repeat
+            delay(50)
+        }
+        val first = viewModel.state.value.channels[0]
+        val second = viewModel.state.value.channels[1]
+
+        viewModel.previewChannel(first)
+        delay(50)
+        viewModel.previewChannel(first)
+        delay(50)
+        assertEquals(1, player.loadCount)
+
+        viewModel.previewChannel(second)
+        delay(50)
+        assertEquals(2, player.loadCount)
+
+        viewModel.leaveGuide()
+        assertTrue(player.state.value is WatchioPlayerState.Idle)
     }
 
     private fun tvGuideRepository(providerId: ProviderId): TvGuideRepository {
@@ -143,10 +177,13 @@ class TvGuideViewModelInstrumentedTest {
     }
 
     private class FakePlayerManager : WatchioPlayerManager {
+        var loadCount = 0
+            private set
         private var metadata = WatchioPlayerMetadata()
         private val mutableState = MutableStateFlow<WatchioPlayerState>(WatchioPlayerState.Idle(metadata))
         override val state: StateFlow<WatchioPlayerState> = mutableState
         override suspend fun load(media: PlaybackMedia) {
+            loadCount += 1
             metadata = metadata.copy(currentMedia = media, isSeekable = !media.isLive)
             mutableState.value = WatchioPlayerState.Playing(metadata)
         }

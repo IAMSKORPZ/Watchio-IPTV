@@ -10,13 +10,14 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 
 class UpdateRepository(
     private val context: Context,
     private val okHttpClient: OkHttpClient,
-    private val manifestUrl: String,
-    private val expectedChannel: String,
+    private val manifestUrl: String? = WATCHIO_DEV_UPDATE_MANIFEST_URL,
+    private val expectedChannel: String = "dev",
     private val localManifest: (suspend (InstalledVersion) -> String)? = null,
     private val artifactDownloadsEnabled: Boolean = true,
 ) {
@@ -30,8 +31,7 @@ class UpdateRepository(
 
     suspend fun checkForUpdates(): UpdateCheckResult = withContext(Dispatchers.IO) {
         val installed = installedVersion()
-        if (localManifest == null && manifestUrl.isBlank()) throw UpdateException("Update checking is disabled for this build.")
-        val body = localManifest?.invoke(installed) ?: httpGet(manifestUrl)
+        val body = localManifest?.invoke(installed) ?: httpGet(manifestUrl ?: WATCHIO_DEV_UPDATE_MANIFEST_URL)
         val manifest = parseManifest(body)
         UpdatePolicy.validateManifest(manifest, expectedChannel)
         val status = UpdatePolicy.compare(manifest.versionCode, installed.versionCode)
@@ -42,17 +42,11 @@ class UpdateRepository(
         manifest: UpdateManifest,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): VerifiedUpdateFile = withContext(Dispatchers.IO) {
-        if (!artifactDownloadsEnabled) throw UpdateException("Update downloads are disabled for this build.")
+        if (!artifactDownloadsEnabled) throw UpdateException("UITEST fixture cannot download or install APKs.")
         UpdatePolicy.validateManifest(manifest, expectedChannel)
         val updatesDir = File(context.cacheDir, "updates").also { it.mkdirs() }
         val target = File(updatesDir, UpdatePolicy.sanitizeFileName(manifest.apk.fileName))
-        if (UpdateArtifactValidator.validateCached(
-                file = target,
-                expectedSha256 = manifest.apk.sha256,
-                expectedPackageName = context.packageName,
-                packageNameReader = ::archivePackageName,
-            )
-        ) {
+        if (target.exists() && sha256(target).equals(manifest.apk.sha256, ignoreCase = true)) {
             return@withContext VerifiedUpdateFile(manifest, target.absolutePath)
         }
         val partial = File(updatesDir, "${target.name}.part")
@@ -80,16 +74,20 @@ class UpdateRepository(
             }
         }
 
+        val actual = sha256(partial)
+        if (!actual.equals(manifest.apk.sha256, ignoreCase = true)) {
+            partial.delete()
+            throw UpdateException("Update verification failed.")
+        }
         if (!partial.renameTo(target)) {
             partial.copyTo(target, overwrite = true)
             partial.delete()
         }
-        UpdateArtifactValidator.validateDownloaded(
-            file = target,
-            expectedSha256 = manifest.apk.sha256,
-            expectedPackageName = context.packageName,
-            packageNameReader = ::archivePackageName,
-        )
+        val apkInfo = context.packageManager.getPackageArchiveInfo(target.absolutePath, 0)
+        if (apkInfo?.packageName != context.packageName) {
+            target.delete()
+            throw UpdateException("Update package does not match Watchio.")
+        }
         VerifiedUpdateFile(manifest, target.absolutePath)
     }
 
@@ -111,8 +109,18 @@ class UpdateRepository(
         }
     }
 
-    private fun archivePackageName(file: File): String? =
-        context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)?.packageName
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 }
 
 class UpdateException(message: String) : Exception(message)

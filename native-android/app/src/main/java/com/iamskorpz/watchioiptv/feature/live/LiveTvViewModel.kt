@@ -41,6 +41,7 @@ data class LiveTvUiState(
     val browsedChannel: LiveTvChannel? = null,
     val initialScrollIndex: Int = 0,
     val nowNext: LiveTvNowNext = LiveTvNowNext(null, null, 0f),
+    val channelProgrammes: Map<String, LiveTvNowNext> = emptyMap(),
     val categorySearchQuery: String = "",
     val liveSearchQuery: String = "",
     val epgRefreshing: Boolean = false,
@@ -60,6 +61,7 @@ class LiveTvViewModel(
     private val mutableUi = MutableStateFlow(LiveTvUiState())
     private var playbackJob: Job? = null
     private var epgJob: Job? = null
+    private var channelProgrammesJob: Job? = null
 
     val uiState: StateFlow<LiveTvUiState> = mutableUi.asStateFlow()
     val playerState: StateFlow<WatchioPlayerState> = playerManager.state
@@ -135,7 +137,9 @@ class LiveTvViewModel(
                 selectedChannel = targetChannel,
                 browsedChannel = targetChannel,
                 initialScrollIndex = targetIndex,
+
             )
+            loadChannelProgrammes(providerId, channels)
 
             if (targetChannel != null) {
                 updateNowNext(targetChannel)
@@ -166,6 +170,7 @@ class LiveTvViewModel(
                 nowNext = LiveTvNowNext(null, null, 0f),
             )
             newSelected?.let { updateNowNext(it) }
+            loadChannelProgrammes(providerId, channels)
 
             persistBrowsingState(
                 providerId = providerId,
@@ -200,6 +205,7 @@ class LiveTvViewModel(
                 channels = channels,
                 selectedChannel = channels.firstOrNull { it.id == mutableUi.value.selectedChannel?.id } ?: mutableUi.value.selectedChannel,
             )
+            loadChannelProgrammes(providerId, channels)
         }
     }
 
@@ -224,6 +230,7 @@ class LiveTvViewModel(
                 browsedChannel = channel,
                 initialScrollIndex = index,
                 errorMessage = null,
+                nowNext = (mutableUi.value.channelProgrammes[channel.id] ?: LiveTvNowNext(null, null, 0f)).takeIf { it.hasAny } ?: mutableUi.value.nowNext,
             )
             updateNowNext(channel)
             val playback = liveTvRepository.playback(channel)
@@ -261,7 +268,8 @@ class LiveTvViewModel(
 
     fun browseChannel(channel: LiveTvChannel) {
         if (mutableUi.value.browsedChannel?.id == channel.id) return
-        mutableUi.value = mutableUi.value.copy(browsedChannel = channel, nowNext = LiveTvNowNext(null, null, 0f))
+        val cached = mutableUi.value.channelProgrammes[channel.id] ?: LiveTvNowNext(null, null, 0f)
+        mutableUi.value = mutableUi.value.copy(browsedChannel = channel, nowNext = cached)
         viewModelScope.launch { updateNowNext(channel) }
     }
 
@@ -319,6 +327,7 @@ class LiveTvViewModel(
                 epgRefreshMessage = if (result.isSuccess) "EPG refreshed." else "EPG refresh failed. Cached guide retained.",
             )
             (mutableUi.value.browsedChannel ?: mutableUi.value.selectedChannel)?.let { updateNowNext(it) }
+            loadChannelProgrammes(providerId, mutableUi.value.channels)
         }
     }
     fun playPause() {
@@ -357,11 +366,13 @@ class LiveTvViewModel(
     fun leaveLiveTv() {
         playbackJob?.cancel()
         epgJob?.cancel()
+        channelProgrammesJob?.cancel()
         playerManager.stop()
     }
 
     fun pauseForBackground() {
         playbackJob?.cancel()
+        channelProgrammesJob?.cancel()
         playerManager.stop()
     }
 
@@ -370,6 +381,11 @@ class LiveTvViewModel(
         epgJob = viewModelScope.launch {
             while (true) {
                 updateNowNext(channel)
+                val currentChannels = mutableUi.value.channels
+                if (currentChannels.isNotEmpty()) {
+                    val updated = liveTvRepository.nowNextForChannels(channel.providerId, currentChannels, clock.nowEpochMs())
+                    mutableUi.value = mutableUi.value.copy(channelProgrammes = updated)
+                }
                 delay(60_000L)
             }
         }
@@ -379,6 +395,23 @@ class LiveTvViewModel(
         val nowNext = liveTvRepository.nowNext(channel, clock.nowEpochMs())
         val displayedChannel = mutableUi.value.browsedChannel ?: mutableUi.value.selectedChannel
         if (displayedChannel?.id == channel.id) mutableUi.value = mutableUi.value.copy(nowNext = nowNext)
+    }
+
+    private fun loadChannelProgrammes(providerId: ProviderId, channels: List<LiveTvChannel>) {
+        channelProgrammesJob?.cancel()
+        if (channels.isEmpty()) {
+            mutableUi.value = mutableUi.value.copy(channelProgrammes = emptyMap())
+            return
+        }
+        channelProgrammesJob = viewModelScope.launch {
+            val programmes = liveTvRepository.nowNextForChannels(providerId, channels, clock.nowEpochMs())
+            val activeChannel = mutableUi.value.browsedChannel ?: mutableUi.value.selectedChannel
+            val activeNowNext = activeChannel?.let { programmes[it.id] } ?: mutableUi.value.nowNext
+            mutableUi.value = mutableUi.value.copy(
+                channelProgrammes = programmes,
+                nowNext = if (activeNowNext.hasAny) activeNowNext else mutableUi.value.nowNext,
+            )
+        }
     }
 
     override fun onCleared() {

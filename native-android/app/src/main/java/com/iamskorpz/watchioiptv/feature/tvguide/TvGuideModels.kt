@@ -5,6 +5,8 @@ import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToInt
 
 data class WatchioGuideChannel(
@@ -54,6 +56,43 @@ data class ProgrammeDetails(
     val channel: WatchioGuideChannel,
 )
 
+data class TvGuideLayoutDimensions(
+    val channelWidthDp: Float,
+    val rowHeightDp: Float,
+    val isCompact: Boolean,
+    val isMedium: Boolean,
+    val heroHeightDp: Float = 74f,
+) {
+    companion object {
+        fun calculate(maxWidthDp: Float): TvGuideLayoutDimensions = when {
+            maxWidthDp < 600f -> TvGuideLayoutDimensions(
+                channelWidthDp = 120f,
+                rowHeightDp = 48f,
+                isCompact = true,
+                isMedium = false,
+                heroHeightDp = 74f,
+            )
+            maxWidthDp < 980f -> TvGuideLayoutDimensions(
+                channelWidthDp = 160f,
+                rowHeightDp = 46f,
+                isCompact = false,
+                isMedium = true,
+                heroHeightDp = 74f,
+            )
+            else -> TvGuideLayoutDimensions(
+                channelWidthDp = 200f,
+                rowHeightDp = 54f,
+                isCompact = false,
+                isMedium = false,
+                heroHeightDp = 90f,
+            )
+        }
+
+        fun visibleRowCapacity(viewportHeightDp: Float, fixedContentHeightDp: Float, rowHeightDp: Float): Int =
+            ((viewportHeightDp - fixedContentHeightDp).coerceAtLeast(0f) / rowHeightDp).toInt()
+    }
+}
+
 object TvGuideTimeline {
     const val MinProgrammeMinutes: Long = 5L
     const val MaxProgrammeHours: Long = 8L
@@ -72,11 +111,13 @@ object TvGuideTimeline {
             startUtcMs = start.toInstant().toEpochMilli(),
             endUtcMs = end.toInstant().toEpochMilli(),
             day = today,
-            days = listOf(
-                WatchioGuideDay(today.minusDays(1), "Yesterday"),
-                WatchioGuideDay(today, "Today"),
-                WatchioGuideDay(today.plusDays(1), "Tomorrow"),
-            ),
+            days = (0L..6L).map { offset ->
+                val date = today.plusDays(offset)
+                WatchioGuideDay(
+                    date = date,
+                    label = if (offset == 0L) "Today" else date.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault())),
+                )
+            },
         )
     }
 
@@ -102,10 +143,46 @@ object TvGuideTimeline {
     fun widthForGapDp(durationMs: Long): Float =
         ((durationMs.coerceAtLeast(0L) / 60_000f) * MinuteWidthDp)
             .coerceAtMost(MaxProgrammeHours * 60f * MinuteWidthDp)
-
-    fun nowLineOffsetDp(nowUtcMs: Long, windowStartUtcMs: Long, channelWidthDp: Float, scrollPx: Int): Float? {
-        val offset = channelWidthDp + offsetDp(nowUtcMs, windowStartUtcMs) - scrollPx
+    fun nowLineOffsetDp(
+        nowUtcMs: Long,
+        windowStartUtcMs: Long,
+        windowEndUtcMs: Long,
+        channelWidthDp: Float,
+        scrollDp: Float,
+    ): Float? {
+        if (nowUtcMs < windowStartUtcMs || nowUtcMs > windowEndUtcMs) return null
+        val offset = channelWidthDp + offsetDp(nowUtcMs, windowStartUtcMs) - scrollDp
         return offset.takeIf { it >= channelWidthDp }
+    }
+
+    fun nowLineOffsetDp(
+        nowUtcMs: Long,
+        windowStartUtcMs: Long,
+        channelWidthDp: Float,
+        scrollDp: Float,
+    ): Float? = nowLineOffsetDp(
+        nowUtcMs = nowUtcMs,
+        windowStartUtcMs = windowStartUtcMs,
+        windowEndUtcMs = Long.MAX_VALUE,
+        channelWidthDp = channelWidthDp,
+        scrollDp = scrollDp,
+    )
+
+    fun nowLineOffsetDp(
+        nowUtcMs: Long,
+        windowStartUtcMs: Long,
+        channelWidthDp: Float,
+        scrollPx: Int,
+        density: Float = 1.0f,
+    ): Float? {
+        val scrollDp = if (density > 0f) scrollPx / density else scrollPx.toFloat()
+        return nowLineOffsetDp(
+            nowUtcMs = nowUtcMs,
+            windowStartUtcMs = windowStartUtcMs,
+            windowEndUtcMs = Long.MAX_VALUE,
+            channelWidthDp = channelWidthDp,
+            scrollDp = scrollDp,
+        )
     }
 
     fun progress(nowUtcMs: Long, startUtcMs: Long, endUtcMs: Long): Float {
@@ -113,4 +190,15 @@ object TvGuideTimeline {
         if (duration <= 0L) return 0f
         return ((nowUtcMs - startUtcMs).toFloat() / duration).coerceIn(0f, 1f)
     }
+}
+
+object TvGuideCategoryNavigation {
+    fun selectedIndex(categoryIds: List<String>, selectedCategoryId: String?): Int =
+        categoryIds.indexOf(selectedCategoryId).takeIf { it >= 0 } ?: 0
+
+    fun previousIndex(categoryIds: List<String>, selectedCategoryId: String?): Int? =
+        (selectedIndex(categoryIds, selectedCategoryId) - 1).takeIf { it >= 0 }
+
+    fun nextIndex(categoryIds: List<String>, selectedCategoryId: String?): Int? =
+        (selectedIndex(categoryIds, selectedCategoryId) + 1).takeIf { it < categoryIds.size }
 }

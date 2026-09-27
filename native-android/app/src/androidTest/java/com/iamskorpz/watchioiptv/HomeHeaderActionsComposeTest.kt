@@ -32,7 +32,7 @@ class HomeHeaderActionsComposeTest {
         var searchClicked = false
         var sportsClicked = false
         var announcementsClicked = false
-        var playlistClicked = false
+        var settingsClicked = false
 
         composeRule.runOnUiThread {
             composeRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
@@ -46,7 +46,7 @@ class HomeHeaderActionsComposeTest {
                         onSearch = { searchClicked = true },
                         onSports = { sportsClicked = true },
                         onAnnouncements = { announcementsClicked = true },
-                        onProviders = { playlistClicked = true },
+                        onSettings = { settingsClicked = true },
                         announcementUnreadCount = 12,
                     )
                 }
@@ -56,8 +56,8 @@ class HomeHeaderActionsComposeTest {
         val actions = listOf(
             "Search" to "home-search",
             "Sports" to "home-action-sports",
-            "Announcements" to "home-action-announcements",
-            "Playlist" to "home-action-playlist",
+            "Notifications, 12 unread notifications" to "home-notifications",
+            "Settings" to "home-settings",
         )
         val leftEdges = actions.map { (label, tag) ->
             composeRule.onNodeWithContentDescription(label).assertIsDisplayed()
@@ -74,10 +74,25 @@ class HomeHeaderActionsComposeTest {
             composeRule.onNodeWithTag(tag).performClick()
             bounds.left
         }
-        assertTrue(searchClicked && sportsClicked && announcementsClicked && playlistClicked)
+        assertTrue(searchClicked && sportsClicked && announcementsClicked && settingsClicked)
         assertTrue("header actions must preserve left-to-right DPAD order", leftEdges == leftEdges.sorted())
         composeRule.onNodeWithTag("home-announcements-badge").assertIsDisplayed()
         composeRule.onNodeWithText("9+").assertIsDisplayed()
+    }
+
+    @Test
+    fun zeroUnreadNotificationsHidesBadge() {
+        composeRule.setContent {
+            WatchioTheme {
+                HomeTopBar(
+                    now = LocalDateTime.of(2026, 8, 30, 12, 0),
+                    onSearch = {}, onSports = {}, onAnnouncements = {}, onSettings = {},
+                    announcementUnreadCount = 0,
+                )
+            }
+        }
+        composeRule.onNodeWithTag("home-notifications").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-announcements-badge").assertDoesNotExist()
     }
 
     @Test
@@ -90,7 +105,7 @@ class HomeHeaderActionsComposeTest {
                     onSearch = {},
                     onSports = {},
                     onAnnouncements = {},
-                    onProviders = {},
+                    onSettings = {},
                 )
             }
         }
@@ -112,7 +127,7 @@ class HomeHeaderActionsComposeTest {
                     onSearch = {},
                     onSports = {},
                     onAnnouncements = {},
-                    onProviders = {},
+                    onSettings = {},
                 )
             }
         }

@@ -34,6 +34,30 @@ data class WatchioThemeState(
     val seriesAccentDim: Color = Color(0xFF129C9A),
     val focusBorder: Color = Color.White,
     val focusGlow: Color = Color(0xFFD95CFF),
+    val headerSurface: Color = surfaceElevated,
+    val navigationSurface: Color = surfaceCard,
+    val navigationIcon: Color = textSecondary,
+    val navigationSelectedIcon: Color = textPrimary,
+    val navigationSelectedSurface: Color = surfaceElevated,
+    val dialogSurface: Color = surfaceStatus,
+    val cardSurface: Color = surfaceCard,
+    val cardOutline: Color = moviesAccentDim,
+    val selectedCardSurface: Color = surfaceElevated,
+    val selectedCardOutline: Color = focusGlow,
+    val buttonSurface: Color = surfaceElevated,
+    val buttonText: Color = textPrimary,
+    val buttonOutline: Color = moviesAccentDim,
+    val selectedButtonSurface: Color = liveTvAccent,
+    val selectedButtonText: Color = surfaceBase,
+    val badgeSurface: Color = liveTvAccent,
+    val badgeText: Color = textPrimary,
+    val focusedSurface: Color = surfaceElevated,
+    val focusedContent: Color = textPrimary,
+    val playerAccent: Color = liveTvAccent,
+    val playerControl: Color = textPrimary,
+    val playerOverlay: Color = surfaceBase.copy(alpha = 0.8f),
+    val artworkTextPrimary: Color = Color.White,
+    val artworkTextSecondary: Color = Color(0xFFD1D5DB),
 ) {
     companion object {
         val Available: List<WatchioThemeState> = listOf(
@@ -93,5 +117,52 @@ data class WatchioThemeState(
 
         fun fromId(id: WatchioThemeId): WatchioThemeState =
             Available.firstOrNull { it.id == id } ?: Available.first()
+
+        fun fromDefinition(definition: WatchioThemeDefinition): WatchioThemeState {
+            val c = definition.colors
+            return WatchioThemeState(
+                id = WatchioThemeId.WatchioDefault,
+                surfaceBase = c.appBackground.toComposeColor(),
+                surfaceCard = c.primaryPanel.toComposeColor(),
+                surfaceElevated = c.secondaryPanel.toComposeColor(),
+                surfaceStatus = c.popup.toComposeColor(),
+                textPrimary = c.primaryText.toComposeColor(),
+                textSecondary = c.secondaryText.toComposeColor(),
+                textMuted = c.mutedText.toComposeColor(),
+                liveTvAccent = c.accent.toComposeColor(),
+                liveTvAccentBright = c.selectedButton.toComposeColor(),
+                liveTvAccentDim = c.buttonOutline.toComposeColor(),
+                moviesAccent = c.accent.toComposeColor(),
+                moviesAccentBright = c.focusGlow.toComposeColor(),
+                moviesAccentDim = c.cardOutline.toComposeColor(),
+                seriesAccent = c.accent.toComposeColor(),
+                seriesAccentBright = c.focusedText.toComposeColor(),
+                seriesAccentDim = c.navigationIcon.toComposeColor(),
+                focusBorder = c.focusOutline.toComposeColor(),
+                focusGlow = c.focusGlow.toComposeColor(),
+                headerSurface = c.header.toComposeColor(),
+                navigationSurface = c.navigationBackground.toComposeColor(),
+                navigationIcon = c.navigationIcon.toComposeColor(),
+                navigationSelectedIcon = c.navigationSelectedIcon.toComposeColor(),
+                navigationSelectedSurface = c.navigationSelectedBackground.toComposeColor(),
+                dialogSurface = c.dialog.toComposeColor(),
+                cardSurface = c.cardBackground.toComposeColor(),
+                cardOutline = c.cardOutline.toComposeColor(),
+                selectedCardSurface = c.selectedCardBackground.toComposeColor(),
+                selectedCardOutline = c.selectedCardOutline.toComposeColor(),
+                buttonSurface = c.buttonBackground.toComposeColor(),
+                buttonText = c.buttonText.toComposeColor(),
+                buttonOutline = c.buttonOutline.toComposeColor(),
+                selectedButtonSurface = c.selectedButton.toComposeColor(),
+                selectedButtonText = c.selectedButtonText.toComposeColor(),
+                badgeSurface = c.badgeBackground.toComposeColor(),
+                badgeText = c.badgeText.toComposeColor(),
+                focusedSurface = c.focusedBackground.toComposeColor(),
+                focusedContent = c.focusedText.toComposeColor(),
+                playerAccent = c.playerAccent.toComposeColor(),
+                playerControl = c.playerControl.toComposeColor(),
+                playerOverlay = c.playerOverlay.toComposeColor(),
+            )
+        }
     }
 }

@@ -43,5 +43,5 @@ data class AnnouncementSnapshot(
     val items: List<AnnouncementItem> = emptyList(),
     val hasCachedFeed: Boolean = false,
 ) {
-    val unreadCount: Int get() = items.count { !it.isRead && !it.isDismissed }
+    val unreadCount: Int get() = items.count { !it.isRead }
 }

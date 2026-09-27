@@ -100,16 +100,22 @@ import com.iamskorpz.watchioiptv.domain.repository.PlayerSettings
 import com.iamskorpz.watchioiptv.ui.components.ResumePlaybackDialog
 import com.iamskorpz.watchioiptv.ui.components.ResumePlaybackRequest
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
+import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIcon
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIconColors
+import com.iamskorpz.watchioiptv.ui.icons.WatchioIconKind
+import com.iamskorpz.watchioiptv.ui.components.watchioSemanticBorder
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
 import com.iamskorpz.watchioiptv.ui.components.WatchioProgressBar
-import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioBorders
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioRadii
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
+import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioPosterTokens
+import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -125,6 +131,7 @@ fun MoviesScreen(
     initialSearchVisible: Boolean = false,
 ) {
     val colors = LocalWatchioColors.current
+    val posterTokens = LocalWatchioPosterTokens.current
     val firstCategoryFocus = remember { FocusRequester() }
     val firstMovieFocus = remember { FocusRequester() }
     val inputModeManager = LocalInputModeManager.current
@@ -149,7 +156,7 @@ fun MoviesScreen(
         }
     }
     if (state.loading) {
-        Box(Modifier.fillMaxSize().background(colors.surfaceBase), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = colors.moviesAccent)
         }
         return
@@ -165,7 +172,7 @@ fun MoviesScreen(
         targetContentId = state.movies.firstOrNull()?.id,
         targetFocusRequester = firstMovieFocus,
     )
-    Box(Modifier.fillMaxSize().background(colors.surfaceBase).testTag("movies-screen")) {
+    Box(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).testTag("movies-screen")) {
         Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp)) {
             WatchioPageHeader(title = "MOVIES", onBack = onBack, testTagPrefix = "movies") {
                 MoviesSearchIconButton(
@@ -206,7 +213,7 @@ fun MoviesScreen(
                         },
                         modifier = Modifier.width(categoryWidth).fillMaxHeight(),
                     )
-                    WatchioCard(modifier = Modifier.weight(1f).fillMaxHeight().testTag("movie-grid-panel"), accent = colors.moviesAccent, minWidth = 0.dp, minHeight = 0.dp) {
+                    WatchioCard(modifier = Modifier.weight(1f).fillMaxHeight().testTag("movie-grid-panel"), surfaceRole = WatchioSurfaceRole.Panel, accent = colors.moviesAccent, minWidth = 0.dp, minHeight = 0.dp) {
                         Column(Modifier.fillMaxSize().padding(12.dp)) {
                             if (state.movies.isEmpty()) {
                                 Box(Modifier.fillMaxSize().testTag("movie-empty"), contentAlignment = Alignment.Center) {
@@ -231,7 +238,7 @@ fun MoviesScreen(
                                 val isContinueWatching = state.selectedCategory?.kind == MovieCategoryKind.ContinueWatching || state.selectedCategory?.id == "continue_watching"
                                 LazyVerticalGrid(
                                     state = gridState,
-                                    columns = GridCells.Adaptive(minSize = if (compactLandscape) 92.dp else 132.dp),
+                                    columns = GridCells.Adaptive(minSize = if (compactLandscape) posterTokens.gridMinWidth * 0.70f else posterTokens.gridMinWidth),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp),
                                     contentPadding = PaddingValues(bottom = 24.dp),
@@ -291,6 +298,7 @@ private fun MoviesSearchIconButton(accent: Color, onClick: () -> Unit, modifier:
         modifier = modifier
             .size(44.dp)
             .semantics { onClick(label = "Search Movies") { onClick(); true } },
+        surfaceRole = WatchioSurfaceRole.Control,
         accent = accent,
         minWidth = 44.dp,
         minHeight = 44.dp,
@@ -298,32 +306,7 @@ private fun MoviesSearchIconButton(accent: Color, onClick: () -> Unit, modifier:
         onClick = onClick,
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.size(20.dp)) {
-                val strokeWidth = 2.dp.toPx()
-                val radius = size.width * 0.30f
-                val centerOffset = androidx.compose.ui.geometry.Offset(size.width * 0.42f, size.height * 0.42f)
-                drawCircle(
-                    color = colors.textPrimary,
-                    radius = radius,
-                    center = centerOffset,
-                    style = Stroke(width = strokeWidth),
-                )
-                val handleStart = androidx.compose.ui.geometry.Offset(
-                    centerOffset.x + (radius * 0.7071f),
-                    centerOffset.y + (radius * 0.7071f),
-                )
-                val handleEnd = androidx.compose.ui.geometry.Offset(
-                    size.width * 0.88f,
-                    size.height * 0.88f,
-                )
-                drawLine(
-                    color = colors.textPrimary,
-                    start = handleStart,
-                    end = handleEnd,
-                    strokeWidth = strokeWidth,
-                    cap = StrokeCap.Round,
-                )
-            }
+            WatchioIcon(WatchioIconKind.Search, WatchioIconColors.Search, Modifier.size(20.dp))
         }
     }
 }
@@ -340,6 +323,7 @@ private fun MoviesMoreButton(accent: Color, onClick: () -> Unit, modifier: Modif
         modifier = modifier
             .size(44.dp)
             .semantics { onClick(label = "More options") { onClick(); true } },
+        surfaceRole = WatchioSurfaceRole.Control,
         accent = accent,
         minWidth = 44.dp,
         minHeight = 44.dp,
@@ -399,7 +383,7 @@ private fun MovieCategoryRail(
             if (!fullyVisible) listState.scrollToItem(selectedIndex)
         }
     }
-    WatchioCard(modifier = modifier.testTag("movie-category-panel"), accent = colors.moviesAccent, minWidth = 0.dp, minHeight = 0.dp) {
+    WatchioCard(modifier = modifier.testTag("movie-category-panel"), surfaceRole = WatchioSurfaceRole.Panel, accent = colors.moviesAccent, minWidth = 0.dp, minHeight = 0.dp) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp).testTag("movie-categories")) {
             itemsIndexed(visible, key = { _, item -> item.id }) { index, category ->
                 MovieCategoryRow(
@@ -514,6 +498,7 @@ private fun MovieSearchOverlay(
     ) {
         WatchioCard(
             modifier = Modifier.fillMaxWidth(0.76f).fillMaxHeight(0.84f).testTag("movie-search-panel"),
+            surfaceRole = WatchioSurfaceRole.Panel,
             accent = colors.moviesAccent,
             minWidth = 0.dp,
             minHeight = 0.dp,
@@ -638,6 +623,7 @@ fun MovieDetailsScreen(
                 title = "MOVIES",
                 onBack = onBack,
                 testTagPrefix = "movie-details",
+                artworkReadability = true,
             )
             Spacer(Modifier.height(16.dp))
             BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -665,7 +651,7 @@ fun MovieDetailsScreen(
                     ) {
                         Text(
                             text = details.title,
-                            color = colors.textPrimary,
+                            color = colors.artworkTextPrimary,
                             style = type.screenTitle,
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
@@ -676,7 +662,7 @@ fun MovieDetailsScreen(
                         if (metaSummary.isNotBlank()) {
                             Text(
                                 text = metaSummary,
-                                color = colors.textSecondary,
+                                color = colors.artworkTextSecondary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
@@ -734,7 +720,7 @@ fun MovieDetailsScreen(
                                 icon = {
                                     HeartIcon(
                                         filled = details.movie.isFavorite,
-                                        color = if (details.movie.isFavorite) colors.moviesAccent else Color.White,
+                                        color = if (details.movie.isFavorite) colors.moviesAccent else colors.textPrimary,
                                     )
                                 },
                                 onClick = onFavorite,
@@ -750,14 +736,14 @@ fun MovieDetailsScreen(
                             Spacer(Modifier.height(2.dp))
                             Text(
                                 text = "Plot",
-                                color = colors.textPrimary,
+                                color = colors.artworkTextPrimary,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp,
                                 modifier = Modifier.testTag("movie-plot-header"),
                             )
                             Text(
                                 text = details.plot,
-                                color = colors.textSecondary,
+                                color = colors.artworkTextSecondary,
                                 fontSize = 13.5.sp,
                                 lineHeight = 19.sp,
                                 maxLines = 4,
@@ -891,13 +877,15 @@ private fun MovieCard(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
+    val radii = LocalWatchioRadii.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val formattedRating = movie.formattedRating ?: formatRating(movie.rating)
+    val shape = RoundedCornerShape(radii.md)
     Column(
         modifier
-            .border(if (focused) 3.dp else 1.dp, if (focused) colors.focusBorder else Color.Transparent)
-            .background(if (focused) colors.moviesAccent.copy(alpha = 0.12f) else Color.Transparent)
+            .watchioSemanticBorder(WatchioSurfaceRole.Card, shape, focused = focused)
+            .background(if (focused) colors.moviesAccent.copy(alpha = 0.12f) else Color.Transparent, shape)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -969,8 +957,9 @@ private fun MovieCard(
 
 @Composable
 private fun Poster(url: String?, modifier: Modifier) {
-    Box(modifier.background(Color.DarkGray), contentAlignment = Alignment.Center) {
-        if (url.isNullOrBlank()) Text("No Image", color = Color.White) else AsyncImage(
+    val colors = LocalWatchioColors.current
+    Box(modifier.background(colors.surfaceElevated), contentAlignment = Alignment.Center) {
+        if (url.isNullOrBlank()) Text("No Image", color = colors.textPrimary) else AsyncImage(
             model = url,
             contentDescription = null,
             contentScale = ContentScale.Crop,
@@ -981,17 +970,18 @@ private fun Poster(url: String?, modifier: Modifier) {
 
 @Composable
 private fun MovieDetailsPoster(url: String?, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(10.dp)
+    val colors = LocalWatchioColors.current
+    val shape = RoundedCornerShape(LocalWatchioRadii.current.md)
     Surface(
         modifier = modifier
             .shadow(elevation = 10.dp, shape = shape)
-            .border(1.dp, Color.White.copy(alpha = 0.12f), shape),
+            .watchioSemanticBorder(WatchioSurfaceRole.Card, shape),
         shape = shape,
-        color = Color.DarkGray,
+        color = colors.surfaceElevated,
     ) {
         if (url.isNullOrBlank()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No Image", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                Text("No Image", color = colors.textSecondary, fontSize = 13.sp)
             }
         } else {
             AsyncImage(
@@ -1010,25 +1000,12 @@ fun HeartIcon(
     color: Color,
     modifier: Modifier = Modifier.size(16.dp),
 ) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val path = Path().apply {
-            moveTo(w * 0.5f, h * 0.82f)
-            cubicTo(w * 0.18f, h * 0.54f, 0f, h * 0.34f, 0f, h * 0.20f)
-            cubicTo(0f, h * 0.06f, w * 0.18f, 0f, w * 0.34f, 0f)
-            cubicTo(w * 0.44f, 0f, w * 0.5f, h * 0.08f, w * 0.5f, h * 0.15f)
-            cubicTo(w * 0.5f, h * 0.08f, w * 0.56f, 0f, w * 0.66f, 0f)
-            cubicTo(w * 0.82f, 0f, w * 1.0f, h * 0.06f, w * 1.0f, h * 0.20f)
-            cubicTo(w * 1.0f, h * 0.34f, w * 0.82f, h * 0.54f, w * 0.5f, h * 0.82f)
-            close()
-        }
-        if (filled) {
-            drawPath(path, color, style = Fill)
-        } else {
-            drawPath(path, color, style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round))
-        }
-    }
+    WatchioIcon(
+        kind = WatchioIconKind.Favourite,
+        tint = color,
+        modifier = modifier,
+        filled = filled,
+    )
 }
 
 @Composable
@@ -1042,7 +1019,6 @@ private fun MovieDetailsActionButton(
 ) {
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current
-    val borders = LocalWatchioBorders.current
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val shape = RoundedCornerShape(radii.md)
@@ -1056,12 +1032,10 @@ private fun MovieDetailsActionButton(
                 ambientColor = colors.focusGlow,
                 spotColor = colors.focusGlow,
             )
-            .border(
-                BorderStroke(
-                    width = if (focused) borders.focused else borders.normal,
-                    color = if (focused) colors.focusBorder else Color.White.copy(alpha = 0.08f),
-                ),
+            .watchioSemanticBorder(
+                role = WatchioSurfaceRole.Control,
                 shape = shape,
+                focused = focused,
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -1115,7 +1089,7 @@ private fun MovieDetailRow(label: String, value: String?) {
     ) {
         Text(
             text = "$label:",
-            color = colors.textSecondary,
+            color = colors.artworkTextSecondary,
             fontSize = 13.5.sp,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.width(96.dp),
@@ -1123,7 +1097,7 @@ private fun MovieDetailRow(label: String, value: String?) {
         )
         Text(
             text = value,
-            color = colors.textPrimary,
+            color = colors.artworkTextPrimary,
             fontSize = 13.5.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,

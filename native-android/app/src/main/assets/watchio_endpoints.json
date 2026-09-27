@@ -1,5 +1,5 @@
 {
   "version": 1,
-  "remoteConfigUrl": "https://iamskorpz.github.io/Watchio_Website/img/watchio_endpoints.json",
+  "remoteConfigUrl": "https://raw.githubusercontent.com/IAMSKORPZ/Watchio_Website/main/2711/WCIT/RTA/SREDIVORP/watchio_endpoints.json",
   "endpoints": []
 }

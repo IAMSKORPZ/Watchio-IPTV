@@ -1,7 +1,9 @@
 package com.iamskorpz.watchioiptv
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -9,7 +11,15 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.espresso.Espresso.pressBack
+import androidx.test.platform.app.InstrumentationRegistry
+import com.iamskorpz.watchioiptv.uitest.StartupFixtureState
+import com.iamskorpz.watchioiptv.uitest.StartupNotificationFixture
 import org.junit.Assert.assertTrue
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
+import org.junit.runner.Description
+import org.junit.runners.model.Statement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -17,8 +27,27 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class HomeComposeTest {
-    @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
+
+    private val announcementFixtureRule = TestRule { base, description ->
+        object : Statement() {
+            override fun evaluate() {
+                val fixture = StartupNotificationFixture(InstrumentationRegistry.getInstrumentation().targetContext)
+                fixture.reset()
+                if (description.methodName == "announcementsBellOpensListDetailsAndBackReturnsHome") {
+                    fixture.select(StartupFixtureState.ANNOUNCEMENT)
+                }
+                try {
+                    base.evaluate()
+                } finally {
+                    fixture.reset()
+                }
+            }
+        }
+    }
+
+    @get:Rule
+    val rules: RuleChain = RuleChain.outerRule(announcementFixtureRule).around(composeRule)
 
     @Test
     fun homeShowsPolishedNavigationHierarchy() {
@@ -34,20 +63,25 @@ class HomeComposeTest {
             composeRule.onNodeWithTag("home-add-provider").assertIsDisplayed()
             composeRule.onNodeWithContentDescription("Search").assertIsDisplayed()
             composeRule.onNodeWithContentDescription("Sports").assertIsDisplayed()
-            composeRule.onNodeWithContentDescription("Announcements").assertIsDisplayed()
-            composeRule.onNodeWithContentDescription("Playlist").assertIsDisplayed()
+            composeRule.onNodeWithContentDescription("Notifications, no unread notifications").assertIsDisplayed()
+            composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
             return
         }
         composeRule.onNodeWithTag("home-live-tv").assertIsDisplayed()
         composeRule.onNodeWithTag("home-movies").assertIsDisplayed()
         composeRule.onNodeWithTag("home-series").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-icon-LiveTv").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-icon-Movies").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-icon-TvShows").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithTag("home-my-list").fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithTag("home-tv-guide").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Search").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Sports").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Announcements").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Playlist").assertIsDisplayed()
-        composeRule.onNodeWithTag("home-settings").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Notifications, no unread notifications").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-top-icon-Settings").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-coming-soon").assertIsDisplayed().assertHasNoClickAction()
+        composeRule.onNodeWithTag("home-icon-ComingSoon").assertIsDisplayed()
     }
 
     @Test
@@ -72,7 +106,7 @@ class HomeComposeTest {
         composeRule.onNodeWithTag("live-branding").assertIsDisplayed()
         composeRule.onNodeWithTag("live-title").assertIsDisplayed()
         composeRule.onNodeWithTag("live-clock").assertIsDisplayed()
-        composeRule.onNodeWithTag("live-category-search").assertIsDisplayed()
+        composeRule.onAllNodesWithTag("live-category-search").assertCountEquals(0)
         composeRule.onNodeWithTag("live-channel-list").assertIsDisplayed()
         composeRule.onNodeWithTag("live-preview").assertIsDisplayed()
         composeRule.onNodeWithTag("live-channel-info").assertIsDisplayed()
@@ -82,7 +116,7 @@ class HomeComposeTest {
     }
 
     @Test
-    fun homeTopBarAndSecondaryRoutesUseExistingDestinations() {
+    fun homeHeaderSettingsOpensSettingsAndBackReturnsHome() {
         enterConfiguredOrProviderSetup()
         if (composeRule.onAllNodes(hasText("Provider Name")).fetchSemanticsNodes().isNotEmpty()) {
             composeRule.onNodeWithText("Provider Name").assertIsDisplayed()
@@ -90,11 +124,14 @@ class HomeComposeTest {
         }
         composeRule.onNodeWithContentDescription("Search").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Sports").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Announcements").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("Playlist").performClick()
+        composeRule.onNodeWithContentDescription("Notifications, no unread notifications").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Settings").performClick()
         composeRule.waitUntil(5_000) {
-            composeRule.onAllNodes(hasText("PROVIDER MANAGEMENT")).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("settings-root").fetchSemanticsNodes().isNotEmpty()
         }
+        composeRule.onNodeWithTag("settings-root").assertIsDisplayed()
+        pressBack()
+        composeRule.onNodeWithTag("home-screen").assertIsDisplayed()
     }
 
     @Test
@@ -116,14 +153,16 @@ class HomeComposeTest {
 
     @Test
     fun announcementsBellOpensListDetailsAndBackReturnsHome() {
+        val fixture = StartupNotificationFixture(InstrumentationRegistry.getInstrumentation().targetContext)
+        val expectedAnnouncementTag = "announcement-${fixture.announcementId()}"
         enterConfiguredOrProviderSetup()
         if (composeRule.onAllNodes(hasText("Provider Name")).fetchSemanticsNodes().isNotEmpty()) return
 
-        composeRule.onNodeWithContentDescription("Announcements").assertIsDisplayed().performClick()
+        composeRule.onNodeWithContentDescription("Notifications, 1 unread notification").assertIsDisplayed().performClick()
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithTag("announcements-list").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithTag("announcement-uitest-update")
+        composeRule.onNodeWithTag(expectedAnnouncementTag)
             .assertIsDisplayed()
             .assertHasClickAction()
             .performClick()

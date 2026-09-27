@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioComponentSizes
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioTypography
+import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioAppearance
+import com.iamskorpz.watchioiptv.ui.theme.toComposeColor
 
 @Composable
 fun WatchioFocusableCard(
@@ -33,6 +35,7 @@ fun WatchioFocusableCard(
     onClick: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
+    val appearance = LocalWatchioAppearance.current
     WatchioCard(
         modifier = modifier,
         focusRequester = focusRequester,
@@ -41,14 +44,14 @@ fun WatchioFocusableCard(
         minHeight = minHeight,
         contentDescription = title,
         onClick = onClick,
-    ) {
+    ) { focused ->
         Box(
             modifier = Modifier.padding(contentPadding),
             contentAlignment = Alignment.CenterStart,
         ) {
             Text(
                 text = title,
-                color = colors.textPrimary,
+                color = if (focused) appearance.colors.focusedText.toComposeColor() else colors.textPrimary,
                 style = textStyle,
                 maxLines = maxLines,
                 overflow = overflow,

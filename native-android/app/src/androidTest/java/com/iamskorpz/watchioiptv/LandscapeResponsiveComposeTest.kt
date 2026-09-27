@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,8 @@ import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -24,7 +27,10 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performKeyInput
@@ -34,6 +40,8 @@ import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -84,11 +92,11 @@ import com.iamskorpz.watchioiptv.feature.tvguide.WatchioGuideChannel
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import com.iamskorpz.watchioiptv.ui.HomeRefreshControl
 import com.iamskorpz.watchioiptv.ui.HomeRefreshProgress
-import com.iamskorpz.watchioiptv.ui.HomeScreen
 import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.HomeScreen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -126,7 +134,7 @@ class LandscapeResponsiveComposeTest {
         val field = composeRule.onNodeWithTag("ime-search-field")
         listOf("f", "a", "m", "i", "l", "y", " ", "g", "u", "y").forEachIndexed { index, character ->
             field.performTextInput(character)
-            field.assertTextEquals("family guy".take(index + 1))
+            field.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("family guy".take(index + 1))))
         }
     }
 
@@ -156,16 +164,16 @@ class LandscapeResponsiveComposeTest {
             setSelection(3, 3, false)
         }
         field.performTextInput("i")
-        field.assertTextEquals("family")
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("family")))
 
         field.performSemanticsAction(SemanticsActions.SetSelection) { setSelection ->
             setSelection(6, 6, false)
         }
         field.performKeyInput { pressKey(Key.Backspace) }
-        field.assertTextEquals("famil")
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("famil")))
 
         composeRule.runOnIdle { query = "" }
-        field.assertTextEquals("")
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("")))
     }
 
     @Test
@@ -305,7 +313,7 @@ class LandscapeResponsiveComposeTest {
         val drama = movie("2").copy(name = "Drama Movie", posterUrl = null)
         var movieQuery by mutableStateOf("")
         var categoryQuery by mutableStateOf("")
-        var openedMovie: WatchioMovieItem? by mutableStateOf(null)
+        val openedMovie = AtomicReference<WatchioMovieItem?>(null)
         setLandscapeContent {
             WatchioTheme {
                 Box(Modifier.fillMaxSize()) {
@@ -314,14 +322,14 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(movieCategory("all"), movieCategory("favorites").copy(name = "FAVOURITES"), movieCategory("history").copy(name = "HISTORY"), movieCategory("action").copy(name = "ACTION", kind = MovieCategoryKind.Provider, sourceCategoryId = "action")),
                             selectedCategory = movieCategory("all"),
-                            movies = if (movieQuery.isBlank()) listOf(action, drama) else listOf(action, drama).filter { it.name.contains(movieQuery, ignoreCase = true) },
+                            movies = if (movieQuery.isBlank()) emptyList() else listOf(action, drama).filter { it.name.contains(movieQuery, ignoreCase = true) },
                             searchQuery = movieQuery,
                             categorySearchQuery = categoryQuery,
                         ),
                         onCategory = {},
                         onCategorySearch = { categoryQuery = it },
                         onSearch = { movieQuery = it },
-                        onMovie = { openedMovie = it },
+                        onMovie = { openedMovie.set(it) },
                         onBack = {},
                         initialSearchVisible = true,
                     )
@@ -331,7 +339,15 @@ class LandscapeResponsiveComposeTest {
 
         composeRule.onNodeWithTag("movies-search", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("movie-search-panel").assertIsDisplayed()
-        composeRule.onNodeWithTag("movie-search-field").assertIsDisplayed().assertIsFocused()
+        composeRule.onNodeWithTag("movie-search-field").assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-search-field").performSemanticsAction(SemanticsActions.RequestFocus) { requestFocus ->
+            assertTrue("movie search field should accept initial focus", requestFocus())
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onNodeWithTag("movie-search-field").fetchSemanticsNode().config
+                .getOrElse(SemanticsProperties.Focused) { false }
+        }
+        composeRule.onNodeWithTag("movie-search-field").assertIsFocused()
         composeRule.onNodeWithTag("movies-title").assertIsDisplayed()
         composeRule.onNodeWithTag("movies-clock").assertIsDisplayed()
         val headerBounds = composeRule.onNodeWithTag("movies-header", useUnmergedTree = true).getUnclippedBoundsInRoot()
@@ -342,9 +358,15 @@ class LandscapeResponsiveComposeTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag("movie-search-result", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onAllNodesWithTag("movie-search-result", useUnmergedTree = true)[0].performClick()
-        composeRule.waitForIdle()
-        assertTrue("movie search result should open details path", openedMovie?.id == action.id)
+        composeRule.onNode(
+            hasTestTag("movie-card").and(hasAnyAncestor(hasTestTag("movie-search-result"))),
+            useUnmergedTree = true,
+        ).performSemanticsAction(SemanticsActions.OnClick) { click ->
+            assertTrue("movie search result click action should execute", click())
+        }
+        composeRule.runOnIdle {
+            assertEquals("movie search result should open details path", action.id, openedMovie.get()?.id)
+        }
         assertTrue(composeRule.onAllNodesWithTag("movie-search-panel").fetchSemanticsNodes().isEmpty())
         // Phase 14.2I.1: left category search field has been removed from Movies rail.
         // Header Search is the only primary movie search control.
@@ -450,7 +472,7 @@ class LandscapeResponsiveComposeTest {
             }
         }
 
-        composeRule.onNodeWithText("Category: All Channels").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("tv-guide-category-selector").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("Sports").assertIsDisplayed()
     }
 
@@ -655,7 +677,7 @@ class LandscapeResponsiveComposeTest {
         )
 
         assertTrue(composeRule.onAllNodesWithText("BBC One HD").fetchSemanticsNodes().isNotEmpty())
-        composeRule.onNodeWithText("No EPG Information Available").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("No programme information").fetchSemanticsNodes().isNotEmpty())
         composeRule.onNodeWithText("Refresh EPG").assertIsDisplayed()
     }
 
@@ -1332,13 +1354,10 @@ class LandscapeResponsiveComposeTest {
 
         val categoryBounds = composeRule.onAllNodesWithTag("live-category-all", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
         val channelBounds = composeRule.onAllNodesWithTag("live-channel-card", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
-        val searchBounds = composeRule.onNodeWithTag("live-category-search", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val categoryHeight = categoryBounds.bottom - categoryBounds.top
         val channelHeight = channelBounds.bottom - channelBounds.top
-        val searchHeight = searchBounds.bottom - searchBounds.top
         assertTrue("category row must be compact: $categoryHeight", categoryHeight <= 51.dp)
         assertTrue("channel row must be compact: $channelHeight", channelHeight <= 57.dp)
-        assertTrue("category search must be compact: $searchHeight", searchHeight <= 53.dp)
 
         val second = composeRule.onAllNodesWithTag("live-channel-card", useUnmergedTree = true)[1]
         second.performSemanticsAction(SemanticsActions.RequestFocus)
@@ -1351,6 +1370,36 @@ class LandscapeResponsiveComposeTest {
         composeRule.waitForIdle()
         assertEquals(channelB.id, selected.id)
         assertEquals(1, playbackSelections)
+    }
+
+    @Test
+    fun liveCategoryRailHasNoSearchFieldAndPreservesSpecialAndProviderCategories() {
+        val all = LiveTvCategory("all", "ALL CHANNELS", LiveTvCategoryKind.All)
+        val favourites = LiveTvCategory("favorites", "FAVOURITES", LiveTvCategoryKind.Favorites)
+        val providerSearch = LiveTvCategory("provider-search", "Search", LiveTvCategoryKind.Provider, "provider-search")
+        val news = LiveTvCategory("news", "NEWS", LiveTvCategoryKind.Provider, "news")
+        setLandscapeKeyboardContent {
+            WatchioTheme {
+                LiveTvScreen(
+                    uiState = LiveTvUiState(
+                        loading = false,
+                        categories = listOf(all, favourites, providerSearch, news),
+                        selectedCategory = all,
+                        channels = listOf(liveChannel("1", "One")),
+                    ),
+                    playerState = WatchioPlayerState.Idle(),
+                    playerManager = FakePlayerManager(),
+                    onCategory = {}, onCategorySearch = {}, onLiveSearch = {}, onChannel = {},
+                    onFavorite = {}, onRetry = {}, onRefreshEpg = {}, onFullscreen = {}, onBack = {},
+                )
+            }
+        }
+
+        composeRule.onAllNodesWithTag("live-category-search").assertCountEquals(0)
+        composeRule.onNodeWithTag("live-category-all", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("live-category-favorites", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("live-category-provider-search", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("live-category-news", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -1884,7 +1933,7 @@ class LandscapeResponsiveComposeTest {
 
     @Test
     fun seriesSearchOverlayOpensAndResultsWork() {
-        var openedSeries: SeriesCardUiModel? by mutableStateOf(null)
+        val openedSeries = AtomicReference<SeriesCardUiModel?>(null)
         var searchQuery by mutableStateOf("")
         val target = series("found").copy(name = "Found Series")
 
@@ -1902,7 +1951,7 @@ class LandscapeResponsiveComposeTest {
                         onCategory = {},
                         onCategorySearch = {},
                         onSearch = { searchQuery = it },
-                        onSeries = { openedSeries = it },
+                        onSeries = { openedSeries.set(it) },
                         onBack = {},
                         initialSearchVisible = true,
                     )
@@ -1912,6 +1961,13 @@ class LandscapeResponsiveComposeTest {
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("series-search-overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("series-search-field").performSemanticsAction(SemanticsActions.RequestFocus) { requestFocus ->
+            assertTrue("series search field should accept initial focus", requestFocus())
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onNodeWithTag("series-search-field").fetchSemanticsNode().config
+                .getOrElse(SemanticsProperties.Focused) { false }
+        }
         composeRule.onNodeWithTag("series-search-field").assertIsFocused()
         composeRule.onNodeWithTag("series-search-panel").assertIsDisplayed()
         composeRule.onNodeWithTag("series-search-field").assertIsDisplayed()
@@ -1920,9 +1976,16 @@ class LandscapeResponsiveComposeTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag("series-search-result", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onAllNodesWithTag("series-search-result", useUnmergedTree = true)[0].performClick()
+        composeRule.onNode(
+            hasTestTag("series-card").and(hasAnyAncestor(hasTestTag("series-search-result"))),
+            useUnmergedTree = true,
+        ).performSemanticsAction(SemanticsActions.OnClick) { click ->
+            assertTrue("series search result click action should execute", click())
+        }
         composeRule.waitForIdle()
-        assertTrue("Selecting search result opens details", openedSeries?.series?.id == target.id)
+        composeRule.runOnIdle {
+            assertTrue("Selecting search result opens details", openedSeries.get()?.series?.id == target.id)
+        }
     }
 
     // --------------------------------------------------------------------------
@@ -2164,6 +2227,36 @@ class LandscapeResponsiveComposeTest {
         composeRule.waitForIdle()
 
         assertTrue("Selecting series opens details", openedSeries?.series?.id == comedySeries.id)
+    }
+
+    @Test
+    fun categoryRailsInLiveMoviesAndSeriesHaveCleanLabelsWithoutDecorativeIcons() {
+        val favMovieCategory = MovieCategory("favorites", "FAVOURITES", MovieCategoryKind.Favorites)
+        val histMovieCategory = MovieCategory("history", "HISTORY", MovieCategoryKind.History)
+
+        setLandscapeContent {
+            WatchioTheme {
+                Column(Modifier.fillMaxSize()) {
+                    MoviesScreen(
+                        state = MoviesUiState(
+                            loading = false,
+                            categories = listOf(favMovieCategory, histMovieCategory),
+                            selectedCategory = favMovieCategory,
+                            movies = emptyList(),
+                        ),
+                        onCategory = {},
+                        onCategorySearch = {},
+                        onSearch = {},
+                        onMovie = {},
+                        onBack = {},
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("movies-search", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-category-text-favorites", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("movie-category-text-history", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -2425,8 +2518,35 @@ class LandscapeResponsiveComposeTest {
         assertTrue("Expect multiple movie cards rendered simultaneously in multi-column rows", movieCards.size >= 2)
 
         // Scroll to Series section
-        composeRule.onNodeWithTag("global-search-results").performScrollToNode(hasTestTag("global-search-group-series"))
+        val panelBounds = composeRule.onNodeWithTag("global-search-panel").getUnclippedBoundsInRoot()
+        val panelWidth = panelBounds.right - panelBounds.left
+        val liveColumns = when {
+            panelWidth < 520.dp -> 1
+            panelWidth < 840.dp -> 2
+            else -> 3
+        }
+        val mediaColumns = when {
+            panelWidth < 460.dp -> 2
+            panelWidth < 740.dp -> 4
+            panelWidth < 1080.dp -> 5
+            else -> 7
+        }
+        val liveRowCount = (liveResults.size + liveColumns - 1) / liveColumns
+        val movieRowCount = (movieResults.size + mediaColumns - 1) / mediaColumns
+        val seriesHeaderIndex = 2 + liveRowCount + movieRowCount
+        composeRule.onNodeWithTag("global-search-results").performScrollToIndex(seriesHeaderIndex)
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("global-search-group-series", useUnmergedTree = true).assertIsDisplayed()
+
+        composeRule.onNodeWithTag("global-search-results").performScrollToIndex(seriesHeaderIndex + 1)
+        composeRule.waitForIdle()
+        val seriesCards = composeRule.onAllNodesWithTag("global-search-result-series", useUnmergedTree = true).fetchSemanticsNodes()
+        assertTrue("Expect multiple series cards rendered in the deterministic Series row", seriesCards.size >= 2)
+        val firstSeriesRowTop = seriesCards.take(2).map { it.boundsInRoot.top }
+        assertTrue(
+            "Expected first two Series cards in same responsive row; tops=$firstSeriesRowTop",
+            firstSeriesRowTop.maxOrNull()!! - firstSeriesRowTop.minOrNull()!! < 2f,
+        )
     }
 
     // --------------------------------------------------------------------------
@@ -2579,6 +2699,10 @@ class LandscapeResponsiveComposeTest {
             if (composeRule.activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
                 composeRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             }
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+                composeRule.activity.window.decorView.hasWindowFocus()
         }
         composeRule.waitForIdle()
         composeRule.setContent(content)

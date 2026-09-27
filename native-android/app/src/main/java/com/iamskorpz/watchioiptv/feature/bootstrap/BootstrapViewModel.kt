@@ -21,6 +21,7 @@ sealed interface BootstrapDestination {
 class BootstrapViewModel(
     private val providerRepository: ProviderRepository,
     private val settingsRepository: SettingsRepository,
+    val detectedInputMode: InputMode = InputMode.Touch,
 ) : ViewModel() {
     private val _destination = MutableStateFlow<BootstrapDestination>(BootstrapDestination.Loading)
     val destination: StateFlow<BootstrapDestination> = _destination
@@ -35,6 +36,10 @@ class BootstrapViewModel(
 
     fun chooseTv() {
         choose(InputMode.TvRemote)
+    }
+
+    fun chooseAutomatic() {
+        choose(InputMode.Auto)
     }
 
     private fun choose(inputMode: InputMode) {

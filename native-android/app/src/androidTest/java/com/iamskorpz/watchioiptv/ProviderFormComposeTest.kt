@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -27,6 +28,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.iamskorpz.watchioiptv.feature.provider.XtreamProviderFormState
 import com.iamskorpz.watchioiptv.ui.XtreamProviderScreen
+import com.iamskorpz.watchioiptv.ui.DnsLoginScreen
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import org.junit.Rule
 import org.junit.Test
@@ -67,6 +69,8 @@ class ProviderFormComposeTest {
                 ?.let { it[androidx.compose.ui.semantics.SemanticsProperties.Focused] } == true
         }
         composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
+
+        composeRule.onAllNodesWithTag("xtream-dns-login").assertCountEquals(0)
 
         composeRule.onNodeWithContentDescription("SIGN IN").performKeyInput { pressKey(Key.DirectionDown) }
         composeRule.onNodeWithContentDescription("QUICK LOGIN").assertIsFocused()
@@ -171,5 +175,74 @@ class ProviderFormComposeTest {
         val fieldBounds = composeRule.onNodeWithTag("xtream-provider-name").getUnclippedBoundsInRoot()
         assertTrue("field must remain narrower than screen", fieldBounds.right - fieldBounds.left < screenBounds.right - screenBounds.left)
         assertEquals(56f, (fieldBounds.bottom - fieldBounds.top).value, 1f)
+    }
+
+    @Test
+    fun dnsLoginHasOnlyUsernamePasswordAndDpadActions() {
+        composeRule.activity.setContent {
+            WatchioTheme {
+                DnsLoginScreen(
+                    state = XtreamProviderFormState(username = "fake-user", password = "fake-pass"),
+                    onUsername = {}, onPassword = {}, onConnect = {}, onBack = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("dns-username").assertIsFocused()
+        composeRule.onNodeWithTag("dns-username").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.onNodeWithTag("dns-password").assertIsFocused()
+        composeRule.onNodeWithTag("dns-password").performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.onNodeWithContentDescription("LOGIN").assertIsFocused()
+        composeRule.onAllNodesWithTag("xtream-server-url").assertCountEquals(0)
+        composeRule.onAllNodesWithText("Provider Name").assertCountEquals(0)
+        assertTrue(composeRule.onNodeWithTag("dns-password").fetchSemanticsNode().config.contains(androidx.compose.ui.semantics.SemanticsProperties.Password))
+    }
+
+    @Test
+    fun xtreamBackDismissesImeBeforeNavigatingAndRestoresDpadFocus() {
+        var imeVisible by mutableStateOf(true)
+        var backCount = 0
+        composeRule.activity.setContent {
+            WatchioTheme {
+                XtreamProviderScreen(
+                    state = XtreamProviderFormState(providerName = "Test", username = "User", password = "Password"),
+                    onProviderName = {}, onUsername = {}, onPassword = {}, onConnect = {}, onQuickLogin = {},
+                    onBack = { backCount++ },
+                    imeVisibleOverride = imeVisible,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("xtream-username").performClick()
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
+        composeRule.runOnIdle { assertEquals(0, backCount) }
+
+        composeRule.onNodeWithContentDescription("SIGN IN").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.onNodeWithTag("xtream-password").assertIsFocused()
+        composeRule.runOnIdle { imeVisible = false }
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.runOnIdle { assertEquals(1, backCount) }
+    }
+
+    @Test
+    fun dnsBackDismissesImeWithoutLeavingScreen() {
+        var imeVisible by mutableStateOf(true)
+        var backCount = 0
+        composeRule.activity.setContent {
+            WatchioTheme {
+                DnsLoginScreen(
+                    state = XtreamProviderFormState(username = "fake-user", password = "fake-pass"),
+                    onUsername = {}, onPassword = {}, onConnect = {}, onBack = { backCount++ },
+                    imeVisibleOverride = imeVisible,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("dns-password").performClick()
+        // Some TV IMEs consume Back themselves. The insets transition must still
+        // clear the text field and return focus to a remote-friendly action.
+        composeRule.runOnIdle { imeVisible = false }
+        composeRule.onNodeWithContentDescription("LOGIN").assertIsFocused()
+        composeRule.runOnIdle { assertEquals(0, backCount) }
     }
 }

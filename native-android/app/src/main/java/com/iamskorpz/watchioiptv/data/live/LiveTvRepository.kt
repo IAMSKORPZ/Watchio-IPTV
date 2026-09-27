@@ -5,6 +5,9 @@ import com.iamskorpz.watchioiptv.core.database.LiveStreamEntity
 import com.iamskorpz.watchioiptv.core.database.M3uItemEntity
 import com.iamskorpz.watchioiptv.core.database.WatchioDatabase
 import com.iamskorpz.watchioiptv.core.model.ProviderId
+import com.iamskorpz.watchioiptv.data.epg.EpgChannelMatcher
+import com.iamskorpz.watchioiptv.data.epg.EpgMatchIndex
+import com.iamskorpz.watchioiptv.data.epg.EpgNowNextCalculator
 import com.iamskorpz.watchioiptv.domain.model.ContentType
 import com.iamskorpz.watchioiptv.domain.model.ProviderType
 import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlRequest
@@ -12,8 +15,11 @@ import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlResolver
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
 import com.iamskorpz.watchioiptv.domain.repository.HistoryRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 open class LiveTvRepository(
     private val database: WatchioDatabase? = null,
@@ -21,6 +27,8 @@ open class LiveTvRepository(
     private val favoritesRepository: FavoritesRepository? = null,
     private val historyRepository: HistoryRepository? = null,
     private val playbackUrlResolver: PlaybackUrlResolver? = null,
+    private val matcher: EpgChannelMatcher = EpgChannelMatcher(),
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     open suspend fun selectedProviderId(): ProviderId? = settingsRepository?.selectedProviderId?.first()
     open fun observeSelectedProviderId(): Flow<ProviderId?> = settingsRepository?.selectedProviderId ?: kotlinx.coroutines.flow.flowOf(null)
@@ -80,22 +88,49 @@ open class LiveTvRepository(
     }
 
     open suspend fun nowNext(channel: LiveTvChannel, nowEpochMs: Long): LiveTvNowNext {
-        val db = database ?: return LiveTvNowNext(null, null, 0f)
-        val epgId = channel.epgChannelId?.takeIf { it.isNotBlank() } ?: return LiveTvNowNext(null, null, 0f)
-        val current = db.epgDao().getCurrentProgramme(channel.providerId.value, epgId, nowEpochMs)
-        val next = db.epgDao().getNextProgramme(channel.providerId.value, epgId, nowEpochMs)
-        val progress = current?.let {
-            val duration = it.endTimeEpochMs - it.startTimeEpochMs
-            if (duration <= 0L) 0f else ((nowEpochMs - it.startTimeEpochMs).toFloat() / duration).coerceIn(0f, 1f)
-        } ?: 0f
-        return LiveTvNowNext(
-            currentTitle = current?.title,
-            nextTitle = next?.title,
-            progress = progress,
-            currentDescription = current?.description,
-            currentStartEpochMs = current?.startTimeEpochMs,
-            currentEndEpochMs = current?.endTimeEpochMs,
-        )
+        return nowNextForChannels(channel.providerId, listOf(channel), nowEpochMs)[channel.id]
+            ?: LiveTvNowNext(null, null, 0f)
+    }
+
+    open suspend fun nowNextForChannels(
+        providerId: ProviderId,
+        channels: List<LiveTvChannel>,
+        nowEpochMs: Long,
+    ): Map<String, LiveTvNowNext> = withContext(ioDispatcher) {
+        val db = database ?: return@withContext emptyMap()
+        if (channels.isEmpty()) return@withContext emptyMap()
+
+        val epgChannels = db.epgDao().getChannels(providerId.value)
+        if (epgChannels.isEmpty()) {
+            return@withContext channels.associate { it.id to LiveTvNowNext(null, null, 0f) }
+        }
+
+        val matchIndex = EpgMatchIndex(epgChannels, matcher)
+        val channelToEpgId = mutableMapOf<String, String>()
+        channels.forEach { channel ->
+            val matchedId = matchIndex.match(channel.epgChannelId, channel.name)
+            if (!matchedId.isNullOrBlank()) {
+                channelToEpgId[channel.id] = matchedId
+            }
+        }
+
+        val matchedEpgIds = channelToEpgId.values.distinct()
+        if (matchedEpgIds.isEmpty()) {
+            return@withContext channels.associate { it.id to LiveTvNowNext(null, null, 0f) }
+        }
+
+        val fromEpochMs = nowEpochMs - 6 * 3_600_000L
+        val toEpochMs = nowEpochMs + 24 * 3_600_000L
+        val programmes = matchedEpgIds.chunked(500).flatMap { chunk ->
+            db.epgDao().getGuide(providerId.value, chunk, fromEpochMs, toEpochMs)
+        }
+        val programmesByEpgId = programmes.groupBy { it.epgChannelId }
+
+        channels.associate { channel ->
+            val epgId = channelToEpgId[channel.id]
+            val epgList = if (epgId != null) programmesByEpgId[epgId].orEmpty() else emptyList()
+            channel.id to EpgNowNextCalculator.calculate(epgList, nowEpochMs)
+        }
     }
 
     private suspend fun xtreamChannels(providerId: ProviderId, category: LiveTvCategory): List<LiveRow> {

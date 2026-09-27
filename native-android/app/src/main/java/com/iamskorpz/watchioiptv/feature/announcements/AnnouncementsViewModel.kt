@@ -16,17 +16,16 @@ data class AnnouncementsUiState(
     val snapshot: AnnouncementSnapshot = AnnouncementSnapshot(),
     val loading: Boolean = false,
     val error: Boolean = false,
-    val showArchived: Boolean = false,
     val selectedId: String? = null,
 ) {
-    val visibleItems: List<AnnouncementItem> get() = snapshot.items.filter { it.isDismissed == showArchived }
+    val visibleItems: List<AnnouncementItem> get() = snapshot.items
     val selected: AnnouncementItem? get() = snapshot.items.firstOrNull { it.announcement.id == selectedId }
 }
 
 class AnnouncementsViewModel(private val repository: AnnouncementRepository) : ViewModel() {
     private val controls = MutableStateFlow(Controls())
     val state: StateFlow<AnnouncementsUiState> = combine(repository.snapshot, controls) { snapshot, controls ->
-        AnnouncementsUiState(snapshot, controls.loading, controls.error, controls.showArchived, controls.selectedId)
+        AnnouncementsUiState(snapshot, controls.loading, controls.error, controls.selectedId)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AnnouncementsUiState())
 
     fun refresh() {
@@ -50,8 +49,12 @@ class AnnouncementsViewModel(private val repository: AnnouncementRepository) : V
         viewModelScope.launch { repository.markRead(id) }
     }
 
+    fun markAllRead() {
+        val ids = state.value.visibleItems.mapTo(mutableSetOf()) { it.announcement.id }
+        viewModelScope.launch { repository.markAllRead(ids) }
+    }
+
     fun closeDetails() { controls.value = controls.value.copy(selectedId = null) }
-    fun toggleArchived() { controls.value = controls.value.copy(showArchived = !controls.value.showArchived) }
     fun dismiss(id: String) {
         controls.value = controls.value.copy(selectedId = null)
         viewModelScope.launch { repository.dismiss(id) }
@@ -60,7 +63,6 @@ class AnnouncementsViewModel(private val repository: AnnouncementRepository) : V
     private data class Controls(
         val loading: Boolean = false,
         val error: Boolean = false,
-        val showArchived: Boolean = false,
         val selectedId: String? = null,
     )
 }
