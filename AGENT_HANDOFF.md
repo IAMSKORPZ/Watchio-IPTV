@@ -18,7 +18,8 @@ is historical/stale for current development and **MUST NOT** override this file.
 
 | Area | Status | Current fact |
 |---|---|---|
-| Branch / Base | PASS | `codex/dev-rescue-bridge` at `3789c5f94131bf8c0207ea2a20786f7eb310590f`; `origin/dev` matches |
+| Branch / Base | PASS | `codex/dev-rescue-bridge` at `fa7c77bc1b69733c30ea515d18ba84dfd02cf1f7`; `origin/dev` matches |
+| Settings Gear Refinement | COMPLETE / PUSHED | Committed (`fa7c77b`) and pushed to `origin/dev` |
 | Icon Redesign & Refinements | COMPLETE / PUSHED | Committed (`3789c5f`) and pushed to `origin/dev` |
 | TV Guide / Player / EPG Categories | COMPLETE / PUSHED | Committed (`8dd6ff3`) and pushed to `origin/dev`; accepted by user |
 | Tracked working tree | CLEAN | Source tree clean post-commit; handoff records post-push verification |
@@ -39,10 +40,10 @@ is historical/stale for current development and **MUST NOT** override this file.
 |---|---|
 | Worktree | `C:\Users\mrsko\.codex\watchio-dev-rescue-worktree` |
 | Branch | `codex/dev-rescue-bridge` |
-| `HEAD` | `3789c5f94131bf8c0207ea2a20786f7eb310590f` |
-| `origin/dev` | `3789c5f94131bf8c0207ea2a20786f7eb310590f` |
+| `HEAD` | `fa7c77bc1b69733c30ea515d18ba84dfd02cf1f7` |
+| `origin/dev` | `fa7c77bc1b69733c30ea515d18ba84dfd02cf1f7` |
 | `origin/main` | `0364d249ee513f0e814ca8163707e8c2ba47210c` |
-| Latest commit subject | `Redesign Watchio icons and refine category navigation` |
+| Latest commit subject | `Refine Watchio Settings gear icon` |
 | Tracked working tree | CLEAN (handoff records post-push verification) |
 | Untracked files | Intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*` evidence files |
 
@@ -966,6 +967,42 @@ Final pre-commit validation results:
 ### Icon redesign commit and push record
 
 - Feature commit: `3789c5f94131bf8c0207ea2a20786f7eb310590f` - `Redesign Watchio icons and refine category navigation`.
+- Push to `origin/dev`: PASS. No force push, rebase, tag, or release.
+- `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
+- Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- BRAVIA untouched. Untracked evidence preserved.
+
+## 2026-09-27 - Watchio Settings gear icon refinement
+
+### Implementation
+
+- Refined Settings icon geometry in `ui/icons/WatchioIcons.kt` (`WatchioIconKind.Settings`):
+  - Replaced stroked wireframe gear outline with a solid 6-tooth mechanical cogwheel.
+  - Used `PathFillType.EvenOdd` with defined trapezoidal teeth (`rOuter = unit * 0.44f`, `rRoot = unit * 0.31f`, tooth tip half-angle 11.0°, flank angle 6.5°).
+  - Clean circular cutout bore hole in center (`rHole = unit * 0.14f`).
+  - Filled style renders sharp, unmistakable gear across Home top header action (`WatchioIconKind.Settings`) and fullscreen player controls (`PlayerIconKind.Settings`).
+
+### Files changed
+
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/icons/WatchioIcons.kt`
+- `AGENT_HANDOFF.md` updated in place.
+
+### Validation
+
+- Full JVM test suite (`.\gradlew.bat test`): PASS (1187 / 1187).
+- Lint (`.\gradlew.bat lintDebug`): PASS (zero errors).
+- Build assembly (`assembleDebug`): PASS.
+- S22 physical replacement install: PASS (`adb install -r native-android\app\build\outputs\apk\debug\app-debug.apk`); no uninstall or data clear.
+- S22 physical screen captures:
+  - Home top-right action bar: Clean, unmistakable solid gear icon.
+  - Fullscreen player controls: Clean, sharp white gear icon.
+- `git diff --check`: PASS (zero whitespace/conflict errors).
+- Rescue manifest `update.json` SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` (verified unchanged).
+- BRAVIA device `192.168.1.49:5555`: untouched. Untracked evidence preserved.
+
+### Settings gear refinement commit and push record
+
+- Feature commit: `fa7c77bc1b69733c30ea515d18ba84dfd02cf1f7` - `Refine Watchio Settings gear icon`.
 - Push to `origin/dev`: PASS. No force push, rebase, tag, or release.
 - `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
 - Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
