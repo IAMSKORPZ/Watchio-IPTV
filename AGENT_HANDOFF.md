@@ -18,10 +18,10 @@ is historical/stale for current development and **MUST NOT** override this file.
 
 | Area | Status | Current fact |
 |---|---|---|
-| Branch / Base | PASS | `codex/dev-rescue-bridge` at `eb9aa3e467a39cf7289f9a460410e75a245855fe`; `origin/dev` matches |
-| Icon Redesign & Refinements | IN REVIEW / UNCOMMITTED | Clean category rails, 6-tooth Settings gear, preserved Home colours and search buttons; DO NOT COMMIT OR PUSH |
+| Branch / Base | PASS | `codex/dev-rescue-bridge` at `3789c5f94131bf8c0207ea2a20786f7eb310590f`; `origin/dev` matches |
+| Icon Redesign & Refinements | COMPLETE / PUSHED | Committed (`3789c5f`) and pushed to `origin/dev` |
 | TV Guide / Player / EPG Categories | COMPLETE / PUSHED | Committed (`8dd6ff3`) and pushed to `origin/dev`; accepted by user |
-| Tracked working tree | MODIFIED | Working tree has uncommitted icon refinements awaiting user review |
+| Tracked working tree | CLEAN | Source tree clean post-commit; handoff records post-push verification |
 | JVM tests | PASS | All unit tests pass (1187 / 1187) |
 | Lint / build gates | PASS | `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, `git diff --check` |
 | S22 automated UITEST | PASS | Focused tests pass: `HomeComposeTest` (5/5), `LandscapeResponsiveComposeTest` clean rail assertion (1/1) |
@@ -29,7 +29,7 @@ is historical/stale for current development and **MUST NOT** override this file.
 | Rescue bridge manifest | PROTECTED | SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` verified unchanged |
 | Public stable | UNCHANGED | `v0.1.4` (`a0e5bafce943eebecbaeb03e0122ba7c2e0c62e5`); `origin/main` untouched (`0364d24`) |
 | Next update | PLANNED | Sports Broadcast / Where to Watch |
-| Next action | USER REVIEW | User review of uncommitted icon redesign and category rail refinements |
+| Next action | RESEARCH / AUDIT | Read-only architecture audit for Sports Broadcast |
 
 ---
 
@@ -39,12 +39,12 @@ is historical/stale for current development and **MUST NOT** override this file.
 |---|---|
 | Worktree | `C:\Users\mrsko\.codex\watchio-dev-rescue-worktree` |
 | Branch | `codex/dev-rescue-bridge` |
-| `HEAD` | `eb9aa3e467a39cf7289f9a460410e75a245855fe` |
-| `origin/dev` | `eb9aa3e467a39cf7289f9a460410e75a245855fe` |
+| `HEAD` | `3789c5f94131bf8c0207ea2a20786f7eb310590f` |
+| `origin/dev` | `3789c5f94131bf8c0207ea2a20786f7eb310590f` |
 | `origin/main` | `0364d249ee513f0e814ca8163707e8c2ba47210c` |
-| Latest commit subject | `Record Live TV Search removal validation` |
-| Tracked working tree | MODIFIED (uncommitted icon redesign and rail refinements) |
-| Untracked files | Intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*`, `WatchioIcons.kt`, `WatchioIconsTest.kt` |
+| Latest commit subject | `Redesign Watchio icons and refine category navigation` |
+| Tracked working tree | CLEAN (handoff records post-push verification) |
+| Untracked files | Intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*` evidence files |
 
 Untracked `s22-*`, `tvguide-*`, `watchio-*` evidence files are intentional and **MUST NOT** be blindly staged, committed, cleaned, or deleted.
 
@@ -920,7 +920,7 @@ Final pre-commit validation results:
 - Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - BRAVIA untouched. Untracked evidence preserved.
 
-## 2026-09-27 - Application icon redesign and category rail refinements (uncommitted)
+## 2026-09-27 - Application icon redesign and category rail refinements
 
 ### Implementation
 
@@ -962,4 +962,11 @@ Final pre-commit validation results:
 - `git diff --check`: PASS (zero whitespace/conflict errors).
 - Rescue manifest `update.json` SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` (verified unchanged).
 - BRAVIA device `192.168.1.49:5555`: untouched.
-- Commit: NO. Push: NO. (Held for review per explicit instruction).
+
+### Icon redesign commit and push record
+
+- Feature commit: `3789c5f94131bf8c0207ea2a20786f7eb310590f` - `Redesign Watchio icons and refine category navigation`.
+- Push to `origin/dev`: PASS. No force push, rebase, tag, or release.
+- `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
+- Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- BRAVIA untouched. Untracked evidence preserved.
