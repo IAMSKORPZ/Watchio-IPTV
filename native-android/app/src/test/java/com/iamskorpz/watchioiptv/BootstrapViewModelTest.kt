@@ -86,6 +86,37 @@ class BootstrapViewModelTest {
     }
 
     @Test
+    fun firstRunAutomaticDetectionPersistsAutoMode() = runTest(dispatcher) {
+        val settings = FakeSettingsRepository()
+        val viewModel = BootstrapViewModel(FakeProviderRepository(), settings, InputMode.TvRemote)
+        backgroundScope.launch { viewModel.destination.collect {} }
+
+        advanceUntilIdle()
+        assertEquals(InputMode.TvRemote, viewModel.detectedInputMode)
+        viewModel.chooseAutomatic()
+        advanceUntilIdle()
+
+        assertEquals(InputMode.Auto, settings.inputMode.value)
+        assertEquals(true, settings.deviceModeOnboardingCompleted.value)
+        assertEquals(BootstrapDestination.NeedsXtreamLogin, viewModel.destination.value)
+    }
+
+    @Test
+    fun savedManualOverrideSurvivesReopening() = runTest(dispatcher) {
+        val settings = FakeSettingsRepository().apply {
+            inputMode.value = InputMode.TvRemote
+            deviceModeOnboardingCompleted.value = true
+        }
+        val viewModel = BootstrapViewModel(FakeProviderRepository(), settings, InputMode.Touch)
+        backgroundScope.launch { viewModel.destination.collect {} }
+
+        advanceUntilIdle()
+
+        assertEquals(InputMode.TvRemote, settings.inputMode.value)
+        assertEquals(BootstrapDestination.NeedsXtreamLogin, viewModel.destination.value)
+    }
+
+    @Test
     fun deviceModeSelectedWithoutProvidersNeedsXtreamLogin() = runTest(dispatcher) {
         val settings = FakeSettingsRepository().apply {
             deviceModeOnboardingCompleted.value = true

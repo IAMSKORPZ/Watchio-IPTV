@@ -802,3 +802,38 @@ Final pre-commit validation results:
 - Validation retained: focused S22 tests 7/7 PASS; JVM tests, `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS.
 - Rescue manifest SHA-256 after commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - BRAVIA untouched. S22 app data and saved provider/session preserved.
+
+## 2026-09-27 — Automatic device/input detection (uncommitted)
+
+### Architecture and behavior
+
+- Existing `InputMode.Auto`, `InputMode.Touch`, and `InputMode.TvRemote` persistence remains authoritative. No preference key, Room schema, or migration changed.
+- Added one shared detector using `UiModeManager`, television UI mode, Leanback, television feature, touchscreen availability, smallest-width tablet classification, and supplemental Amazon/Fire TV model signals.
+- Supported classifications: phone, tablet, Android/Google TV, Fire TV, and other TV-style/non-touch devices.
+- `Auto` resolves phone/tablet to Touch and all TV classes to TV Remote. Explicit Touch or TV Remote remains a persisted manual override and is never reset when screens reopen.
+- First-run device screen shows `Detected: ...`, visually marks detected choice, and puts initial remote focus on it when Compose is in keyboard input mode. Explicit left/right focus links make remote traversal deterministic. Selecting detected choice preserves `Auto`; selecting opposite choice saves manual override.
+- Settings Input Mode screen remains available, shows current detection, and keeps Auto/TV Remote/Touch controls.
+- Fullscreen player and root TV Back behavior now reuse shared detector instead of duplicate partial TV checks.
+
+### Files changed
+
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/core/device/DeviceInputDetector.kt` (new)
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/feature/bootstrap/BootstrapViewModel.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/feature/player/WatchioFullscreenPlayerScreen.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/WatchioNativeApp.kt`
+- `native-android/app/src/test/java/com/iamskorpz/watchioiptv/DeviceInputDetectorTest.kt` (new)
+- `native-android/app/src/test/java/com/iamskorpz/watchioiptv/BootstrapViewModelTest.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/DeviceModeComposeTest.kt` (new)
+- `AGENT_HANDOFF.md` updated in place.
+
+### Validation
+
+- Focused detector/bootstrap JVM tests: PASS. Covers television UI mode, Leanback, television feature, Fire TV primary/fallback, phone, tablet, automatic first-run mode, and persisted manual override.
+- Device-mode Compose test on authorised S22: PASS, 2/2. Covers detected Touch and TV initial focus plus D-pad Right and Enter manual override activation.
+- Full `test`: PASS.
+- `lintDebug`: PASS, zero errors.
+- `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
+- S22 final replacement install: PASS. Settings showed `Detected: Mobile / Touch` with Auto selected. Manual TV Remote override selected and survived process restart. Auto restored afterward. Existing saved `Admin` provider/session remained present after final APK install. No uninstall or data clear.
+- TV/Fire classification: covered by pure JVM tests; no physical TV used.
+- Rescue manifest SHA-256 remained `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` before implementation and after S22 validation.
+- BRAVIA untouched. No commit or push.

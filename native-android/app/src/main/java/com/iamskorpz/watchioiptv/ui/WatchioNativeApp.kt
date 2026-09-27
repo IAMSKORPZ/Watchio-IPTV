@@ -2,10 +2,7 @@ package com.iamskorpz.watchioiptv.ui
 
 import android.content.Intent
 import android.app.Activity
-import android.app.UiModeManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.net.Uri
 import android.os.SystemClock
 import com.iamskorpz.watchioiptv.core.diagnostics.QuickLoginBootstrapTrace
@@ -98,8 +95,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.InputMode as ComposeInputMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -130,6 +129,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.iamskorpz.watchioiptv.core.di.AppContainer
+import com.iamskorpz.watchioiptv.core.device.DeviceInputDetection
+import com.iamskorpz.watchioiptv.core.device.detectDeviceInput
+import com.iamskorpz.watchioiptv.core.device.label
 import com.iamskorpz.watchioiptv.data.epg.EpgRefreshInterval
 import com.iamskorpz.watchioiptv.data.m3u.M3uImportState
 import com.iamskorpz.watchioiptv.data.xtream.XtreamImportState
@@ -266,6 +268,8 @@ fun WatchioNativeApp(
     val inputMode by container.settingsRepository.inputMode.collectAsStateWithLifecycle(initialValue = InputMode.Auto)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val context = LocalContext.current
+    val detectedDeviceInput = remember(context) { context.detectDeviceInput() }
+    val effectiveInputMode = if (inputMode == InputMode.Auto) detectedDeviceInput.inputMode else inputMode
     val announcementsViewModel: AnnouncementsViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -287,7 +291,7 @@ fun WatchioNativeApp(
     )
     TvRootExitBackHandler(
         enabled = shouldRequireTvDoubleBackExit(
-            inputMode = inputMode,
+            inputMode = effectiveInputMode,
             route = currentBackStackEntry?.destination?.route,
             hasPreviousBackStackEntry = navController.previousBackStackEntry != null,
         ),
@@ -306,7 +310,11 @@ fun WatchioNativeApp(
                     factory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return BootstrapViewModel(container.providerRepository, container.settingsRepository) as T
+                            return BootstrapViewModel(
+                                container.providerRepository,
+                                container.settingsRepository,
+                                detectedDeviceInput.inputMode,
+                            ) as T
                         }
                     },
                 )
@@ -323,6 +331,8 @@ fun WatchioNativeApp(
                 when (destination) {
                     BootstrapDestination.Loading -> BootstrapLoadingScreen()
                     BootstrapDestination.NeedsDeviceMode -> DeviceModeScreen(
+                        detection = detectedDeviceInput,
+                        onAutomatic = bootstrapViewModel::chooseAutomatic,
                         onMobile = bootstrapViewModel::chooseMobile,
                         onTv = bootstrapViewModel::chooseTv,
                     )
@@ -1174,14 +1184,22 @@ private fun BootstrapLoadingScreen() {
 }
 
 @Composable
-private fun DeviceModeScreen(
+internal fun DeviceModeScreen(
+    detection: DeviceInputDetection,
+    onAutomatic: () -> Unit,
     onMobile: () -> Unit,
     onTv: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
-    val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { firstFocus.requestFocus() }
+    val mobileFocus = remember { FocusRequester() }
+    val tvFocus = remember { FocusRequester() }
+    val inputModeManager = LocalInputModeManager.current
+    LaunchedEffect(detection.inputMode, inputModeManager.inputMode) {
+        if (inputModeManager.inputMode == ComposeInputMode.Keyboard) {
+            if (detection.inputMode == InputMode.Touch) mobileFocus.requestFocus() else tvFocus.requestFocus()
+        }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1191,19 +1209,31 @@ private fun DeviceModeScreen(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("How will you use Watchio?", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(spacing.sm))
+            Text("Detected: ${detection.label()}", color = colors.textSecondary)
             Spacer(Modifier.height(spacing.lg))
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.lg)) {
                 WatchioFocusableCard(
-                    title = "MOBILE / TOUCH\nPhones & Tablets",
-                    accent = colors.liveTvAccent,
-                    modifier = Modifier.width(300.dp).height(180.dp).focusRequester(firstFocus).testTag("device-mode-mobile"),
-                    onClick = onMobile,
+                    title = if (detection.inputMode == InputMode.Touch) "MOBILE / TOUCH\nDetected • Phones & Tablets" else "MOBILE / TOUCH\nPhones & Tablets",
+                    accent = if (detection.inputMode == InputMode.Touch) colors.focusGlow else colors.liveTvAccent,
+                    modifier = Modifier
+                        .width(300.dp)
+                        .height(180.dp)
+                        .focusRequester(mobileFocus)
+                        .focusProperties { right = tvFocus }
+                        .testTag("device-mode-mobile"),
+                    onClick = if (detection.inputMode == InputMode.Touch) onAutomatic else onMobile,
                 )
                 WatchioFocusableCard(
-                    title = "TV / REMOTE\nAndroid TV, Fire TV & Remote",
-                    accent = colors.seriesAccent,
-                    modifier = Modifier.width(340.dp).height(180.dp).testTag("device-mode-tv"),
-                    onClick = onTv,
+                    title = if (detection.inputMode == InputMode.TvRemote) "TV / REMOTE\nDetected • Android TV, Fire TV & Remote" else "TV / REMOTE\nAndroid TV, Fire TV & Remote",
+                    accent = if (detection.inputMode == InputMode.TvRemote) colors.focusGlow else colors.seriesAccent,
+                    modifier = Modifier
+                        .width(340.dp)
+                        .height(180.dp)
+                        .focusRequester(tvFocus)
+                        .focusProperties { left = mobileFocus }
+                        .testTag("device-mode-tv"),
+                    onClick = if (detection.inputMode == InputMode.TvRemote) onAutomatic else onTv,
                 )
             }
         }
@@ -2014,9 +2044,7 @@ private fun QuickLoginScreen(
 }
 
 private fun Context.isTelevisionDevice(): Boolean {
-    val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
-    return uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
-        packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    return detectDeviceInput().inputMode == InputMode.TvRemote
 }
 
 @Composable
@@ -3318,7 +3346,10 @@ private fun InputModeSettingsContent(
     onInputMode: (InputMode) -> Unit,
 ) {
     val colors = LocalWatchioColors.current
+    val context = LocalContext.current
+    val detection = remember(context) { context.detectDeviceInput() }
     Text("Input mode", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+    Text("Detected: ${detection.label()}", color = colors.textSecondary)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val columns = if (maxWidth < 720.dp) 2 else InputMode.entries.size
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

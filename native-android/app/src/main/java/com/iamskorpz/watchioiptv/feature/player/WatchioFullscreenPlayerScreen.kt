@@ -1,9 +1,6 @@
 package com.iamskorpz.watchioiptv.feature.player
 
-import android.app.UiModeManager
 import android.content.Context
-import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -86,6 +83,8 @@ import androidx.media3.common.util.UnstableApi
 import coil.compose.AsyncImage
 import com.iamskorpz.watchioiptv.core.player.WatchioAudioTrack
 import com.iamskorpz.watchioiptv.core.player.WatchioPlayerManager
+import com.iamskorpz.watchioiptv.core.device.detectDeviceInput
+import com.iamskorpz.watchioiptv.domain.model.InputMode
 import com.iamskorpz.watchioiptv.core.player.WatchioPlayerMetadata
 import com.iamskorpz.watchioiptv.core.player.WatchioPlayerState
 import com.iamskorpz.watchioiptv.core.player.shouldKeepScreenOn
@@ -492,9 +491,7 @@ fun WatchioFullscreenPlayerScreen(
     val context = LocalContext.current
     val colors = LocalWatchioColors.current
     val isTvDevice = remember(context) {
-        val uiModeManager = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
-        uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
-            context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        context.detectDeviceInput().inputMode == InputMode.TvRemote
     }
 
     var controlsVisible by remember { mutableStateOf(true) }
