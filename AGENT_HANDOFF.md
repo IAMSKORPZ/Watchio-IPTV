@@ -847,3 +847,30 @@ Final pre-commit validation results:
 - Rescue manifest SHA-256 after source commit/push: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - `origin/main` remained `0364d249ee513f0e814ca8163707e8c2ba47210c` and untouched.
 - BRAVIA untouched. Untracked evidence preserved.
+
+## 2026-09-27 - Home Settings and Coming Soon update (uncommitted)
+
+### Implementation
+
+- Replaced Home header Playlist/Profiles action with Settings, retaining its 52dp size, position, semantic control styling, touch action, focusability, and existing Settings route.
+- Replaced lower Home Settings tile with a non-interactive `Coming Soon` tile using the existing TV/guide placeholder icon, unchanged tile size, and theme-aware styling.
+- Coming Soon exposes descriptive semantics but no click action or focus target, so it cannot open an empty screen or trap TV focus.
+- Provider/profile management remains available through Settings > Provider Management. Existing provider/session behavior is unchanged.
+
+### Files changed
+
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/WatchioNativeApp.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/HomeHeaderActionsComposeTest.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/HomeComposeTest.kt`
+- `AGENT_HANDOFF.md` updated in place.
+
+### Validation
+
+- Focused S22 UITEST classes `HomeHeaderActionsComposeTest` and `HomeComposeTest`: PASS, 9/9. Covers header Settings size/accessibility/focusability/touch activation, Settings navigation, Back to Home, and Coming Soon having no click action.
+- Full `test`: PASS.
+- `lintDebug`: PASS, zero errors.
+- `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
+- Physical S22 replacement install: PASS; no uninstall/data clear. Header Settings and non-clickable Coming Soon rendered correctly. Header Settings opened existing Settings; Provider Management remained present; Back returned Home. Saved `Admin` provider/session remained present.
+- BRAVIA untouched.
+- Rescue manifest SHA-256 remained `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Commit: NO. Push: NO.

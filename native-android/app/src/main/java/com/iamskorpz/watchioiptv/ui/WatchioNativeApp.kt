@@ -1367,7 +1367,7 @@ internal fun HomeScreen(
                 onSearch = onSearch,
                 onSports = onSports,
                 onAnnouncements = onAnnouncements,
-                onProviders = onProviders,
+                onSettings = onSettings,
                 announcementUnreadCount = announcementUnreadCount,
             )
             Spacer(Modifier.height(spacing.md))
@@ -1439,11 +1439,11 @@ internal fun HomeScreen(
                                 .testTag("home-series"),
                         )
                         HomeSecondaryPill(
-                            action = HomeAction("Settings", "App Preferences", "", HomeIconKind.Settings, colors.focusGlow, onSettings),
+                            action = HomeAction("Coming Soon", "More features on the way", "", HomeIconKind.Guide, colors.focusGlow, null),
                             modifier = Modifier
                                 .weight(0.28f)
                                 .fillMaxWidth()
-                                .testTag("home-settings"),
+                                .testTag("home-coming-soon"),
                         )
                     }
                 }
@@ -2274,7 +2274,7 @@ private data class HomeAction(
     val status: String,
     val icon: HomeIconKind,
     val accent: androidx.compose.ui.graphics.Color,
-    val onClick: () -> Unit,
+    val onClick: (() -> Unit)?,
 )
 
 private enum class HomeIconKind {
@@ -2299,7 +2299,7 @@ internal fun HomeTopBar(
     onSearch: () -> Unit,
     onSports: () -> Unit,
     onAnnouncements: () -> Unit,
-    onProviders: () -> Unit,
+    onSettings: () -> Unit,
     announcementUnreadCount: Int = 0,
 ) {
     val colors = LocalWatchioColors.current
@@ -2346,7 +2346,13 @@ internal fun HomeTopBar(
                     testTag = "home-notifications",
                     badgeCount = announcementUnreadCount,
                 )
-                HomeTopAction("Playlist", HomeIconKind.Provider, colors.seriesAccent, onProviders)
+                HomeTopAction(
+                    "Settings",
+                    HomeIconKind.Settings,
+                    colors.seriesAccent,
+                    onSettings,
+                    testTag = "home-settings",
+                )
             }
         }
         if (activeServerLabel != null) {
