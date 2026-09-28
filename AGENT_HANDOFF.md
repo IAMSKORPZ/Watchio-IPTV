@@ -1162,3 +1162,36 @@ Final pre-commit validation results:
 
 - Feature commit: `b65ad56e7bead82e34074f6c9791484095b96446` - `Add Live TV now next and later programme details`.
 - Intended push target: `origin/dev` only.
+
+## 2026-09-28 - Public Watchio IPTV v0.1.5 release
+
+### Promotion and compatibility
+
+- DEV feature commit: `b65ad56e7bead82e34074f6c9791484095b96446`.
+- DEV validation handoff commit: `508320814e2fc31509825a4f1245a01fad19ae33`.
+- Promoted the approved DEV application state to MAIN with a normal merge commit: `8b46dabc5ae7b0c5996aade81bfe78dce58df195`.
+- Preserved MAIN's stable updater validation/bindings in `0ec6302e21f8398dc42e8c19a45b363e9ba7b362`.
+- Aligned isolated UITEST fixtures with their deliberate `dev` manifest channel in `fd40df75f18778b29a1c25f9609a5443da538dfd`.
+- Stable release metadata commit/tag target: `47217a9fe021ec60e357bcce549a9e2caf338d34`.
+
+### Release
+
+- Version: `0.1.5` (`versionCode 18`).
+- Tag: `v0.1.5`.
+- GitHub Release: `Watchio IPTV v0.1.5`.
+- Canonical asset: `Watchio-IPTV.apk` (`4,603,528` bytes).
+- APK SHA-256: `035C21D8C8BBD9F140C017A69C572D5F33C725377DA8D644024FC472634ECD6D`.
+- Package: `com.iamskorpz.watchioiptv`.
+- Production signing certificate SHA-256: `8A:76:E2:0B:7C:B2:E1:68:12:F5:05:12:75:A3:D1:12:FC:FB:AB:7C:24:24:C5:E8:97:F5:58:87:6B:CC:6F:F0` (matches v0.1.4).
+- Release URL: `https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.5`.
+- Permanent latest APK URL downloaded and verified against the exact APK SHA.
+
+### Final validation and delivery
+
+- Full JVM tests, `lintDebug`, `lintRelease`, `assembleDebug`, `assembleRelease`, `assembleLocal`, `assembleUitest`, and `assembleUitestAndroidTest`: PASS on the merged MAIN release candidate.
+- Focused isolated S22 Live TV Compose tests: PASS (5/5) on the merged MAIN release candidate.
+- Production announcement commit in `Watchio_Website`: `79bcc13621b2d74b14124e379987976b34652527`.
+- Live announcement ID: `watchio-live-tv-v0-1-5-2026-09-28`; live raw JSON parsed and entry verified.
+- Live stable manifest: `0.1.5`, code `18`, channel `stable`, canonical latest APK URL and exact SHA verified.
+- Protected DEV rescue manifest SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- No force push, rebase, or history rewrite. BRAVIA untouched. Evidence preserved. No credentials or tokens committed.
