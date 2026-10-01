@@ -1,6 +1,8 @@
 package com.iamskorpz.watchioiptv
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
@@ -11,6 +13,11 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.input.key.Key
+import com.iamskorpz.watchioiptv.ui.components.WatchioFocusVisualActiveKey
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.platform.app.InstrumentationRegistry
 import com.iamskorpz.watchioiptv.uitest.StartupFixtureState
@@ -113,6 +120,54 @@ class HomeComposeTest {
         composeRule.onNodeWithTag("live-epg-panel").assertIsDisplayed()
         composeRule.onNodeWithTag("live-search").assertIsDisplayed()
         composeRule.onNodeWithTag("live-more").assertIsDisplayed()
+    }
+
+    @Test
+    fun homePrimaryCardsKeepVisibleDpadFocusAndRestoreLiveFocus() {
+        enterConfiguredOrProviderSetup()
+
+        if (composeRule.onAllNodes(hasText("Provider Name")).fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithText("Provider Name").assertIsDisplayed()
+            return
+        }
+        if (composeRule.onAllNodesWithTag("home-live-tv").fetchSemanticsNodes().isEmpty()) {
+            composeRule.onNodeWithTag("home-no-provider").assertIsDisplayed()
+            return
+        }
+
+        val live = composeRule.onNodeWithTag("home-live-tv")
+        val movies = composeRule.onNodeWithTag("home-movies")
+        val series = composeRule.onNodeWithTag("home-series")
+        val tvGuide = composeRule.onNodeWithTag("home-tv-guide")
+        val focusVisualActive = SemanticsMatcher.expectValue(WatchioFocusVisualActiveKey, true)
+        val focusVisualInactive = SemanticsMatcher.expectValue(WatchioFocusVisualActiveKey, false)
+
+        live.assertIsFocused().assert(focusVisualActive)
+        movies.assert(focusVisualInactive)
+        series.assert(focusVisualInactive)
+        tvGuide.assert(focusVisualInactive)
+        live.performKeyInput { pressKey(Key.DirectionRight) }
+        live.assert(focusVisualInactive)
+        movies.assertIsFocused().assert(focusVisualActive)
+        movies.performKeyInput { pressKey(Key.DirectionRight) }
+        movies.assert(focusVisualInactive)
+        series.assertIsFocused().assert(focusVisualActive)
+        series.performKeyInput { pressKey(Key.DirectionLeft) }
+        movies.performKeyInput { pressKey(Key.DirectionDown) }
+        composeRule.onNodeWithContentDescription("Refresh Movies").performKeyInput { pressKey(Key.DirectionRight) }
+        tvGuide.assertIsFocused().assert(focusVisualActive)
+        series.assert(focusVisualInactive)
+        tvGuide.performKeyInput { pressKey(Key.DirectionUp) }
+        movies.assertIsFocused().assert(focusVisualActive)
+        movies.performKeyInput { pressKey(Key.DirectionRight) }
+        series.assertIsFocused().assert(focusVisualActive)
+        series.performClick()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithTag("series-screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        pressBack()
+        composeRule.onNodeWithTag("home-screen").assertIsDisplayed()
+        live.assertIsFocused()
     }
 
     @Test

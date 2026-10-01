@@ -204,6 +204,7 @@ import coil.compose.AsyncImage
 import com.iamskorpz.watchioiptv.ui.components.WatchioButton
 import com.iamskorpz.watchioiptv.ui.components.WatchioButtonVariant
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
+import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.components.WatchioProgressBar
@@ -2500,52 +2501,63 @@ private fun HomePrimaryCard(
     WatchioCard(
         modifier = modifier
             .focusProperties { down = refreshFocusRequester }
-            .focusRequester(cardFocusRequester)
             .shadow(10.dp, RoundedCornerShape(radii.lg)),
         accent = action.accent,
+        surfaceRole = WatchioSurfaceRole.Control,
+        focusRequester = cardFocusRequester,
         minWidth = 0.dp,
         minHeight = 0.dp,
         contentDescription = "${action.title}, ${action.status}",
         onClick = action.onClick,
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(colors.surfaceCard.copy(alpha = 0.72f), colors.surfaceElevated.copy(alpha = 0.88f))))
-                .padding(top = spacing.lg),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            colors.surfaceCard.copy(alpha = 0.72f),
+                            colors.surfaceElevated.copy(alpha = 0.88f),
+                        ),
+                    ),
+                ),
         ) {
-            WatchioIcon(action.icon, action.accent, Modifier.size(52.dp).testTag("home-icon-${action.icon.name}"))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(action.title, color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(action.subtitle, color = colors.textSecondary, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .background(colors.surfaceElevated.copy(alpha = 0.72f))
-                    .padding(horizontal = spacing.lg),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier.fillMaxSize().padding(top = spacing.lg),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(
-                    text = if (refreshing) "Refreshing..." else action.status,
-                    color = colors.textPrimary,
-                    style = type.body,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                HomeRefreshControl(
-                    title = action.title,
-                    accent = action.accent,
-                    refreshing = refreshing,
-                    onRefresh = onRefresh,
-                    focusRequester = refreshFocusRequester,
-                    upFocusRequester = cardFocusRequester,
-                )
+                WatchioIcon(action.icon, action.accent, Modifier.size(52.dp).testTag("home-icon-${action.icon.name}"))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(action.title, color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(action.subtitle, color = colors.textSecondary, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .background(colors.surfaceElevated.copy(alpha = 0.72f))
+                        .padding(horizontal = spacing.lg),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (refreshing) "Refreshing..." else action.status,
+                        color = colors.textPrimary,
+                        style = type.body,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    HomeRefreshControl(
+                        title = action.title,
+                        accent = action.accent,
+                        refreshing = refreshing,
+                        onRefresh = onRefresh,
+                        focusRequester = refreshFocusRequester,
+                        upFocusRequester = cardFocusRequester,
+                    )
+                }
             }
         }
     }

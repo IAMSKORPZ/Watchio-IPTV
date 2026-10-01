@@ -4,9 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +25,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.widthIn
@@ -37,11 +37,15 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +75,9 @@ enum class WatchioButtonVariant {
 }
 
 enum class WatchioSurfaceRole { Card, Panel, Control }
+
+internal val WatchioFocusVisualActiveKey = SemanticsPropertyKey<Boolean>("WatchioFocusVisualActive")
+internal var SemanticsPropertyReceiver.watchioFocusVisualActive by WatchioFocusVisualActiveKey
 
 internal fun semanticOutlineWidthDp(
     role: WatchioSurfaceRole,
@@ -149,12 +156,13 @@ fun WatchioCard(
     val borders = LocalWatchioBorders.current
     val appearance = LocalWatchioAppearance.current
     val interactionSource = remember { MutableInteractionSource() }
-    val focused by interactionSource.collectIsFocusedAsState()
-    val shape = RoundedCornerShape(when (surfaceRole) {
+    var focused by remember { mutableStateOf(false) }
+    val cornerRadius = when (surfaceRole) {
         WatchioSurfaceRole.Card -> appearance.cards.cornerRadiusDp.dp
         WatchioSurfaceRole.Panel -> appearance.surfaces.cornerRadiusDp.dp
         WatchioSurfaceRole.Control -> appearance.controls.cornerRadiusDp.dp
-    })
+    }
+    val shape = RoundedCornerShape(cornerRadius)
     val active = focused || selected
     val borderWidth = if (focused) borders.focused else semanticOutlineWidthDp(surfaceRole, appearance).dp
     val borderColor = when {
@@ -173,7 +181,6 @@ fun WatchioCard(
                 role = Role.Button,
                 onClick = onClick,
             )
-            .focusable(interactionSource = interactionSource)
     } else {
         Modifier
     }
@@ -188,9 +195,10 @@ fun WatchioCard(
                 ambientColor = appearance.colors.focusGlow.toComposeColor().copy(alpha = appearance.focus.glowIntensity),
                 spotColor = appearance.colors.focusGlow.toComposeColor().copy(alpha = appearance.focus.glowIntensity),
             )
-            .then(if (borderWidth > 0.dp) Modifier.border(BorderStroke(borderWidth, borderColor), shape) else Modifier)
+            .semantics { watchioFocusVisualActive = focused }
             .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .onFocusChanged { focused = it.isFocused }
             .then(clickableModifier),
         color = Color.Transparent,
         shape = shape,
@@ -202,6 +210,15 @@ fun WatchioCard(
         }
         Box(Modifier.background(background).alpha(if (enabled) 1f else appearance.controls.disabledOpacity)) {
             content(focused)
+            if (borderWidth > 0.dp) {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .zIndex(1f)
+                        .padding(borderWidth)
+                        .border(BorderStroke(borderWidth, borderColor), shape),
+                )
+            }
         }
     }
 }

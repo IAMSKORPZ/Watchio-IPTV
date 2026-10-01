@@ -205,6 +205,7 @@ internal fun StartupAnnouncementModal(
                 WatchioButton(
                     text = "DISMISS",
                     onClick = onDismiss,
+                    variant = WatchioButtonVariant.Secondary,
                     modifier = Modifier
                         .widthIn(min = 150.dp)
                         .focusRequester(dismissFocus)

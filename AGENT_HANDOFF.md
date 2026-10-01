@@ -1162,3 +1162,102 @@ Final pre-commit validation results:
 
 - Feature commit: `b65ad56e7bead82e34074f6c9791484095b96446` - `Add Live TV now next and later programme details`.
 - Intended push target: `origin/dev` only.
+
+## 2026-09-28 - Home focus highlight and announcement Dismiss readability fixes (uncommitted)
+
+### Bug 1 - Home primary-card focus
+
+- Root cause: `WatchioCard` already supplied the shared focus border, scale, glow, and focused surface, but `HomePrimaryCard` painted an opaque full-card gradient and child surfaces over that mechanism. The previous overlay restored four-sided visibility but remained a separate thin edge border, so it could not match TV Guide's Control-role focus frame and visible focused-surface spacing.
+- Fix: removed the large-card-only border overlay. `HomePrimaryCard` now uses the same `WatchioCard` Control-role focus mechanism as `HomeSecondaryPill`/TV Guide. Its original gradient is inset by the configured theme focus-outline width only while focused, exposing the shared focused surface as the same rounded inner spacing while the shared wrapper supplies ring width, colour, corner radius, scale, and glow. Touch actions, dimensions, identity colours, navigation order, refresh controls, and routes are unchanged.
+
+### Bug 2 - Announcement Dismiss text
+
+- Root cause: the Dismiss action used the Primary button variant. Primary keeps `selectedButtonText`, while a focused card uses the darker `focusedSurface`; this produced dark text on a dark focused surface.
+- Fix: Dismiss now uses the existing Secondary button variant, which uses theme `buttonText`/`buttonSurface` tokens and remains readable in normal and focused states. Dismiss callback, Back behavior, focus trap, and touch behavior are unchanged.
+
+### Files changed
+
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/WatchioNativeApp.kt`
+- `native-android/app/src/main/java/com/iamskorpz/watchioiptv/feature/startup/StartupNotifications.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/HomeComposeTest.kt`
+- `native-android/app/src/androidTest/java/com/iamskorpz/watchioiptv/StartupNotificationsComposeTest.kt`
+- `AGENT_HANDOFF.md`
+
+### Validation
+
+- Full JVM test suite: PASS.
+- `lintDebug`: PASS, zero errors.
+- `assembleDebug`, `assembleUitest`, and `assembleUitestAndroidTest`: PASS.
+- Focused isolated S22 UITEST: PASS, 2/2. Covers Live TV -> Movies -> Series D-pad focus traversal, Series activation, Back-to-Home focus restoration, Dismiss focusability, Dismiss touch activation, and callback behavior.
+- S22 replacement install: PASS; no uninstall or data clear. Existing provider/session preserved.
+- S22 comparison/validation: replacement install PASS with provider/session preserved. Captured TV Guide's working focus frame before the correction (`s22-tv-guide-focus-reference2.png`) and confirmed the implementation now routes large cards through that exact shared Control-role wrapper. Focus traversal/restoration and exclusive focus passed isolated S22 instrumentation 2/2. Final large-card screenshot capture remained limited because the physical S22 correctly stayed in touch input mode; no false D-pad visual claim is recorded.
+- Announcement modal behavior was exercised on the physical S22 through isolated UITEST; no production announcement state or content was changed.
+- `git diff --check`: PASS.
+- Rescue manifest SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- MAIN untouched. BRAVIA untouched. Untracked evidence preserved. No commit or push.
+
+## 2026-09-28 - Home focus follow-up investigation (blocked; not fixed)
+
+- The prior Home-focus completion claim is withdrawn. Repeated physical S22 captures still show no white frame on Live TV despite Android UIAutomator reporting the Live TV node focused.
+- Proven physical state: focused node content description `LIVE TV, Updated last: 9:04 pm`, bounds `[108,286][784,921]`, `focusable=true`, `focused=true`; screenshot `s22-home-focus-live-final-mechanism.png` still has no visible frame.
+- Input mode was not the blocker: real ADB D-pad key events moved Android focus onto the Live TV card. The temporary Activity/input-mode recovery experiment was removed.
+- Rendering/modifier ordering remains implicated: TV Guide/Refresh transparent content exposes the shared `WatchioCard` focus treatment, while the large primary cards use a full-size gradient/content structure. However, speculative custom overlays, hard-coded strokes, single-target click handling, and large-card-only focus overrides did not satisfy physical acceptance and were removed as required.
+- The existing diagnostic semantics test (`WatchioFocusVisualActive`) and prior primary-card Control-role/inset work remain uncommitted, but they are not sufficient proof of visible output.
+- Physical results: Live TV FAIL; Movies NOT RE-VERIFIED; Series NOT RE-VERIFIED; TV Guide reference PASS from existing evidence. Required four-capture acceptance is incomplete.
+- Task status: BLOCKED / NOT FULLY VERIFIED. No fix claim. Full validation gates were not rerun because no accepted root-cause fix was retained.
+- Latest replacement install used only authorized S22 `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp`; app data/session preserved. BRAVIA untouched.
+- Rescue manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- No commit, push, release, tag, MAIN change, uninstall, or data clear.
+
+## 2026-09-29 - Large Home focus-ring rendering continuation (blocked; candidate rejected)
+
+- Reproduced on authorized S22 with real D-pad events. Android focus moves through Live TV, Movies, and Series, but no thick white frame appears.
+- Explicit outer/inner content separation was tested: `WatchioCard` remained outer owner; gradient moved into an inner clipped box. Physical result exposed only thin normal top/bottom outline on Movies/Series, not the focused white ring.
+- Moving the existing border into Material `Surface.border` and padding shared card content was also tested. Physical result remained unchanged.
+- UIAutomator evidence shows the physically focused node is an outer clickable/focusable wrapper with empty description while the child carrying Watchio card semantics remains unfocused. Thus `collectIsFocusedAsState()` does not activate the shared visual state on the physical path, despite Android focus acquisition.
+- Removing/reordering the redundant explicit `focusable` was tested and rejected: startup action activation or D-pad traversal regressed. Those changes and all rendering candidates were removed.
+- No candidate met acceptance. Retained source remains prior uncommitted state; Announcement Dismiss fix unchanged.
+- Candidate gates: JVM `1347/1347` PASS, `lintDebug` PASS, `assembleDebug` PASS, `assembleUitest` PASS, `assembleUitestAndroidTest` PASS, `git diff --check` PASS. These do not override failed physical acceptance.
+- Physical results: Live TV FAIL; Movies FAIL; Series FAIL; TV Guide existing reference PASS. Required four-state acceptance not achieved.
+- Evidence preserved untracked, including `s22-home-focus-live-nested-final.png`, `s22-home-focus-movies-nested-final.png`, `s22-home-focus-series-nested-final.png`, and related candidate captures/XML.
+- Rescue manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- BRAVIA and MAIN untouched. No commit, push, release, tag, uninstall, or data clear.
+
+## 2026-09-29 - Large Home focus owner mismatch fixed and physically accepted
+
+### Root cause and fix
+
+- Confirmed root cause: `WatchioCard` composed `Modifier.clickable(...)` and then a second explicit `focusable(...)`. Physical D-pad focus landed the redundant focus target, while the state used for the shared `WatchioCard` visual treatment did not represent that authoritative target.
+- Removed the redundant explicit `focusable`; `WatchioCard` now has one effective interactive focus target owned by its existing clickable path.
+- `WatchioCard` observes that target with `onFocusChanged`, so the same physical focus state drives scale, glow, focused surface, diagnostic semantics, and focus frame.
+- Focus frame remains shared and theme-driven. The existing `WatchioCard` border is rendered as a topmost inset overlay so full-card gradient content cannot obscure it. No Home-specific or hard-coded white border was added.
+- `HomePrimaryCard` now delegates focus requester, semantics, touch activation, and D-pad activation directly to `WatchioCard`, matching the coherent TV Guide path. No outer competing focus/click node remains.
+- Announcement Dismiss text-colour fix remains unchanged.
+
+### Physical S22 acceptance
+
+- Device: `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp` (`SM-S901B`). Replacement install only; provider/session and app data preserved.
+- Real D-pad focus and `DPAD_CENTER`:
+  - Live TV visual focus PASS; activation opened Live TV once PASS.
+  - Movies visual focus PASS; activation opened Movies once PASS.
+  - Series visual focus PASS; activation opened Series once PASS.
+  - TV Guide reference focus PASS; activation opened EPG Categories once PASS.
+- Repeated traversal showed one moving ring, no stuck ring, no missing ring, and no neighbouring-card activation.
+- Evidence preserved untracked:
+  - `s22-focus-live-pass3.png`
+  - `s22-focus-movies-pass.png`
+  - `s22-focus-series-pass.png`
+  - `s22-focus-tvguide-pass.png`
+  - route XML: `s22-focus-live-open.xml`, `s22-focus-movies-open.xml`, `s22-focus-series-open.xml`, `s22-focus-tvguide-open.xml`
+
+### Validation
+
+- Focused S22 Compose test `homePrimaryCardsKeepVisibleDpadFocusAndRestoreLiveFocus`: PASS (1/1).
+- Full JVM tests: PASS (1347/1347, zero failures/errors/skips).
+- `lintDebug`: PASS, zero errors. Required isolated one-worker run after two combined Gradle batches stalled without results.
+- `assembleDebug`: PASS.
+- `assembleUitest`: PASS.
+- `assembleUitestAndroidTest`: PASS.
+- `git diff --check`: PASS.
+- Rescue manifest SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- BRAVIA untouched. MAIN untouched. Untracked evidence preserved. No commit, push, release, tag, uninstall, or data clear.

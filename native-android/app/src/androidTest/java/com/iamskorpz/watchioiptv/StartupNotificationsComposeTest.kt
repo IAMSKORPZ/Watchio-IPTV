@@ -1,12 +1,17 @@
 package com.iamskorpz.watchioiptv
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.isFocused
 import com.iamskorpz.watchioiptv.data.updates.UpdateApk
 import com.iamskorpz.watchioiptv.data.updates.UpdateManifest
 import com.iamskorpz.watchioiptv.domain.model.Announcement
@@ -64,10 +69,18 @@ class StartupNotificationsComposeTest {
     fun announcementFocusesDismissAndPersistsThroughCallback() {
         var dismissed = false
         composeRule.setContent {
+            val inputModeManager = LocalInputModeManager.current
+            LaunchedEffect(Unit) { inputModeManager.requestInputMode(InputMode.Keyboard) }
             WatchioTheme { StartupAnnouncementModal(announcement(), onDismiss = { dismissed = true }) }
         }
         composeRule.onNodeWithTag("startup-announcement-modal").assertIsDisplayed()
-        composeRule.onNodeWithTag("startup-announcement-dismiss").assertIsDisplayed().performClick()
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodes(isFocused()).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("startup-announcement-dismiss")
+            .assertIsDisplayed()
+            .assertIsFocused()
+            .performClick()
         composeRule.runOnIdle { assertTrue(dismissed) }
     }
 
