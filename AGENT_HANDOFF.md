@@ -1261,3 +1261,12 @@ Final pre-commit validation results:
 - `git diff --check`: PASS.
 - Rescue manifest SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - BRAVIA untouched. MAIN untouched. Untracked evidence preserved. No commit, push, release, tag, uninstall, or data clear.
+
+### DEV commit and push
+
+- Feature commit: `00a984b2203ffb54cef613f4509508e3919fdb1c` - `Fix TV focus indicators and announcement dismiss styling`.
+- Push target: `origin/dev` only.
+- Push verification: PASS; feature commit matched `origin/dev` after fetch.
+- Validation at commit time: focused S22 tests 2/2 PASS; JVM tests 1347/1347 PASS; `lintDebug`, `assembleDebug`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS.
+- Rescue manifest SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- MAIN and BRAVIA remained untouched. No release or tag was created. Untracked evidence remained uncommitted.
