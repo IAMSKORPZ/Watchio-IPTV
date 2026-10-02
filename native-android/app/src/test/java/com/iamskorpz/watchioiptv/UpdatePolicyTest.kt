@@ -27,27 +27,27 @@ class UpdatePolicyTest {
 
     @Test
     fun validManifestPasses() {
-        UpdatePolicy.validateManifest(manifest())
+        UpdatePolicy.validateManifest(manifest(), expectedChannel = "dev")
     }
 
     @Test(expected = UpdateException::class)
     fun malformedShaFails() {
-        UpdatePolicy.validateManifest(manifest(apk = apk().copy(sha256 = "bad")))
+        UpdatePolicy.validateManifest(manifest(apk = apk().copy(sha256 = "bad")), expectedChannel = "dev")
     }
 
     @Test(expected = UpdateException::class)
     fun httpApkUrlFails() {
-        UpdatePolicy.validateManifest(manifest(apk = apk().copy(downloadUrl = "http://example.invalid/app.apk")))
+        UpdatePolicy.validateManifest(manifest(apk = apk().copy(downloadUrl = "http://example.invalid/app.apk")), expectedChannel = "dev")
     }
 
     @Test(expected = UpdateException::class)
     fun channelMismatchFails() {
-        UpdatePolicy.validateManifest(manifest(channel = "stable"))
+        UpdatePolicy.validateManifest(manifest(channel = "stable"), expectedChannel = "dev")
     }
 
     @Test(expected = UpdateException::class)
     fun pathTraversalFilenameFails() {
-        UpdatePolicy.validateManifest(manifest(apk = apk().copy(fileName = "../app.apk")))
+        UpdatePolicy.validateManifest(manifest(apk = apk().copy(fileName = "../app.apk")), expectedChannel = "dev")
     }
 
     @Test

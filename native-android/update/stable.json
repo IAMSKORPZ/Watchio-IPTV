@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "channel": "stable",
+  "versionCode": 18,
+  "versionName": "0.1.5",
+  "minimumSupportedVersionCode": 1,
+  "mandatory": false,
+  "publishedAt": "2026-09-28T00:09:39Z",
+  "releaseNotes": [
+    "Added NOW, NEXT and LATER programme information directly to Live TV.",
+    "Added current programme progress and focus-driven programme details.",
+    "Improved Live TV EPG matching, performance and compact TV navigation.",
+    "General stability and performance improvements."
+  ],
+  "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.5",
+  "apk": {
+    "fileName": "Watchio-IPTV.apk",
+    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/latest/download/Watchio-IPTV.apk",
+    "sha256": "035C21D8C8BBD9F140C017A69C572D5F33C725377DA8D644024FC472634ECD6D"
+  }
+}

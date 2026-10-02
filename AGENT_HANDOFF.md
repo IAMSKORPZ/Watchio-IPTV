@@ -1270,3 +1270,18 @@ Final pre-commit validation results:
 - Validation at commit time: focused S22 tests 2/2 PASS; JVM tests 1347/1347 PASS; `lintDebug`, `assembleDebug`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS.
 - Rescue manifest SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - MAIN and BRAVIA remained untouched. No release or tag was created. Untracked evidence remained uncommitted.
+
+## 2026-10-03 - v0.1.6 updater reconciliation and release-candidate validation
+
+- Starting DEV: `060a221417526fc000142b77fa81d48834ded6d1`; starting MAIN: `f97b7a141469d9119535b1fe89e2d5b60ff08027`.
+- Reviewed MAIN release-line commits before reconciliation. Reusable common baseline now includes build-variant update-channel bindings, explicit update repository channel/manifest injection, `UpdateArtifactValidator`, package/SHA validation, cached verified APK reuse, and isolated UITEST fixtures/tests.
+- Variant contract verified from generated BuildConfig: Debug=`dev`, Release=`stable`, Local=`local` with updates disabled, UITEST=`uitest` fixture URI.
+- Approved DEV focus fix `00a984b2203ffb54cef613f4509508e3919fdb1c` and Announcement Dismiss Secondary styling are preserved.
+- Release candidate metadata: `versionName=0.1.6`, `versionCode=19`; package remains `com.iamskorpz.watchioiptv`.
+- Release APK preflight: 4,603,532 bytes; SHA-256 `282D7681C87B0935198FA1F65D40883CCB6F62B21DA7BF4638C3683798E3B726`.
+- v0.1.6 signer SHA-256 `8A:76:E2:0B:7C:B2:E1:68:12:F5:05:12:75:A3:D1:12:FC:FB:AB:7C:24:24:C5:E8:97:F5:58:87:6B:CC:6F:F0` exactly matches public v0.1.5.
+- JVM tests: PASS 1403/1403. `lintDebug`, `lintRelease`, `assembleDebug`, `assembleRelease`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
+- Current S22 RC run unavailable because the authorized S22 was offline. Exact approved UI code retains prior physical PASS evidence; no fresh physical claim is made.
+- Protected rescue manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- BRAVIA untouched. Existing evidence preserved. No secrets exposed.
+- Target pushes: reconciled baseline to `origin/dev`, exact approved source promotion to `origin/main`, then public `v0.1.6` release.

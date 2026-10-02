@@ -2,9 +2,6 @@ package com.iamskorpz.watchioiptv.data.updates
 
 import kotlinx.serialization.Serializable
 
-const val WATCHIO_DEV_UPDATE_MANIFEST_URL =
-    "https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/dev/native-android/update/update.json"
-
 @Serializable
 data class UpdateManifest(
     val schemaVersion: Int,

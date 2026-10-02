@@ -19,12 +19,12 @@ class StartupNotificationFixtureTest {
         assertEquals(UpdateAvailability.UpToDate, UpdatePolicy.compare(none.versionCode, installed.versionCode))
 
         val optional = manifestFor(StartupFixtureState.OPTIONAL_UPDATE, installed)
-        UpdatePolicy.validateManifest(optional)
+        UpdatePolicy.validateManifest(optional, "dev")
         assertEquals(UpdateAvailability.UpdateAvailable, UpdatePolicy.compare(optional.versionCode, installed.versionCode))
         assertFalse(optional.mandatory)
 
         val mandatory = manifestFor(StartupFixtureState.MANDATORY_UPDATE, installed)
-        UpdatePolicy.validateManifest(mandatory)
+        UpdatePolicy.validateManifest(mandatory, "dev")
         assertEquals(UpdateAvailability.UpdateAvailable, UpdatePolicy.compare(mandatory.versionCode, installed.versionCode))
         assertTrue(mandatory.mandatory)
     }
