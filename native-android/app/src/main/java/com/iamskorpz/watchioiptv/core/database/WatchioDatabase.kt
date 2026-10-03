@@ -24,8 +24,9 @@ import androidx.room.RoomDatabase
         M3uImportItemEntity::class,
         MovieDetailEntity::class,
         TmdbTrailerCacheEntity::class,
+        SportsFixtureCacheEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class WatchioDatabase : RoomDatabase() {
@@ -41,4 +42,5 @@ abstract class WatchioDatabase : RoomDatabase() {
     abstract fun m3uItemDao(): M3uItemDao
     abstract fun epgDao(): EpgDao
     abstract fun movieDetailDao(): MovieDetailDao
+    abstract fun sportsCacheDao(): SportsCacheDao
 }

@@ -1,0 +1,55 @@
+package com.iamskorpz.watchioiptv.core.database
+
+import androidx.room.Entity
+import androidx.room.Index
+
+@Entity(
+    tableName = "sports_fixture_cache",
+    primaryKeys = ["source", "sourceFixtureId"],
+    indices = [
+        Index("kickoffEpochMs"),
+        Index(value = ["source", "kickoffEpochMs"]),
+        Index("expiresAtEpochMs"),
+    ],
+)
+data class SportsFixtureCacheEntity(
+    val source: String,
+    val sourceFixtureId: String,
+    val canonicalFixtureId: String?,
+    val competitionSourceId: String,
+    val competitionCanonicalId: String?,
+    val competitionName: String,
+    val competitionCode: String?,
+    val competitionCountry: String?,
+    val competitionLogoUrl: String?,
+    val competitionType: String?,
+    val homeTeamSourceId: String,
+    val homeTeamCanonicalId: String?,
+    val homeTeamName: String,
+    val homeTeamShortName: String?,
+    val homeTeamLogoUrl: String?,
+    val homeTeamCountry: String?,
+    val awayTeamSourceId: String,
+    val awayTeamCanonicalId: String?,
+    val awayTeamName: String,
+    val awayTeamShortName: String?,
+    val awayTeamLogoUrl: String?,
+    val awayTeamCountry: String?,
+    val kickoffEpochMs: Long,
+    val venue: String?,
+    val state: String,
+    val rawStatus: String?,
+    val minute: Int?,
+    val currentHomeScore: Int?,
+    val currentAwayScore: Int?,
+    val halftimeHomeScore: Int?,
+    val halftimeAwayScore: Int?,
+    val fulltimeHomeScore: Int?,
+    val fulltimeAwayScore: Int?,
+    val extraTimeHomeScore: Int?,
+    val extraTimeAwayScore: Int?,
+    val penaltiesHomeScore: Int?,
+    val penaltiesAwayScore: Int?,
+    val fetchedAtEpochMs: Long,
+    val expiresAtEpochMs: Long,
+)

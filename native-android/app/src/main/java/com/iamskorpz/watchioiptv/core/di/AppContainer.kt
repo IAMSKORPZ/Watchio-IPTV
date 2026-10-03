@@ -52,6 +52,9 @@ import com.iamskorpz.watchioiptv.feature.sports.SecureFootballDataCredentialStor
 import com.iamskorpz.watchioiptv.feature.sports.FootballDataScheduleSource
 import com.iamskorpz.watchioiptv.feature.sports.SportsRepository
 import com.iamskorpz.watchioiptv.feature.sports.UitestFootballScheduleSource
+import com.iamskorpz.watchioiptv.feature.sports.v2.CachedFixtureRepository
+import com.iamskorpz.watchioiptv.feature.sports.v2.FootballDataV2FixtureSource
+import com.iamskorpz.watchioiptv.feature.sports.v2.RoomSportsFixtureCache
 
 private val Context.watchioDataStore by preferencesDataStore(name = "watchio_native_settings")
 
@@ -66,6 +69,7 @@ class AppContainer(context: Context) {
         .addMigrations(WatchioMigrations.MIGRATION_3_4)
         .addMigrations(WatchioMigrations.MIGRATION_4_5)
         .addMigrations(WatchioMigrations.MIGRATION_5_6)
+        .addMigrations(WatchioMigrations.MIGRATION_6_7)
         .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2)
         .build()
 
@@ -158,6 +162,10 @@ class AppContainer(context: Context) {
         (footballScheduleSource as? FootballDataScheduleSource)?.invalidateCache()
     }
     val sportsRepository = SportsRepository(footballScheduleSource, tvGuideRepository)
+    val sportsV2Repository = CachedFixtureRepository(
+        source = FootballDataV2FixtureSource(footballDataApi, footballDataCredentialStore),
+        cache = RoomSportsFixtureCache(database.sportsCacheDao()),
+    )
     val moviesRepository = MoviesRepository(
         database = database,
         settingsRepository = settingsRepository,

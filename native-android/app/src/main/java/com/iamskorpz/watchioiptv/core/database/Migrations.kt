@@ -133,4 +133,58 @@ object WatchioMigrations {
             db.execSQL("ALTER TABLE episodes ADD COLUMN updatedAtEpochMs INTEGER NOT NULL DEFAULT 0")
         }
     }
+
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS sports_fixture_cache (
+                    source TEXT NOT NULL,
+                    sourceFixtureId TEXT NOT NULL,
+                    canonicalFixtureId TEXT,
+                    competitionSourceId TEXT NOT NULL,
+                    competitionCanonicalId TEXT,
+                    competitionName TEXT NOT NULL,
+                    competitionCode TEXT,
+                    competitionCountry TEXT,
+                    competitionLogoUrl TEXT,
+                    competitionType TEXT,
+                    homeTeamSourceId TEXT NOT NULL,
+                    homeTeamCanonicalId TEXT,
+                    homeTeamName TEXT NOT NULL,
+                    homeTeamShortName TEXT,
+                    homeTeamLogoUrl TEXT,
+                    homeTeamCountry TEXT,
+                    awayTeamSourceId TEXT NOT NULL,
+                    awayTeamCanonicalId TEXT,
+                    awayTeamName TEXT NOT NULL,
+                    awayTeamShortName TEXT,
+                    awayTeamLogoUrl TEXT,
+                    awayTeamCountry TEXT,
+                    kickoffEpochMs INTEGER NOT NULL,
+                    venue TEXT,
+                    state TEXT NOT NULL,
+                    rawStatus TEXT,
+                    minute INTEGER,
+                    currentHomeScore INTEGER,
+                    currentAwayScore INTEGER,
+                    halftimeHomeScore INTEGER,
+                    halftimeAwayScore INTEGER,
+                    fulltimeHomeScore INTEGER,
+                    fulltimeAwayScore INTEGER,
+                    extraTimeHomeScore INTEGER,
+                    extraTimeAwayScore INTEGER,
+                    penaltiesHomeScore INTEGER,
+                    penaltiesAwayScore INTEGER,
+                    fetchedAtEpochMs INTEGER NOT NULL,
+                    expiresAtEpochMs INTEGER NOT NULL,
+                    PRIMARY KEY(source, sourceFixtureId)
+                )
+                """.trimIndent(),
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_sports_fixture_cache_kickoffEpochMs ON sports_fixture_cache(kickoffEpochMs)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_sports_fixture_cache_source_kickoffEpochMs ON sports_fixture_cache(source, kickoffEpochMs)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_sports_fixture_cache_expiresAtEpochMs ON sports_fixture_cache(expiresAtEpochMs)")
+        }
+    }
 }

@@ -46,9 +46,27 @@ interface FootballDataApi {
     val awayTeam: FootballTeamDto,
     val score: FootballScoreDto? = null,
 )
-@Serializable data class FootballCompetitionDto(val id: Long, val name: String, val code: String? = null)
-@Serializable data class FootballTeamDto(val name: String, val shortName: String? = null)
-@Serializable data class FootballScoreDto(@SerialName("fullTime") val fullTime: FootballGoalsDto? = null)
+@Serializable data class FootballCompetitionDto(
+    val id: Long,
+    val name: String,
+    val code: String? = null,
+    val emblem: String? = null,
+    val type: String? = null,
+    val area: FootballAreaDto? = null,
+)
+@Serializable data class FootballAreaDto(val name: String? = null)
+@Serializable data class FootballTeamDto(
+    val id: Long? = null,
+    val name: String,
+    val shortName: String? = null,
+    val crest: String? = null,
+)
+@Serializable data class FootballScoreDto(
+    val halfTime: FootballGoalsDto? = null,
+    val fullTime: FootballGoalsDto? = null,
+    val extraTime: FootballGoalsDto? = null,
+    val penalties: FootballGoalsDto? = null,
+)
 @Serializable data class FootballGoalsDto(val home: Int? = null, val away: Int? = null)
 
 class FootballDataScheduleSource(
