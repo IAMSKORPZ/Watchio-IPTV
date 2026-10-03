@@ -18,7 +18,7 @@ object SensitiveUrlMasker {
     fun mask(input: String): String {
         if (input.isBlank()) return input
         val queryMasked = maskQueryValues(input)
-        return maskIptvPathCredentials(queryMasked)
+        return maskApiKeyPath(maskIptvPathCredentials(queryMasked))
     }
 
     private fun maskQueryValues(input: String): String {
@@ -52,5 +52,18 @@ object SensitiveUrlMasker {
             }
         }
         return mutable.joinToString("/")
+    }
+
+    private fun maskApiKeyPath(input: String): String {
+        val parts = input.split("/").toMutableList()
+        for (index in 2 until parts.lastIndex) {
+            if (parts[index - 2].equals("api", true) &&
+                parts[index - 1].equals("v1", true) &&
+                parts[index].equals("json", true)
+            ) {
+                parts[index + 1] = "***"
+            }
+        }
+        return parts.joinToString("/")
     }
 }

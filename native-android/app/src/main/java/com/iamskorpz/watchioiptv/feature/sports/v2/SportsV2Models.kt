@@ -98,6 +98,17 @@ data class SportsBroadcast(
     val countryOrRegion: String? = null,
     val logoUrl: String? = null,
     val fetchedAt: Instant,
+    val evidence: List<SportsBroadcastEvidence> = emptyList(),
+)
+
+enum class BroadcastReconciliationConfidence { Exact, Strong }
+
+data class SportsBroadcastEvidence(
+    val sourceIdentity: SportsSourceIdentity,
+    val sourceFixtureId: String,
+    val confidence: BroadcastReconciliationConfidence,
+    val originalCountryOrRegion: String? = null,
+    val fetchedAt: Instant,
 )
 
 data class SportsFixture(

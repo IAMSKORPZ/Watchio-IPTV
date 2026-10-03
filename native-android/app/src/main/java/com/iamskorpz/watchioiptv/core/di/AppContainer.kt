@@ -55,10 +55,17 @@ import com.iamskorpz.watchioiptv.feature.sports.UitestFootballScheduleSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.CachedFixtureRepository
 import com.iamskorpz.watchioiptv.feature.sports.v2.ApiFootballApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.ApiFootballFixtureSource
+import com.iamskorpz.watchioiptv.feature.sports.v2.BroadcastRepository
 import com.iamskorpz.watchioiptv.feature.sports.v2.FootballDataV2FixtureSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.RoomSportsFixtureCache
 import com.iamskorpz.watchioiptv.feature.sports.v2.SecureApiFootballCredentialStore
+import com.iamskorpz.watchioiptv.feature.sports.v2.SecureSoccersApiCredentialStore
+import com.iamskorpz.watchioiptv.feature.sports.v2.SecureTheSportsDbCredentialStore
+import com.iamskorpz.watchioiptv.feature.sports.v2.SoccersApiBroadcastApi
+import com.iamskorpz.watchioiptv.feature.sports.v2.SoccersApiBroadcastSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsV2SourceSelector
+import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastApi
+import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastSource
 
 private val Context.watchioDataStore by preferencesDataStore(name = "watchio_native_settings")
 
@@ -176,6 +183,17 @@ class AppContainer(context: Context) {
         source = sportsV2SourceSelector.selected(),
         cache = RoomSportsFixtureCache(database.sportsCacheDao()),
     )
+    val soccersApiCredentialStore = SecureSoccersApiCredentialStore(secretStore)
+    val theSportsDbCredentialStore = SecureTheSportsDbCredentialStore(secretStore)
+    private val soccersApiBroadcastSource = SoccersApiBroadcastSource(
+        networkModule.retrofit("https://api.soccersapi.com/").create(SoccersApiBroadcastApi::class.java),
+        soccersApiCredentialStore,
+    )
+    private val theSportsDbBroadcastSource = TheSportsDbBroadcastSource(
+        networkModule.retrofit("https://www.thesportsdb.com/").create(TheSportsDbBroadcastApi::class.java),
+        theSportsDbCredentialStore,
+    )
+    val sportsBroadcastRepository = BroadcastRepository(soccersApiBroadcastSource, theSportsDbBroadcastSource)
     val moviesRepository = MoviesRepository(
         database = database,
         settingsRepository = settingsRepository,

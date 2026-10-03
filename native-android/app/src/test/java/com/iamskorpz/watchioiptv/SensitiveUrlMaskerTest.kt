@@ -48,4 +48,14 @@ class SensitiveUrlMaskerTest {
 
         assertEquals("Authorization: Bearer ***", masked)
     }
+
+    @Test
+    fun masksApiKeyEmbeddedInTheSportsDbPath() {
+        val masked = SensitiveUrlMasker.mask(
+            "https://www.thesportsdb.com/api/v1/json/synthetic-key/eventsday.php?d=2026-10-04",
+        )
+
+        assertEquals("https://www.thesportsdb.com/api/v1/json/***/eventsday.php?d=2026-10-04", masked)
+        assertFalse(masked.contains("synthetic-key"))
+    }
 }
