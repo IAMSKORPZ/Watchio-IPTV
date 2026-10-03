@@ -2,6 +2,30 @@
 
 > **READ THIS FILE COMPLETELY BEFORE MAKING ANY CHANGE.**
 
+## Sports V2 Phase 1 — Completed 2026-10-03
+
+Sports V2 Phase 1 is complete on `codex/dev-rescue-bridge`.
+
+- Feature commit: `be3627b`
+- Push target: `origin/dev`
+- Starting baseline: `b84460df3ee5488340031ea13b01b417392d7391`
+- Room schema: upgraded additively from v6 to v7
+- Migration: `MIGRATION_6_7` creates only `sports_fixture_cache` and its indexes; existing provider, credential, catalogue, EPG, favourites, history, and settings data remain untouched.
+- Domain: vendor-neutral fixture, team, competition, status, score, event, broadcast, provenance, freshness, and snapshot models under `feature/sports/v2`.
+- Sources: capability-aware `FixtureSource` and `BroadcastSource` interfaces with typed success, no-data, rate-limit, authorization, availability, network, parse, and unsupported results.
+- Cache: Room-backed normalized fixture cache keyed by `source + sourceFixtureId`, range replacement, freshness states, stale/expired offline fallback, and centralized TTL policy.
+- football-data.org: new V2 adapter maps current response fields into V2 without changing the existing Sports path or SecretStore credential handling.
+- Existing Sports UI: unchanged and still uses the original `SportsRepository`, `SportsViewModel`, `SportsScreen`, and `SportsChannelMatcher`.
+- Validation: focused Sports V2 tests passed; full JVM suite passed with 1,495 executions across Debug, Local, Release, and UITEST; `lintDebug`, `assembleDebug`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` passed.
+- Migration device proof: `SportsCacheMigrationTest` passed 1/1 on authorized Samsung S22 using replacement installs only. Existing manual app/provider data was not cleared or uninstalled.
+- Protected rescue manifest SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- BRAVIA and AFTT: untouched.
+- API-22/AFTT compatibility work remains PARKED in its separate worktree and must not be accidentally merged into DEV.
+
+Intentionally not implemented: API-Football, SoccersAPI, TheSportsDB, Sportmonks, broadcaster matching, provider-channel matching V2, EPG verification V2, Sports UI redesign, live polling, or a Watchio backend.
+
+Next planned Sports task: **SPORTS V2 PHASE 2 — API-FOOTBALL EXPERIMENTAL SOURCE**.
+
 This `AGENT_HANDOFF.md` is the authoritative current handoff for the active rescue/dev worktree.
 
 The older file:
