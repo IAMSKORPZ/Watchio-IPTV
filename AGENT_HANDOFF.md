@@ -1340,3 +1340,21 @@ Final pre-commit validation results:
 - Public release remains v0.1.6. No v0.1.7 release is authorized.
 - Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - Push target: `origin/dev` only. MAIN, BRAVIA, AFTT, release state, tags, signing, and version metadata remain untouched.
+
+## 2026-10-03 - Sports V2 Phase 2 API-Football source
+
+- Added experimental API-Football support through the Phase 1 vendor-neutral `FixtureSource` architecture. Existing football-data.org remains the default; source selection requires an explicit internal/test configuration and does not change the current Sports UI.
+- API client uses the official `https://v3.football.api-sports.io/` endpoint, Retrofit/OkHttp, `x-apisports-key`, UTC fixture queries, API error-envelope handling, paging DTOs, daily/per-minute quota headers, `Retry-After`, and typed unauthorized, rate-limited, network, unavailable, malformed, and no-data results.
+- API-Football key storage uses the existing encrypted `SecretStore` boundary under `sports.api_football.api_key`. No key is stored in source, BuildConfig, domain/cache objects, logs, or committed fixtures. Network diagnostics log only masked request method/URL and never headers.
+- `ApiFootballFixtureSource` capabilities: date/range fixtures, fixture by source ID, and live fixtures. API DTOs remain isolated from domain models.
+- Normalization covers source-scoped fixture/team/competition/event identities; UTC `Instant` kickoff; venue; raw and normalized state; elapsed minute; current, halftime, full-time, extra-time, and penalty scores; goal/card/substitution/VAR/unknown events; provenance/fetch time; and empty broadcast data when unknown.
+- Status mapping covers `TBD`, `NS`, `1H`, `HT`, `2H`, `ET`, `BT`, `P`, `SUSP`, `INT`, `FT`, `AET`, `PEN`, `PST`, `CANC`, `ABD`, `AWD`, `WO`, and `LIVE`, with unknown values safely normalized to `Unknown`.
+- Central competition catalogue contains API-Football IDs for Premier League, UEFA Champions League, Championship, La Liga, Bundesliga, Serie A, and Ligue 1. Split seasons use their starting year; DTO season data is parsed but is not added to the Phase 1 domain because that model has no season field.
+- Reused Room v7 Sports cache and existing TTL policy. Added single-fixture lookup/upsert and live retrieval/persistence without a new table or migration. Source identity remains `api-football:<upstream-id>` and is never inferred equivalent to a football-data.org identity.
+- Comparison mode was intentionally deferred: no duplicate production calls and no premature cross-source fixture reconciliation.
+- Synthetic focused API-Football/Sports V2 tests: PASS. Full JVM suite: PASS, 1,571/1,571 with zero failures, errors, or skips. `lintDebug`, `assembleDebug`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
+- Live API smoke test not run: no API-Football key was securely available in the development environment. S22 testing not run because this phase has no user-visible behavior. BRAVIA and AFTT untouched.
+- Feature commit: `aefbff133760f56fdbf0fdfe5072778f45298904` (`feat(sports): add API-Football v2 source`). Push target: `origin/dev` only.
+- Room remains v7. Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Existing 427 untracked evidence files remain preserved.
+- API-22/AFTT compatibility work remains PARKED in `C:\Users\mrsko\.codex\watchio-api22-compat`.
+- Next planned Sports task: `SPORTS V2 PHASE 3 — BROADCAST DATA PROOF`, evaluating SoccersAPI and TheSportsDB through `BroadcastSource` before ProviderChannelMatcher V2.
