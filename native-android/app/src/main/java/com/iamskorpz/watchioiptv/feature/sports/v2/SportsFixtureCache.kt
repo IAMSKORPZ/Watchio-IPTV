@@ -10,7 +10,9 @@ data class CachedSportsFixture(val fixture: SportsFixture, val expiresAt: Instan
 
 interface SportsFixtureCache {
     suspend fun fixtures(source: SportsDataSource, from: Instant, toExclusive: Instant): List<CachedSportsFixture>
+    suspend fun fixture(source: SportsDataSource, sourceFixtureId: String): CachedSportsFixture?
     suspend fun replace(source: SportsDataSource, from: Instant, toExclusive: Instant, fixtures: List<CachedSportsFixture>)
+    suspend fun upsert(fixtures: List<CachedSportsFixture>)
     suspend fun prune(before: Instant): Int
 }
 
@@ -18,8 +20,15 @@ class RoomSportsFixtureCache(private val dao: SportsCacheDao) : SportsFixtureCac
     override suspend fun fixtures(source: SportsDataSource, from: Instant, toExclusive: Instant) =
         dao.fixtures(source.value, from.toEpochMilli(), toExclusive.toEpochMilli()).map { it.toCachedFixture() }
 
+    override suspend fun fixture(source: SportsDataSource, sourceFixtureId: String) =
+        dao.fixture(source.value, sourceFixtureId)?.toCachedFixture()
+
     override suspend fun replace(source: SportsDataSource, from: Instant, toExclusive: Instant, fixtures: List<CachedSportsFixture>) =
         dao.replaceRange(source.value, from.toEpochMilli(), toExclusive.toEpochMilli(), fixtures.map { it.toEntity() })
+
+    override suspend fun upsert(fixtures: List<CachedSportsFixture>) {
+        if (fixtures.isNotEmpty()) dao.upsertFixtures(fixtures.map { it.toEntity() })
+    }
 
     override suspend fun prune(before: Instant): Int = dao.deleteExpired(before.toEpochMilli())
 }
@@ -56,6 +65,46 @@ class CachedFixtureRepository(
             }
         }
     }
+
+    suspend fun fixture(sourceFixtureId: String): SportsSourceResult<SportsFixture> {
+        val now = clock.instant()
+        val cached = cache.fixture(source.source, sourceFixtureId)
+        if (cached != null && SportsCachePolicy.freshness(now, cached.fixture.fetchedAt, cached.expiresAt) == SportsFreshness.Fresh) {
+            return SportsSourceResult.Success(cached.fixture, cached.fixture.fetchedAt)
+        }
+        return when (val remote = source.fixture(sourceFixtureId)) {
+            is SportsSourceResult.Success -> {
+                cache.upsert(listOf(remote.data.toCached(remote.fetchedAt)))
+                remote
+            }
+            SportsSourceResult.NoData -> SportsSourceResult.NoData
+            is SportsSourceResult.Failure -> cached?.let { SportsSourceResult.Success(it.fixture, it.fixture.fetchedAt) } ?: remote
+        }
+    }
+
+    suspend fun liveFixtures(): SportsSourceResult<SportsFixtureSnapshot> {
+        val now = clock.instant()
+        return when (val remote = source.liveFixtures()) {
+            is SportsSourceResult.Success -> {
+                val records = remote.data.map { it.toCached(remote.fetchedAt) }
+                cache.upsert(records)
+                SportsSourceResult.Success(records.toSnapshot(source.source, remote.fetchedAt, SportsFreshness.Fresh, false), remote.fetchedAt)
+            }
+            SportsSourceResult.NoData -> SportsSourceResult.NoData
+            is SportsSourceResult.Failure -> {
+                val dayStart = LocalDate.ofInstant(now, zoneId).atStartOfDay(zoneId).toInstant()
+                val cached = cache.fixtures(source.source, dayStart, dayStart.atZone(zoneId).plusDays(1).toInstant())
+                    .filter { it.fixture.state == SportsFixtureState.Live || it.fixture.state == SportsFixtureState.Halftime }
+                if (cached.isEmpty()) remote else SportsSourceResult.Success(
+                    cached.toSnapshot(source.source, now, cached.overallFreshness(now)),
+                    now,
+                )
+            }
+        }
+    }
+
+    private fun SportsFixture.toCached(fetchedAt: Instant) =
+        CachedSportsFixture(this, fetchedAt.plus(SportsCachePolicy.fixtureTtl(this, fetchedAt, zoneId)))
 
     private fun List<CachedSportsFixture>.overallFreshness(now: Instant): SportsFreshness =
         maxOfOrNull { SportsCachePolicy.freshness(now, it.fixture.fetchedAt, it.expiresAt).ordinal }

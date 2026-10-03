@@ -71,6 +71,35 @@ class SportsV2CacheTest {
         assertEquals(now.plusSeconds(45), cache.values.single().expiresAt)
     }
 
+    @Test fun fixtureLookupUsesFreshCacheWithoutNetwork() = runTest {
+        val cached = fixture(SportsFixtureState.Scheduled)
+        val cache = FakeCache(mutableListOf(CachedSportsFixture(cached, now.plusSeconds(60))))
+        val source = object : FixtureSource {
+            override val source = SportsDataSource.FootballData
+            override val capabilities = setOf(SportsSourceCapability.FixtureById)
+            var calls = 0
+            override suspend fun fixtures(from: LocalDate, toInclusive: LocalDate) = SportsSourceResult.NoData
+            override suspend fun fixture(sourceFixtureId: String): SportsSourceResult<SportsFixture> { calls++; return SportsSourceResult.NoData }
+        }
+        val result = CachedFixtureRepository(source, cache, Clock.fixed(now, ZoneOffset.UTC), zone).fixture("42") as SportsSourceResult.Success
+        assertEquals(cached, result.data)
+        assertEquals(0, source.calls)
+    }
+
+    @Test fun liveFetchUsesLiveTtlAndPersistsWithoutReplacingDateRange() = runTest {
+        val cache = FakeCache()
+        val live = fixture(SportsFixtureState.Live)
+        val source = object : FixtureSource {
+            override val source = SportsDataSource.FootballData
+            override val capabilities = setOf(SportsSourceCapability.LiveFixtures)
+            override suspend fun fixtures(from: LocalDate, toInclusive: LocalDate) = SportsSourceResult.NoData
+            override suspend fun liveFixtures() = SportsSourceResult.Success(listOf(live), now)
+        }
+        val result = CachedFixtureRepository(source, cache, Clock.fixed(now, ZoneOffset.UTC), zone).liveFixtures() as SportsSourceResult.Success
+        assertEquals(false, result.data.fromCache)
+        assertEquals(now.plusSeconds(45), cache.values.single().expiresAt)
+    }
+
     @Test fun utcKickoffPresentsAcrossGmtBstAndDstEdge() {
         val london = ZoneId.of("Europe/London")
         assertEquals(12, Instant.parse("2026-01-15T12:00:00Z").atZone(london).hour)
@@ -101,7 +130,9 @@ class SportsV2CacheTest {
 
     private class FakeCache(val values: MutableList<CachedSportsFixture> = mutableListOf()) : SportsFixtureCache {
         override suspend fun fixtures(source: SportsDataSource, from: Instant, toExclusive: Instant) = values.toList()
+        override suspend fun fixture(source: SportsDataSource, sourceFixtureId: String) = values.firstOrNull { it.fixture.identity.source == source && it.fixture.identity.sourceId == sourceFixtureId }
         override suspend fun replace(source: SportsDataSource, from: Instant, toExclusive: Instant, fixtures: List<CachedSportsFixture>) { values.removeAll { it.fixture.identity.source == source && !it.fixture.kickoff.isBefore(from) && it.fixture.kickoff.isBefore(toExclusive) }; values.addAll(fixtures) }
+        override suspend fun upsert(fixtures: List<CachedSportsFixture>) { values.removeAll { old -> fixtures.any { it.fixture.identity == old.fixture.identity } }; values.addAll(fixtures) }
         override suspend fun prune(before: Instant) = 0
     }
 }

@@ -53,8 +53,12 @@ import com.iamskorpz.watchioiptv.feature.sports.FootballDataScheduleSource
 import com.iamskorpz.watchioiptv.feature.sports.SportsRepository
 import com.iamskorpz.watchioiptv.feature.sports.UitestFootballScheduleSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.CachedFixtureRepository
+import com.iamskorpz.watchioiptv.feature.sports.v2.ApiFootballApi
+import com.iamskorpz.watchioiptv.feature.sports.v2.ApiFootballFixtureSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.FootballDataV2FixtureSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.RoomSportsFixtureCache
+import com.iamskorpz.watchioiptv.feature.sports.v2.SecureApiFootballCredentialStore
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsV2SourceSelector
 
 private val Context.watchioDataStore by preferencesDataStore(name = "watchio_native_settings")
 
@@ -162,8 +166,14 @@ class AppContainer(context: Context) {
         (footballScheduleSource as? FootballDataScheduleSource)?.invalidateCache()
     }
     val sportsRepository = SportsRepository(footballScheduleSource, tvGuideRepository)
+    val apiFootballCredentialStore = SecureApiFootballCredentialStore(secretStore)
+    private val apiFootballApi = networkModule.retrofit("https://v3.football.api-sports.io/").create(ApiFootballApi::class.java)
+    private val footballDataV2Source = FootballDataV2FixtureSource(footballDataApi, footballDataCredentialStore)
+    private val apiFootballV2Source = ApiFootballFixtureSource(apiFootballApi, apiFootballCredentialStore)
+    // Existing football-data path remains default. Tests/internal development may construct selector with ApiFootball.
+    private val sportsV2SourceSelector = SportsV2SourceSelector(footballDataV2Source, apiFootballV2Source)
     val sportsV2Repository = CachedFixtureRepository(
-        source = FootballDataV2FixtureSource(footballDataApi, footballDataCredentialStore),
+        source = sportsV2SourceSelector.selected(),
         cache = RoomSportsFixtureCache(database.sportsCacheDao()),
     )
     val moviesRepository = MoviesRepository(
