@@ -1285,3 +1285,19 @@ Final pre-commit validation results:
 - Protected rescue manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - BRAVIA untouched. Existing evidence preserved. No secrets exposed.
 - Target pushes: reconciled baseline to `origin/dev`, exact approved source promotion to `origin/main`, then public `v0.1.6` release.
+
+### v0.1.6 publication and synchronized baseline
+
+- DEV reconciliation/application-baseline commit: `c921d9b6f473b259488a856b47dceecbe2b69eaf` (`Reconcile updater architecture for v0.1.6`).
+- MAIN promotion: safe fast-forward to the exact `c921d9b6f473b259488a856b47dceecbe2b69eaf` application baseline; no rebase or force push.
+- Stable release commit: `4615a201f67c42ffeeee26835c9d8231b0653dcf` (`Prepare stable v0.1.6 release`).
+- Tag: `v0.1.6`, verified at `4615a201f67c42ffeeee26835c9d8231b0653dcf`.
+- Release: `Watchio IPTV v0.1.6` at `https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.6`.
+- APK: `Watchio-IPTV.apk`, 4,603,532 bytes, SHA-256 `282D7681C87B0935198FA1F65D40883CCB6F62B21DA7BF4638C3683798E3B726`.
+- Production signer matches v0.1.5 exactly: `8A:76:E2:0B:7C:B2:E1:68:12:F5:05:12:75:A3:D1:12:FC:FB:AB:7C:24:24:C5:E8:97:F5:58:87:6B:CC:6F:F0`.
+- Live immutable and permanent-latest APK downloads both match the published SHA-256 and report package `com.iamskorpz.watchioiptv`, version `0.1.6`, code 19.
+- Live Stable manifest: PASS (`stable`, v0.1.6/code 19, exact APK SHA). A public v0.1.5/code 18 installation evaluates as update available.
+- DEV binding: PASS (`dev` URL/channel). Protected legacy rescue manifest remains active at v0.1.4/code 17; current code 19 DEV builds will not downgrade. Local updates remain disabled; UITEST remains isolated at `watchio://uitest/update.json`.
+- Final synchronization plan: fast-forward DEV to this post-release handoff state so DEV and MAIN share one application/updater architecture baseline. Build variants—not accidental branch divergence—own channel selection.
+- Fresh S22 RC validation was unavailable because the authorized device was offline. Previously accepted exact focus/Dismiss implementation evidence remains preserved; BRAVIA untouched.
+- Protected rescue manifest SHA-256 after release: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
