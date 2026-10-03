@@ -64,6 +64,15 @@ class StartupNotificationsTest {
         assertEquals("ordinary", result?.id)
     }
 
+    @Test
+    fun archivedAnnouncementsAreSkippedWithoutChangingDismissedSemantics() {
+        val archived = item("archived").copy(isArchived = true)
+        val dismissed = item("dismissed", dismissed = true)
+        val ordinary = item("ordinary")
+        val result = selectStartupAnnouncement(AnnouncementSnapshot(listOf(archived, dismissed, ordinary)), emptySet())
+        assertEquals("ordinary", result?.id)
+    }
+
     private fun resolve(
         status: UpdateStatus,
         manifest: UpdateManifest?,

@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -40,6 +42,7 @@ import com.iamskorpz.watchioiptv.domain.model.AnnouncementItem
 import com.iamskorpz.watchioiptv.domain.model.AnnouncementPriority
 import com.iamskorpz.watchioiptv.domain.model.AnnouncementType
 import com.iamskorpz.watchioiptv.ui.components.WatchioButton
+import com.iamskorpz.watchioiptv.ui.components.WatchioButtonVariant
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
@@ -58,6 +61,9 @@ fun AnnouncementsScreen(
     onOpen: (String) -> Unit,
     onCloseDetails: () -> Unit,
     onMarkAllRead: () -> Unit,
+    onMailboxChange: (AnnouncementMailbox) -> Unit = {},
+    onArchive: (String) -> Unit = {},
+    onRestore: (String) -> Unit = {},
     onAction: (AnnouncementAction) -> Unit,
 ) {
     val selected = state.selected
@@ -65,6 +71,8 @@ fun AnnouncementsScreen(
         AnnouncementDetails(
             item = selected,
             onBack = onCloseDetails,
+            onArchive = { onArchive(selected.announcement.id) },
+            onRestore = { onRestore(selected.announcement.id) },
             onAction = onAction,
         )
         return
@@ -80,47 +88,103 @@ fun AnnouncementsScreen(
             .testTag("announcements-screen"),
     ) {
         WatchioPageHeader(
-            title = "NOTIFICATIONS",
+            title = "ANNOUNCEMENTS",
             onBack = onBack,
             testTagPrefix = "announcements",
         )
         Spacer(Modifier.height(12.dp))
-        if (state.snapshot.unreadCount > 0) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                WatchioButton(
-                    text = "MARK ALL READ",
-                    onClick = onMarkAllRead,
-                    modifier = Modifier.widthIn(min = 150.dp).testTag("announcements-mark-all-read"),
+        AnnouncementMailboxControls(state, onMailboxChange, onMarkAllRead)
+        Spacer(Modifier.height(12.dp))
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+            when {
+                state.loading && state.visibleItems.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = colors.liveTvAccent, modifier = Modifier.testTag("announcements-loading"))
+                }
+                state.error && state.visibleItems.isEmpty() -> AnnouncementMessage(
+                    title = "Announcements unavailable",
+                    body = "Check your connection and try again.",
+                    button = "RETRY",
+                    onClick = onRefresh,
+                    testTag = "announcements-error",
                 )
+                state.visibleItems.isEmpty() -> AnnouncementMessage(
+                    title = if (state.mailbox == AnnouncementMailbox.INBOX) "No announcements" else "No archived announcements",
+                    body = if (state.mailbox == AnnouncementMailbox.INBOX) "Check back later for Watchio news and alerts." else "Announcements you archive will appear here.",
+                    testTag = if (state.mailbox == AnnouncementMailbox.INBOX) "announcements-empty" else "announcements-archived-empty",
+                )
+                else -> AnnouncementList(state.visibleItems, state.mailbox, state.focusId, onOpen, onArchive, onRestore)
             }
-            Spacer(Modifier.height(12.dp))
-        }
-        when {
-            state.loading && state.visibleItems.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = colors.liveTvAccent, modifier = Modifier.testTag("announcements-loading"))
-            }
-            state.error && state.visibleItems.isEmpty() -> AnnouncementMessage(
-                title = "Announcements unavailable",
-                body = "Check your connection and try again.",
-                button = "RETRY",
-                onClick = onRefresh,
-                testTag = "announcements-error",
-            )
-            state.visibleItems.isEmpty() -> AnnouncementMessage(
-                title = "No notifications yet",
-                body = "Check back later for Watchio news and alerts.",
-                testTag = "announcements-empty",
-            )
-            else -> AnnouncementList(state.visibleItems, onOpen)
         }
     }
 }
 
 @Composable
-private fun AnnouncementList(items: List<AnnouncementItem>, onOpen: (String) -> Unit) {
+private fun AnnouncementMailboxControls(
+    state: AnnouncementsUiState,
+    onMailboxChange: (AnnouncementMailbox) -> Unit,
+    onMarkAllRead: () -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth().testTag("announcements-mailboxes")) {
+        val tabs: @Composable () -> Unit = {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                WatchioButton(
+                    text = "INBOX (${state.snapshot.inboxItems.size})",
+                    onClick = { onMailboxChange(AnnouncementMailbox.INBOX) },
+                    variant = if (state.mailbox == AnnouncementMailbox.INBOX) WatchioButtonVariant.Primary else WatchioButtonVariant.Secondary,
+                    modifier = Modifier.width(155.dp).testTag("announcements-inbox-tab"),
+                )
+                WatchioButton(
+                    text = "ARCHIVED (${state.snapshot.archivedItems.size})",
+                    onClick = { onMailboxChange(AnnouncementMailbox.ARCHIVED) },
+                    variant = if (state.mailbox == AnnouncementMailbox.ARCHIVED) WatchioButtonVariant.Primary else WatchioButtonVariant.Secondary,
+                    modifier = Modifier.width(155.dp).testTag("announcements-archived-tab"),
+                )
+            }
+        }
+        val showMarkAll = state.mailbox == AnnouncementMailbox.INBOX && state.snapshot.unreadCount > 0
+        if (maxWidth < 600.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                tabs()
+                if (showMarkAll) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        WatchioButton(
+                            text = "MARK ALL READ",
+                            onClick = onMarkAllRead,
+                            modifier = Modifier.width(170.dp).testTag("announcements-mark-all-read"),
+                        )
+                    }
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                tabs()
+                Spacer(Modifier.weight(1f))
+                if (showMarkAll) {
+                    WatchioButton(
+                        text = "MARK ALL READ",
+                        onClick = onMarkAllRead,
+                        modifier = Modifier.width(170.dp).testTag("announcements-mark-all-read"),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnnouncementList(
+    items: List<AnnouncementItem>,
+    mailbox: AnnouncementMailbox,
+    focusId: String?,
+    onOpen: (String) -> Unit,
+    onArchive: (String) -> Unit,
+    onRestore: (String) -> Unit,
+) {
     val spacing = LocalWatchioSpacing.current
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(items.firstOrNull()?.announcement?.id) {
+    val focusTargetId = focusId?.takeIf { id -> items.any { it.announcement.id == id } }
+        ?: items.firstOrNull()?.announcement?.id
+    LaunchedEffect(focusTargetId) {
         if (items.isNotEmpty()) firstFocus.requestFocus()
     }
     LazyColumn(
@@ -128,14 +192,29 @@ private fun AnnouncementList(items: List<AnnouncementItem>, onOpen: (String) -> 
         verticalArrangement = Arrangement.spacedBy(spacing.sm),
     ) {
         items(items, key = { it.announcement.id }) { item ->
-            AnnouncementCard(
-                item = item,
-                onClick = { onOpen(item.announcement.id) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (item == items.first()) Modifier.focusRequester(firstFocus) else Modifier)
-                    .testTag("announcement-${item.announcement.id}"),
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AnnouncementCard(
+                    item = item,
+                    onClick = { onOpen(item.announcement.id) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .then(if (item.announcement.id == focusTargetId) Modifier.focusRequester(firstFocus) else Modifier)
+                        .testTag("announcement-${item.announcement.id}"),
+                )
+                WatchioButton(
+                    text = if (mailbox == AnnouncementMailbox.INBOX) "ARCHIVE" else "RESTORE",
+                    onClick = {
+                        if (mailbox == AnnouncementMailbox.INBOX) onArchive(item.announcement.id)
+                        else onRestore(item.announcement.id)
+                    },
+                    variant = WatchioButtonVariant.Secondary,
+                    modifier = Modifier.width(120.dp).testTag("announcement-${if (mailbox == AnnouncementMailbox.INBOX) "archive" else "restore"}-${item.announcement.id}"),
+                )
+            }
         }
     }
 }
@@ -168,7 +247,10 @@ private fun AnnouncementCard(item: AnnouncementItem, onClick: () -> Unit, modifi
                     Text(item.announcement.title, color = colors.textPrimary, style = type.cardTitle, fontWeight = if (item.isRead) FontWeight.SemiBold else FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(formatAnnouncementDate(item.announcement.publishedAt), color = colors.textMuted, style = type.label)
                 }
-                Text(item.announcement.type.name.replace('_', ' '), color = accent, style = type.label, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                    Text(item.announcement.type.name.replace('_', ' '), color = accent, style = type.label, fontWeight = FontWeight.Bold)
+                    if (item.isDismissed) Text("DISMISSED", color = colors.textMuted, style = type.label, fontWeight = FontWeight.Bold)
+                }
                 Text(item.announcement.body, color = colors.textSecondary, style = type.body, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -179,6 +261,8 @@ private fun AnnouncementCard(item: AnnouncementItem, onClick: () -> Unit, modifi
 private fun AnnouncementDetails(
     item: AnnouncementItem,
     onBack: () -> Unit,
+    onArchive: () -> Unit,
+    onRestore: () -> Unit,
     onAction: (AnnouncementAction) -> Unit,
 ) {
     val colors = LocalWatchioColors.current
@@ -194,12 +278,16 @@ private fun AnnouncementDetails(
             .padding(horizontal = 18.dp, vertical = 14.dp)
             .testTag("announcement-details"),
     ) {
-        WatchioPageHeader(title = "ANNOUNCEMENT", onBack = onBack, testTagPrefix = "announcement-detail")
+        WatchioPageHeader(
+            title = if (item.isArchived) "ARCHIVED ANNOUNCEMENT" else "ANNOUNCEMENT",
+            onBack = onBack,
+            testTagPrefix = "announcement-detail",
+        )
         Spacer(Modifier.height(12.dp))
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val contentWidth = if (maxWidth < 900.dp) maxWidth else 900.dp
             WatchioCard(
-                modifier = Modifier.widthIn(max = contentWidth).align(Alignment.TopCenter).testTag("announcement-detail-card"),
+                modifier = Modifier.widthIn(max = contentWidth).fillMaxHeight().align(Alignment.TopCenter).testTag("announcement-detail-card"),
                 accent = accent,
                 minWidth = 0.dp,
                 minHeight = 0.dp,
@@ -209,15 +297,27 @@ private fun AnnouncementDetails(
                     verticalArrangement = Arrangement.spacedBy(spacing.md),
                 ) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(announcement.type.name.replace('_', ' '), color = accent, style = type.label, fontWeight = FontWeight.Bold)
+                        Text(
+                            "${announcement.type.name.replace('_', ' ')}  ${announcement.priority.name}",
+                            color = accent,
+                            style = type.label,
+                            fontWeight = FontWeight.Bold,
+                        )
                         Text(formatAnnouncementDate(announcement.publishedAt), color = colors.textMuted, style = type.label)
                     }
+                    if (item.isDismissed) Text("Startup popup dismissed", color = colors.textMuted, style = type.label)
                     Text(announcement.title, color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold)
                     Text(announcement.body, color = colors.textSecondary, style = type.body)
                     Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
                         announcement.action?.let { action ->
-                            WatchioButton(action.label, onClick = { onAction(action) }, modifier = Modifier.widthIn(min = 150.dp).testTag("announcement-action"))
+                            WatchioButton(action.label, onClick = { onAction(action) }, modifier = Modifier.width(150.dp).testTag("announcement-action"))
                         }
+                        WatchioButton(
+                            text = if (item.isArchived) "RESTORE" else "ARCHIVE",
+                            onClick = if (item.isArchived) onRestore else onArchive,
+                            variant = WatchioButtonVariant.Secondary,
+                            modifier = Modifier.width(140.dp).testTag(if (item.isArchived) "announcement-detail-restore" else "announcement-detail-archive"),
+                        )
                     }
                 }
             }

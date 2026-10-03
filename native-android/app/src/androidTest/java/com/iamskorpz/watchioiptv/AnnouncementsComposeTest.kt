@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.runtime.mutableStateOf
 import com.iamskorpz.watchioiptv.domain.model.Announcement
 import com.iamskorpz.watchioiptv.domain.model.AnnouncementAction
 import com.iamskorpz.watchioiptv.domain.model.AnnouncementItem
@@ -39,7 +41,7 @@ class AnnouncementsComposeTest {
         setContent()
         composeRule.onNodeWithTag("announcements-header").assertIsDisplayed()
         composeRule.onNodeWithTag("announcements-title").assertIsDisplayed()
-        composeRule.onNodeWithText("NOTIFICATIONS").assertIsDisplayed()
+        composeRule.onNodeWithText("ANNOUNCEMENTS").assertIsDisplayed()
     }
 
     @Test
@@ -132,6 +134,70 @@ class AnnouncementsComposeTest {
             }
         }
         composeRule.onNodeWithTag("announcements-empty").assertIsDisplayed()
+    }
+
+    @Test
+    fun mailboxTabsSwitchAndArchivedEmptyStateIsFriendly() {
+        val selected = mutableStateOf(com.iamskorpz.watchioiptv.feature.announcements.AnnouncementMailbox.INBOX)
+        composeRule.setContent {
+            WatchioTheme {
+                AnnouncementsScreen(
+                    state = AnnouncementsUiState(mailbox = selected.value),
+                    onBack = {}, onRefresh = {}, onOpen = {}, onCloseDetails = {},
+                    onMarkAllRead = {}, onMailboxChange = { selected.value = it }, onAction = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("announcements-archived-tab").performClick()
+        composeRule.onNodeWithTag("announcements-archived-empty").assertIsDisplayed()
+        assertEquals(com.iamskorpz.watchioiptv.feature.announcements.AnnouncementMailbox.ARCHIVED, selected.value)
+    }
+
+    @Test
+    fun archiveAndRestoreActionsFireOnce() {
+        var archived = 0
+        var restored = 0
+        val archivedView = mutableStateOf(false)
+        composeRule.setContent {
+            WatchioTheme {
+                AnnouncementsScreen(
+                    state = if (archivedView.value) AnnouncementsUiState(
+                        snapshot = AnnouncementSnapshot(listOf(AnnouncementItem(announcement, false, false, true)), true),
+                        mailbox = com.iamskorpz.watchioiptv.feature.announcements.AnnouncementMailbox.ARCHIVED,
+                    ) else AnnouncementsUiState(AnnouncementSnapshot(listOf(AnnouncementItem(announcement, false, false)), true)),
+                    onBack = {}, onRefresh = {}, onOpen = {}, onCloseDetails = {}, onMarkAllRead = {},
+                    onArchive = { archived++ }, onRestore = { restored++ }, onAction = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("announcement-archive-first").performClick()
+        assertEquals(1, archived)
+        archivedView.value = true
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("announcement-restore-first").performClick()
+        assertEquals(1, restored)
+    }
+
+    @Test
+    fun detailsExposeArchiveOrRestoreForCurrentMailboxState() {
+        val archivedView = mutableStateOf(false)
+        composeRule.setContent {
+            WatchioTheme {
+                AnnouncementsScreen(
+                    state = AnnouncementsUiState(
+                        snapshot = AnnouncementSnapshot(listOf(AnnouncementItem(announcement, true, false, archivedView.value)), true),
+                        selectedId = "first",
+                        mailbox = if (archivedView.value) com.iamskorpz.watchioiptv.feature.announcements.AnnouncementMailbox.ARCHIVED else com.iamskorpz.watchioiptv.feature.announcements.AnnouncementMailbox.INBOX,
+                    ),
+                    onBack = {}, onRefresh = {}, onOpen = {}, onCloseDetails = {},
+                    onMarkAllRead = {}, onAction = {},
+                )
+            }
+        }
+        composeRule.onNodeWithTag("announcement-detail-archive").performScrollTo().assertIsDisplayed()
+        archivedView.value = true
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("announcement-detail-restore").performScrollTo().assertIsDisplayed()
     }
 
     private fun setContent(

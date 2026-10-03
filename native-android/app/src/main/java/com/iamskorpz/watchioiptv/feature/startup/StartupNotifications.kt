@@ -48,6 +48,7 @@ internal fun selectStartupAnnouncement(
 ): Announcement? = snapshot.items
     .asSequence()
     .filterNot { it.isDismissed }
+    .filterNot { it.isArchived }
     .map { it.announcement }
     .filterNot { it.type == AnnouncementType.UPDATE }
     .filter { it.dismissible }

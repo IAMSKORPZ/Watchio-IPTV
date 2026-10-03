@@ -458,6 +458,9 @@ fun WatchioNativeApp(
                     onOpen = announcementsViewModel::open,
                     onCloseDetails = announcementsViewModel::closeDetails,
                     onMarkAllRead = announcementsViewModel::markAllRead,
+                    onMailboxChange = announcementsViewModel::showMailbox,
+                    onArchive = announcementsViewModel::archive,
+                    onRestore = announcementsViewModel::restore,
                     onAction = { action ->
                         when (action) {
                             is AnnouncementAction.OpenUpdater -> navController.navigate("settings/updates")

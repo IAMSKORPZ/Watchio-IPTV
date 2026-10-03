@@ -17,15 +17,22 @@ data class AnnouncementsUiState(
     val loading: Boolean = false,
     val error: Boolean = false,
     val selectedId: String? = null,
+    val mailbox: AnnouncementMailbox = AnnouncementMailbox.INBOX,
+    val focusId: String? = null,
 ) {
-    val visibleItems: List<AnnouncementItem> get() = snapshot.items
+    val visibleItems: List<AnnouncementItem> get() = when (mailbox) {
+        AnnouncementMailbox.INBOX -> snapshot.inboxItems
+        AnnouncementMailbox.ARCHIVED -> snapshot.archivedItems
+    }
     val selected: AnnouncementItem? get() = snapshot.items.firstOrNull { it.announcement.id == selectedId }
 }
+
+enum class AnnouncementMailbox { INBOX, ARCHIVED }
 
 class AnnouncementsViewModel(private val repository: AnnouncementRepository) : ViewModel() {
     private val controls = MutableStateFlow(Controls())
     val state: StateFlow<AnnouncementsUiState> = combine(repository.snapshot, controls) { snapshot, controls ->
-        AnnouncementsUiState(snapshot, controls.loading, controls.error, controls.selectedId)
+        AnnouncementsUiState(snapshot, controls.loading, controls.error, controls.selectedId, controls.mailbox, controls.focusId)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, AnnouncementsUiState())
 
     fun refresh() {
@@ -41,7 +48,7 @@ class AnnouncementsViewModel(private val repository: AnnouncementRepository) : V
     }
 
     fun open(id: String) {
-        controls.value = controls.value.copy(selectedId = id)
+        controls.value = controls.value.copy(selectedId = id, focusId = id)
         viewModelScope.launch { repository.markRead(id) }
     }
 
@@ -50,8 +57,22 @@ class AnnouncementsViewModel(private val repository: AnnouncementRepository) : V
     }
 
     fun markAllRead() {
-        val ids = state.value.visibleItems.mapTo(mutableSetOf()) { it.announcement.id }
+        val ids = state.value.snapshot.inboxItems.mapTo(mutableSetOf()) { it.announcement.id }
         viewModelScope.launch { repository.markAllRead(ids) }
+    }
+
+    fun showMailbox(mailbox: AnnouncementMailbox) {
+        controls.value = controls.value.copy(mailbox = mailbox, selectedId = null, focusId = null)
+    }
+
+    fun archive(id: String) {
+        controls.value = controls.value.copy(selectedId = null)
+        viewModelScope.launch { repository.archive(id) }
+    }
+
+    fun restore(id: String) {
+        controls.value = controls.value.copy(selectedId = null)
+        viewModelScope.launch { repository.restore(id) }
     }
 
     fun closeDetails() { controls.value = controls.value.copy(selectedId = null) }
@@ -64,5 +85,7 @@ class AnnouncementsViewModel(private val repository: AnnouncementRepository) : V
         val loading: Boolean = false,
         val error: Boolean = false,
         val selectedId: String? = null,
+        val mailbox: AnnouncementMailbox = AnnouncementMailbox.INBOX,
+        val focusId: String? = null,
     )
 }

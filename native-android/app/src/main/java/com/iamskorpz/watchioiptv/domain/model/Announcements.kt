@@ -37,11 +37,14 @@ data class AnnouncementItem(
     val announcement: Announcement,
     val isRead: Boolean,
     val isDismissed: Boolean,
+    val isArchived: Boolean = false,
 )
 
 data class AnnouncementSnapshot(
     val items: List<AnnouncementItem> = emptyList(),
     val hasCachedFeed: Boolean = false,
 ) {
-    val unreadCount: Int get() = items.count { !it.isRead }
+    val inboxItems: List<AnnouncementItem> get() = items.filterNot { it.isArchived }
+    val archivedItems: List<AnnouncementItem> get() = items.filter { it.isArchived }
+    val unreadCount: Int get() = inboxItems.count { !it.isRead }
 }

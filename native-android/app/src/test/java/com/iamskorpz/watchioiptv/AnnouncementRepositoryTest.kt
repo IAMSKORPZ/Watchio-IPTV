@@ -118,6 +118,86 @@ class AnnouncementRepositoryTest {
     }
 
     @Test
+    fun archiveUnreadMovesItemOutOfInboxBadgeAndIntoArchive() = runTest {
+        val local = FakeAnnouncementStore(feed(entry("one"), entry("two")))
+        val repository = AnnouncementRepository(AnnouncementRemoteDataSource { error("unused") }, local)
+
+        repository.archive("one")
+        val snapshot = repository.snapshot.first()
+
+        assertEquals(listOf("two"), snapshot.inboxItems.map { it.announcement.id })
+        assertEquals(listOf("one"), snapshot.archivedItems.map { it.announcement.id })
+        assertEquals(1, snapshot.unreadCount)
+        assertFalse(snapshot.archivedItems.single().isRead)
+    }
+
+    @Test
+    fun restorePreservesReadAndUnreadStateAndRestoresBadge() = runTest {
+        val local = FakeAnnouncementStore(feed(entry("read"), entry("unread")))
+        val repository = AnnouncementRepository(AnnouncementRemoteDataSource { error("unused") }, local)
+        repository.markRead("read")
+        repository.archive("read")
+        repository.archive("unread")
+
+        repository.restore("read")
+        var snapshot = repository.snapshot.first()
+        assertTrue(snapshot.inboxItems.single().isRead)
+        assertEquals(0, snapshot.unreadCount)
+
+        repository.restore("unread")
+        snapshot = repository.snapshot.first()
+        assertFalse(snapshot.inboxItems.first { it.announcement.id == "unread" }.isRead)
+        assertEquals(1, snapshot.unreadCount)
+    }
+
+    @Test
+    fun feedRefreshKeepsStableIdsArchived() = runTest {
+        val local = FakeAnnouncementStore(feed(entry("one")))
+        val repository = AnnouncementRepository(
+            AnnouncementRemoteDataSource { feed(entry("one"), entry("two")) },
+            local,
+        )
+        repository.archive("one")
+
+        assertTrue(repository.refresh().isSuccess)
+        val snapshot = repository.snapshot.first()
+        assertEquals(listOf("one"), snapshot.archivedItems.map { it.announcement.id })
+        assertEquals(listOf("two"), snapshot.inboxItems.map { it.announcement.id })
+    }
+
+    @Test
+    fun archiveStateSurvivesRepositoryRecreationAndStaysIndependentFromDismissal() = runTest {
+        val local = FakeAnnouncementStore(feed(entry("one")))
+        AnnouncementRepository(AnnouncementRemoteDataSource { error("unused") }, local).apply {
+            dismiss("one")
+            archive("one")
+        }
+
+        val recreated = AnnouncementRepository(AnnouncementRemoteDataSource { error("unused") }, local)
+        var item = recreated.snapshot.first().archivedItems.single()
+        assertTrue(item.isDismissed)
+        assertTrue(item.isArchived)
+
+        recreated.restore("one")
+        item = recreated.snapshot.first().inboxItems.single()
+        assertTrue(item.isDismissed)
+        assertFalse(item.isArchived)
+    }
+
+    @Test
+    fun markAllReadCanTargetInboxWithoutChangingArchivedUnread() = runTest {
+        val local = FakeAnnouncementStore(feed(entry("active"), entry("archived")))
+        val repository = AnnouncementRepository(AnnouncementRemoteDataSource { error("unused") }, local)
+        repository.archive("archived")
+
+        repository.markAllRead(setOf("active"))
+        val snapshot = repository.snapshot.first()
+        assertTrue(snapshot.inboxItems.single().isRead)
+        assertFalse(snapshot.archivedItems.single().isRead)
+        assertEquals(0, snapshot.unreadCount)
+    }
+
+    @Test
     fun noUpdateYieldsNoGeneratedUpdateAnnouncement() = runTest {
         val local = FakeAnnouncementStore(feed(entry("welcome")))
         val repository = AnnouncementRepository(
@@ -276,6 +356,7 @@ private class FakeAnnouncementStore(initialFeed: String? = null) : AnnouncementL
     override val cachedFeed = MutableStateFlow(initialFeed)
     override val seenIds = MutableStateFlow(emptySet<String>())
     override val dismissedIds = MutableStateFlow(emptySet<String>())
+    override val archivedIds = MutableStateFlow(emptySet<String>())
 
     override suspend fun saveFeed(raw: String) { cachedFeed.value = raw }
     override suspend fun markSeen(id: String) { seenIds.value += id }
@@ -283,4 +364,6 @@ private class FakeAnnouncementStore(initialFeed: String? = null) : AnnouncementL
     override suspend fun dismiss(id: String) {
         dismissedIds.value += id
     }
+    override suspend fun archive(id: String) { archivedIds.value += id }
+    override suspend fun restore(id: String) { archivedIds.value -= id }
 }

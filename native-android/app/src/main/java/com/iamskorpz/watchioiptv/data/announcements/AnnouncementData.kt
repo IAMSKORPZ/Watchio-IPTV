@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -119,10 +120,13 @@ interface AnnouncementLocalStore {
     val cachedFeed: Flow<String?>
     val seenIds: Flow<Set<String>>
     val dismissedIds: Flow<Set<String>>
+    val archivedIds: Flow<Set<String>> get() = flowOf(emptySet())
     suspend fun saveFeed(raw: String)
     suspend fun markSeen(id: String)
     suspend fun markSeen(ids: Set<String>)
     suspend fun dismiss(id: String)
+    suspend fun archive(id: String) = Unit
+    suspend fun restore(id: String) = Unit
 }
 
 class DataStoreAnnouncementLocalStore(
@@ -132,6 +136,7 @@ class DataStoreAnnouncementLocalStore(
     override val cachedFeed = safeData.map { it[CachedFeed] }
     override val seenIds = safeData.map { it[SeenIds].orEmpty() }
     override val dismissedIds = safeData.map { it[DismissedIds].orEmpty() }
+    override val archivedIds = safeData.map { it[ArchivedIds].orEmpty() }
 
     override suspend fun saveFeed(raw: String) { dataStore.edit { it[CachedFeed] = raw } }
     override suspend fun markSeen(id: String) { dataStore.edit { it[SeenIds] = it[SeenIds].orEmpty() + id } }
@@ -139,11 +144,18 @@ class DataStoreAnnouncementLocalStore(
     override suspend fun dismiss(id: String) {
         dataStore.edit { it[DismissedIds] = it[DismissedIds].orEmpty() + id }
     }
+    override suspend fun archive(id: String) {
+        dataStore.edit { it[ArchivedIds] = it[ArchivedIds].orEmpty() + id }
+    }
+    override suspend fun restore(id: String) {
+        dataStore.edit { it[ArchivedIds] = it[ArchivedIds].orEmpty() - id }
+    }
 
     private companion object {
         val CachedFeed = stringPreferencesKey("announcement_cached_feed")
         val SeenIds = stringSetPreferencesKey("announcement_seen_ids")
         val DismissedIds = stringSetPreferencesKey("announcement_dismissed_ids")
+        val ArchivedIds = stringSetPreferencesKey("announcement_archived_ids")
     }
 }
 
@@ -161,8 +173,9 @@ class AnnouncementRepository(
         local.cachedFeed,
         local.seenIds,
         local.dismissedIds,
+        local.archivedIds,
         latestUpdate,
-    ) { raw, seen, dismissed, updateResult ->
+    ) { raw, seen, dismissed, archived, updateResult ->
         val parsed = raw?.let { runCatching { parser.parse(it) }.getOrNull() }
         val generatedUpdate = generateUpdateAnnouncement(updateResult)
         val remoteList = parsed.orEmpty()
@@ -179,7 +192,7 @@ class AnnouncementRepository(
             .filterNot(::isExpired)
             .sortedByDescending { runCatching { Instant.parse(it.publishedAt) }.getOrNull() ?: Instant.MIN }
         AnnouncementSnapshot(
-            items = announcements.map { AnnouncementItem(it, it.id in seen, it.id in dismissed) },
+            items = announcements.map { AnnouncementItem(it, it.id in seen, it.id in dismissed, it.id in archived) },
             hasCachedFeed = parsed != null || generatedUpdate != null,
         )
     }
@@ -201,6 +214,8 @@ class AnnouncementRepository(
     suspend fun markRead(id: String) = local.markSeen(id)
     suspend fun markAllRead(ids: Set<String>) = local.markSeen(ids)
     suspend fun dismiss(id: String) = local.dismiss(id)
+    suspend fun archive(id: String) = local.archive(id)
+    suspend fun restore(id: String) = local.restore(id)
 
     private fun generateUpdateAnnouncement(result: UpdateCheckResult?): Announcement? {
         if (result == null || result.status != UpdateAvailability.UpdateAvailable) return null
