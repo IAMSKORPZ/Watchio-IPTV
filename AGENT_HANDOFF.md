@@ -1301,3 +1301,18 @@ Final pre-commit validation results:
 - Final synchronization plan: fast-forward DEV to this post-release handoff state so DEV and MAIN share one application/updater architecture baseline. Build variants—not accidental branch divergence—own channel selection.
 - Fresh S22 RC validation was unavailable because the authorized device was offline. Previously accepted exact focus/Dismiss implementation evidence remains preserved; BRAVIA untouched.
 - Protected rescue manifest SHA-256 after release: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+
+## 2026-10-03 - Announcements Inbox and archive workflow accepted
+
+- Completed the Announcements redesign with Inbox and Archived Inbox views, persistent archive/restore actions, and responsive touch and TV/D-pad behavior.
+- Archive state is stored independently in DataStore. Read/unread and dismissed state remain unchanged when an announcement is archived or restored.
+- Archived announcements are excluded from the unread badge and startup popup while existing expiry, disabled, update-type, and non-dismissible behavior remains intact.
+- Feature commit: `c78bf8826335e79075e6482856b9a6bbb12c45eb` (`feat(announcements): add inbox and archive workflow`).
+- Full JVM tests: PASS, 1427/1427 with zero failures, errors, or skips.
+- `lintDebug`: PASS with zero errors. `assembleDebug`: PASS. `git diff --check`: PASS.
+- Authorized S22 replacement install and smoke test: PASS. Existing app data and provider session remained available. Inbox, Archived Inbox, tab switching, details, scrolling, and Back passed without a crash.
+- User manual visual acceptance: PASS.
+- API-22/AFTT compatibility work remains PARKED in the separate `C:\Users\mrsko\.codex\watchio-api22-compat` worktree and must not be merged accidentally.
+- Public release remains v0.1.6. No v0.1.7 release is authorized.
+- Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Push target: `origin/dev` only. MAIN, BRAVIA, AFTT, release state, tags, signing, and version metadata remain untouched.
