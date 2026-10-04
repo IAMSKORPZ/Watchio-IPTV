@@ -558,8 +558,14 @@ fun WatchioNativeApp(
                     state = state,
                     onQuery = searchViewModel::setQuery,
                     onScope = searchViewModel::setScope,
-                    onResult = { result -> navController.navigate(contentRoute(result.contentType, result.contentId)) },
+                    onResult = { result ->
+                        searchViewModel.recordCurrentQuery()
+                        navController.navigate(contentRoute(result.contentType, result.contentId))
+                    },
                     onBack = { navController.popBackStack() },
+                    onRecent = searchViewModel::selectRecent,
+                    onRemoveRecent = searchViewModel::removeRecent,
+                    onClearRecents = searchViewModel::clearRecents,
                 )
             }
             composable("my-list") {

@@ -240,6 +240,9 @@ class AppContainer(context: Context) {
     val searchRepository = SearchRepository(
         database = database,
         settingsRepository = settingsRepository,
+        historyStore = com.iamskorpz.watchioiptv.data.library.SharedPreferencesSearchHistoryStore(
+            appContext.getSharedPreferences("watchio_search_history", android.content.Context.MODE_PRIVATE),
+        ),
     )
     val myListRepository = MyListRepository(
         database = database,

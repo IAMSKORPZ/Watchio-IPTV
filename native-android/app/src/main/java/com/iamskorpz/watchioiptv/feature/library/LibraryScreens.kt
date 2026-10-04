@@ -58,6 +58,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
+import com.iamskorpz.watchioiptv.ui.components.WatchioButton
+import com.iamskorpz.watchioiptv.ui.components.WatchioButtonVariant
 import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
 import com.iamskorpz.watchioiptv.ui.components.watchioSemanticBorder
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioRadii
@@ -73,6 +75,9 @@ fun GlobalSearchScreen(
     onScope: (SearchScope) -> Unit,
     onResult: (WatchioSearchResult) -> Unit,
     onBack: () -> Unit,
+    onRecent: (String) -> Unit = onQuery,
+    onRemoveRecent: (String) -> Unit = {},
+    onClearRecents: () -> Unit = {},
 ) {
     val colors = LocalWatchioColors.current
     val firstFocus = remember { FocusRequester() }
@@ -80,7 +85,7 @@ fun GlobalSearchScreen(
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.54f))
+            .background(watchioScreenBackgroundColor())
             .imePadding()
             .testTag("global-search-overlay"),
         contentAlignment = Alignment.Center,
@@ -223,12 +228,47 @@ fun GlobalSearchScreen(
                             CircularProgressIndicator(color = colors.seriesAccent)
                         }
                     } else if (state.query.isBlank()) {
+                        LazyColumn(
+                            Modifier.fillMaxWidth().weight(1f).testTag("global-search-home"),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            item {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("RECENT SEARCHES", color = colors.textPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    if (state.recentQueries.isNotEmpty()) WatchioButton(
+                                        "CLEAR ALL",
+                                        onClearRecents,
+                                        modifier = Modifier.testTag("global-search-clear-recents"),
+                                        variant = WatchioButtonVariant.Ghost,
+                                    )
+                                }
+                            }
+                            if (state.recentQueries.isEmpty()) {
+                                item { Text("Search Live TV, Movies, and Series from your active provider.", color = colors.textMuted, fontSize = 13.sp) }
+                            } else items(state.recentQueries, key = { it }) { query ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    WatchioFocusableCard(
+                                        title = query,
+                                        accent = colors.focusGlow,
+                                        onClick = { onRecent(query) },
+                                        modifier = Modifier.weight(1f).testTag("global-search-recent-$query"),
+                                    )
+                                    WatchioButton(
+                                        "REMOVE",
+                                        { onRemoveRecent(query) },
+                                        modifier = Modifier.testTag("global-search-remove-$query"),
+                                        variant = WatchioButtonVariant.Ghost,
+                                    )
+                                }
+                            }
+                        }
+                    } else if (state.status == SearchStatus.Error) {
                         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                            Text("Type to search Live TV, Movies, and Series.", color = colors.textMuted, fontSize = 13.sp)
+                            Text(state.errorMessage ?: "Search is temporarily unavailable.", color = colors.textSecondary, fontSize = 13.sp)
                         }
                     } else if (state.results.isEmpty) {
                         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                            Text("No results", color = colors.textMuted, fontSize = 13.sp)
+                            Text("NO RESULTS FOR \"${state.query}\"", color = colors.textMuted, fontSize = 13.sp)
                         }
                     } else {
                         LazyColumn(
@@ -419,6 +459,7 @@ private fun SearchResultLiveCard(
                     )
                 }
             }
+            Text("WATCH", color = colors.liveTvAccent, fontWeight = FontWeight.Bold, fontSize = 10.sp)
         }
     }
 }

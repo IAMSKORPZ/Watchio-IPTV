@@ -16,6 +16,7 @@ import com.iamskorpz.watchioiptv.data.RoomHistoryRepository
 import com.iamskorpz.watchioiptv.data.library.MyListRepository
 import com.iamskorpz.watchioiptv.data.library.SearchRepository
 import com.iamskorpz.watchioiptv.data.library.SearchScope
+import com.iamskorpz.watchioiptv.data.library.SearchHistoryStore
 import com.iamskorpz.watchioiptv.domain.model.ContentType
 import com.iamskorpz.watchioiptv.domain.model.InputMode
 import com.iamskorpz.watchioiptv.domain.model.StreamFormat
@@ -71,6 +72,39 @@ class SearchAndMyListRepositoryTest {
         assertEquals(1, liveOnly.live.size)
         assertTrue(liveOnly.movies.isEmpty())
         assertTrue(liveOnly.series.isEmpty())
+    }
+
+    @Test fun providerSwitchInvalidatesSearchScopeAndNeverLeaksOtherProvider() = runBlocking {
+        seedProvider("provider-a")
+        seedProvider("provider-b")
+        database.liveStreamDao().upsertAll(listOf(live("provider-a", "a", "Shared A"), live("provider-b", "b", "Shared B")))
+        val repository = SearchRepository(database, settings)
+        assertEquals(listOf("a"), repository.search("shared", SearchScope.Live).live.map { it.contentId })
+        settings.setSelectedProviderId(ProviderId("provider-b"))
+        assertEquals(listOf("b"), repository.search("shared", SearchScope.Live).live.map { it.contentId })
+    }
+
+    @Test fun recentQueriesAreProviderScopedBoundedDeduplicatedAndClearable() = runBlocking {
+        val history = FakeHistory()
+        val repository = SearchRepository(database, settings, history)
+        repeat(12) { repository.recordQuery(ProviderId("provider-a"), "Query $it") }
+        repository.recordQuery(ProviderId("provider-a"), "  QUERY 11 ")
+        repository.recordQuery(ProviderId("provider-b"), "Other")
+        assertEquals(10, repository.recentQueries(ProviderId("provider-a")).size)
+        assertEquals("QUERY 11", repository.recentQueries(ProviderId("provider-a")).first())
+        assertEquals(listOf("Other"), repository.recentQueries(ProviderId("provider-b")))
+        repository.removeRecent(ProviderId("provider-a"), "query 11")
+        assertTrue(repository.recentQueries(ProviderId("provider-a")).none { it.contains("11") })
+        repository.clearRecents(ProviderId("provider-a"))
+        assertTrue(repository.recentQueries(ProviderId("provider-a")).isEmpty())
+    }
+
+    @Test fun punctuationAndFuzzySearchUseLocalCatalogue() = runBlocking {
+        seedProvider("provider-a")
+        database.vodDao().upsertAll(listOf(movie("provider-a", "m1", "Spider-Man"), movie("provider-a", "m2", "Harry Potter")))
+        val repository = SearchRepository(database, settings)
+        assertEquals(listOf("m1"), repository.search("spider man", SearchScope.Movies).movies.map { it.contentId })
+        assertEquals(listOf("m2"), repository.search("harry poter", SearchScope.Movies).movies.map { it.contentId })
     }
 
     @Test
@@ -177,5 +211,11 @@ class SearchAndMyListRepositoryTest {
         }
         override suspend fun setInputMode(inputMode: InputMode) = Unit
         override suspend fun setStreamFormat(streamFormat: StreamFormat) = Unit
+    }
+
+    private class FakeHistory : SearchHistoryStore {
+        private val rows = mutableMapOf<ProviderId, List<String>>()
+        override fun get(providerId: ProviderId) = rows[providerId].orEmpty()
+        override fun put(providerId: ProviderId, queries: List<String>) { rows[providerId] = queries }
     }
 }

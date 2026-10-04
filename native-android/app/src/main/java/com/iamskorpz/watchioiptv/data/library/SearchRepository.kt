@@ -13,6 +13,7 @@ import com.iamskorpz.watchioiptv.domain.model.ProviderType
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 
 enum class SearchScope { Global, Live, Movies, Series }
@@ -20,13 +21,36 @@ enum class SearchScope { Global, Live, Movies, Series }
 class SearchRepository(
     private val database: WatchioDatabase,
     private val settingsRepository: SettingsRepository,
+    private val historyStore: SearchHistoryStore = EmptySearchHistoryStore,
 ) {
+    val activeProviderId: Flow<ProviderId?> = settingsRepository.selectedProviderId
     suspend fun selectedProviderId(): ProviderId? = settingsRepository.selectedProviderId.first()
+
+    suspend fun recentQueries(providerId: ProviderId): List<String> = withContext(Dispatchers.IO) { historyStore.get(providerId) }
+
+    suspend fun recordQuery(providerId: ProviderId, query: String) = withContext(Dispatchers.IO) {
+        val display = query.trim().replace(Regex("\\s+"), " ")
+        val normalized = normalizeSearchQuery(display)
+        if (normalized.isBlank()) return@withContext
+        val updated = listOf(display) + historyStore.get(providerId).filter { normalizeSearchQuery(it) != normalized }
+        historyStore.put(providerId, updated.take(MAX_RECENTS))
+    }
+
+    suspend fun removeRecent(providerId: ProviderId, query: String) = withContext(Dispatchers.IO) {
+        val normalized = normalizeSearchQuery(query)
+        historyStore.put(providerId, historyStore.get(providerId).filter { normalizeSearchQuery(it) != normalized })
+    }
+
+    suspend fun clearRecents(providerId: ProviderId) = withContext(Dispatchers.IO) { historyStore.put(providerId, emptyList()) }
 
     suspend fun search(query: String, scope: SearchScope, limitPerType: Int = 40): SearchResults = withContext(Dispatchers.IO) {
         val providerId = selectedProviderId() ?: return@withContext SearchResults()
+        search(providerId, query, scope, limitPerType)
+    }
+
+    suspend fun search(providerId: ProviderId, query: String, scope: SearchScope, limitPerType: Int = 40): SearchResults = withContext(Dispatchers.IO) {
         val provider = database.providerDao().findById(providerId.value) ?: return@withContext SearchResults()
-        val normalized = TextNormalizer.normalizeForSearch(query)
+        val normalized = normalizeSearchQuery(query)
         if (normalized.isBlank()) return@withContext SearchResults()
         val type = ProviderType.fromPersisted(provider.type)
         SearchResults(
@@ -37,25 +61,21 @@ class SearchRepository(
     }
 
     private suspend fun live(providerId: ProviderId, type: ProviderType, query: String, limit: Int): List<WatchioSearchResult> = when (type) {
-        ProviderType.Xtream -> database.liveStreamDao().search(providerId.value, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult() }
-        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().searchByType(providerId.value, ContentType.Live.persisted, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult(ContentType.Live) }
+        ProviderType.Xtream -> database.liveStreamDao().getByProvider(providerId.value).map { it.toResult() }
+        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().getByProviderAndType(providerId.value, ContentType.Live.persisted).map { it.toResult(ContentType.Live) }
     }.rankedForSearch(query, limit)
 
     private suspend fun movies(providerId: ProviderId, type: ProviderType, query: String, limit: Int): List<WatchioSearchResult> = when (type) {
-        ProviderType.Xtream -> database.vodDao().search(providerId.value, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult() }
-        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().searchByType(providerId.value, ContentType.Movie.persisted, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult(ContentType.Movie) }
+        ProviderType.Xtream -> database.vodDao().getByProvider(providerId.value).map { it.toResult() }
+        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().getByProviderAndType(providerId.value, ContentType.Movie.persisted).map { it.toResult(ContentType.Movie) }
     }.rankedForSearch(query, limit)
 
     private suspend fun series(providerId: ProviderId, type: ProviderType, query: String, limit: Int): List<WatchioSearchResult> = when (type) {
-        ProviderType.Xtream -> database.seriesDao().search(providerId.value, query, limit * CANDIDATE_MULTIPLIER).map { it.toResult() }
-        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().searchByType(providerId.value, ContentType.Series.persisted, query, limit * CANDIDATE_MULTIPLIER)
+        ProviderType.Xtream -> database.seriesDao().getByProvider(providerId.value).map { it.toResult() }
+        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().getByProviderAndType(providerId.value, ContentType.Series.persisted)
             .groupBy { it.seriesName ?: it.name.substringBefore(" S").substringBefore(" Season").trim() }
             .values.mapNotNull { it.minByOrNull { row -> row.playlistOrder }?.toResult(ContentType.Series) }
     }.rankedForSearch(query, limit)
-
-    private companion object {
-        const val CANDIDATE_MULTIPLIER = 5
-    }
 
     private fun LiveStreamEntity.toResult() = WatchioSearchResult(
         providerId = ProviderId(providerId),
@@ -108,4 +128,6 @@ class SearchRepository(
             rating = null,
         )
     }
+
+    private companion object { const val MAX_RECENTS = 10 }
 }
