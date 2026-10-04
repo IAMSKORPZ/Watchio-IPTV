@@ -11,6 +11,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.unit.dp
 import com.iamskorpz.watchioiptv.core.model.ProviderId
@@ -26,6 +33,10 @@ import com.iamskorpz.watchioiptv.feature.sports.SportsMatchConfidence
 import com.iamskorpz.watchioiptv.feature.sports.SportsScreen
 import com.iamskorpz.watchioiptv.feature.sports.SportsUiState
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
+import com.iamskorpz.watchioiptv.feature.sports.v2.MatchChannelConfidence
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcast
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsDataSource
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsSourceIdentity
 import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
@@ -89,6 +100,32 @@ class SportsScreenComposeTest {
         }
     }
 
+    @Test fun shortCompetitionFilterListIsCentered() {
+        setContent(readyState())
+        val row = composeRule.onNodeWithTag("sports-competition-filters").getUnclippedBoundsInRoot()
+        val first = composeRule.onNodeWithTag("sports-filter-all").getUnclippedBoundsInRoot()
+        val last = composeRule.onNodeWithTag("sports-filter-PL").getUnclippedBoundsInRoot()
+        val leftGap = first.left - row.left
+        val rightGap = row.right - last.right
+        assertTrue(kotlin.math.abs(leftGap.value - rightGap.value) < 3f)
+    }
+
+    @Test fun longCompetitionFilterListScrollsWithoutClippingEitherEdge() {
+        val competitions = (0..11).map { SportsCompetition("C$it", "Competition $it", it, listOf(fixture.copy(id = "$it", competitionId = "C$it"))) }
+        setContent(SportsUiState(day, SportsLoadState.Ready(SportsDateSchedule(day, competitions))))
+        composeRule.onNodeWithTag("sports-filter-all").assertIsDisplayed()
+        composeRule.onNodeWithTag("sports-competition-filters").performTouchInput { swipeLeft() }
+        composeRule.onNodeWithTag("sports-filter-C11").assertIsDisplayed()
+    }
+
+    @Test fun dpadTraversalMovesAcrossCompetitionFilters() {
+        val competitions = (0..7).map { SportsCompetition("C$it", "Competition $it", it, listOf(fixture.copy(id = "$it", competitionId = "C$it"))) }
+        setContent(SportsUiState(day, SportsLoadState.Ready(SportsDateSchedule(day, competitions))))
+        composeRule.onNodeWithTag("sports-filter-all").performSemanticsAction(SemanticsActions.RequestFocus)
+        repeat(8) { composeRule.onNodeWithTag("sports-competition-filters").performKeyInput { pressKey(Key.DirectionRight) } }
+        composeRule.onNodeWithTag("sports-filter-C7").assertIsDisplayed()
+    }
+
     @Test fun selectedDateOpensCalendarAndChoosingDayClosesIt() {
         var selected: LocalDate? = null
         setContent(readyState(), onSelectDate = { selected = it })
@@ -127,11 +164,38 @@ class SportsScreenComposeTest {
         composeRule.runOnIdle { assertTrue(backed) }
     }
 
-    @Test fun watchInvokesFixtureSelection() {
+    @Test fun cardClickDoesNotStartPlaybackAndExplicitChannelActionDoes() {
         var watched: SportsFixture? = null
-        setContent(readyState(), onWatch = { watched = it })
-        composeRule.onNodeWithTag("fixture-1").performClick()
+        setContent(readyState(withBroadcast = true), onWatch = { watched = it })
+        composeRule.onNodeWithTag("fixture-1").assertHasNoClickAction()
+        composeRule.runOnIdle { assertEquals(null, watched) }
+        composeRule.onNodeWithTag("fixture-watch-1").performClick()
         composeRule.runOnIdle { assertEquals(fixture, watched) }
+    }
+
+    @Test fun verifiedCandidateExposesExplicitWatchLive() {
+        val candidate = SportsChannelCandidate(channel, 130, SportsMatchConfidence.High, "Arsenal v Chelsea", v2Confidence = MatchChannelConfidence.VERIFIED)
+        setContent(readyState().copy(selectedFixture = fixture, candidates = listOf(candidate)))
+        composeRule.onNodeWithText("▶ WATCH LIVE").assertIsDisplayed()
+    }
+
+    @Test fun strongCandidateExposesExplicitWatchLive() {
+        val candidate = SportsChannelCandidate(channel, 90, SportsMatchConfidence.High, "Arsenal v Chelsea", v2Confidence = MatchChannelConfidence.STRONG)
+        setContent(readyState().copy(selectedFixture = fixture, candidates = listOf(candidate)))
+        composeRule.onNodeWithText("▶ WATCH LIVE").assertIsDisplayed()
+    }
+
+    @Test fun possibleCandidateUsesChooserWording() {
+        val candidate = SportsChannelCandidate(channel, 70, SportsMatchConfidence.Medium, v2Confidence = MatchChannelConfidence.POSSIBLE)
+        setContent(readyState().copy(selectedFixture = fixture, candidates = listOf(candidate)))
+        composeRule.onNodeWithText("CHOOSE").assertIsDisplayed()
+    }
+
+    @Test fun unavailableLiveFixtureShowsDisabledNoChannelAction() {
+        val live = fixture.copy(status = SportsFixtureStatus.Live)
+        val schedule = SportsDateSchedule(day, listOf(SportsCompetition("PL", "Premier League", 0, listOf(live))))
+        setContent(SportsUiState(day, SportsLoadState.Ready(schedule, broadcastUnavailable = setOf(live.id))))
+        composeRule.onNodeWithText("NO CHANNEL FOUND").assertIsNotEnabled()
     }
 
     @Test fun candidatePlayInvokesExistingChannelCallback() {
@@ -139,7 +203,7 @@ class SportsScreenComposeTest {
         val candidate = SportsChannelCandidate(channel, 130, SportsMatchConfidence.High, "Arsenal v Chelsea")
         setContent(readyState().copy(selectedFixture = fixture, candidates = listOf(candidate)), onPlay = { played = it })
         composeRule.onNodeWithText("Available channels").assertIsDisplayed()
-        composeRule.onNodeWithText("WATCH LIVE").performClick()
+        composeRule.onNodeWithText("▶ WATCH LIVE").performClick()
         composeRule.runOnIdle { assertEquals(channel, played) }
     }
 
@@ -204,11 +268,16 @@ class SportsScreenComposeTest {
         }
     }
 
-    private fun readyState() = SportsUiState(day, SportsLoadState.Ready(SportsDateSchedule(day, listOf(SportsCompetition("PL", "Premier League", 0, listOf(fixture))))))
+    private fun readyState(withBroadcast: Boolean = false): SportsUiState {
+        val schedule = SportsDateSchedule(day, listOf(SportsCompetition("PL", "Premier League", 0, listOf(fixture))))
+        val broadcasts = if (withBroadcast) mapOf(fixture.id to listOf(broadcast)) else emptyMap()
+        return SportsUiState(day, SportsLoadState.Ready(schedule, broadcasts = broadcasts))
+    }
 
     private companion object {
         val day: LocalDate = LocalDate.of(2026, 9, 6)
         val fixture = SportsFixture("1", "PL", "Premier League", Instant.parse("2026-09-06T16:30:00Z"), "Arsenal", "Chelsea", SportsFixtureStatus.Scheduled)
         val channel = LiveTvChannel(ProviderId("p1"), ProviderType.Xtream, "sports-1", "Sports One", null, "sports", "sports.one", "ts", null, emptyMap(), 1, false)
+        val broadcast = SportsBroadcast(SportsSourceIdentity(SportsDataSource.SoccersApi, "b1"), displayName = "Sky Sports", countryOrRegion = "GB", fetchedAt = Instant.parse("2026-09-06T12:00:00Z"))
     }
 }

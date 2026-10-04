@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -150,7 +151,11 @@ fun SportsScreen(
                         Text("Try another date using the controls above.", color = colors.textSecondary)
                     }
                 } else Column(Modifier.fillMaxSize()) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().testTag("sports-competition-filters")) {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        modifier = Modifier.fillMaxWidth().testTag("sports-competition-filters"),
+                    ) {
                         item { WatchioChip("ALL", selectedCompetition == null, { selectedCompetition = null }, Modifier.testTag("sports-filter-all")) }
                         items(load.schedule.competitions, key = { it.id }) { competition ->
                             WatchioChip(competition.name, selectedCompetition == competition.id, { selectedCompetition = competition.id }, Modifier.testTag("sports-filter-${competition.id}"))
@@ -253,10 +258,10 @@ private fun DateControls(
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        WatchioButton("‹", onPreviousDay, Modifier.width(52.dp).focusRequester(previousFocus).focusProperties { right = todayFocus }.testTag("sports-previous").semantics { contentDescription = "Previous day" }, WatchioButtonVariant.Ghost)
+        WatchioButton("‹", onPreviousDay, Modifier.width(52.dp).focusRequester(previousFocus).focusProperties { right = todayFocus }.testTag("sports-previous").semantics { contentDescription = "Previous day" }, WatchioButtonVariant.Secondary)
         val label = if (date == LocalDate.now()) "TODAY • ${date.format(DateTimeFormatter.ofPattern("d MMM"))}" else date?.format(DateTimeFormatter.ofPattern("EEE • d MMM")) ?: "CHOOSE DATE"
         WatchioButton(label, onOpenCalendar, Modifier.width(190.dp).focusRequester(todayFocus).focusProperties { left = previousFocus; right = nextFocus }.testTag("sports-today").semantics { contentDescription = "Choose sports date" }, WatchioButtonVariant.Secondary)
-        WatchioButton("›", onNextDay, Modifier.width(52.dp).focusRequester(nextFocus).focusProperties { left = todayFocus }.testTag("sports-next").semantics { contentDescription = "Next day" }, WatchioButtonVariant.Ghost)
+        WatchioButton("›", onNextDay, Modifier.width(52.dp).focusRequester(nextFocus).focusProperties { left = todayFocus }.testTag("sports-next").semantics { contentDescription = "Next day" }, WatchioButtonVariant.Secondary)
     }
 }
 
@@ -270,7 +275,7 @@ private fun DateControls(
 ) {
     val colors = LocalWatchioColors.current
     val ukBroadcasts = broadcasts.filter { it.countryOrRegion == "GB" || it.countryOrRegion?.startsWith("GB-") == true }.take(3)
-    WatchioCard(modifier = Modifier.fillMaxWidth().testTag("fixture-${fixture.id}"), minHeight = 88.dp, onClick = { onWatch(fixture) }, contentDescription = "Open ${fixture.homeTeam} versus ${fixture.awayTeam}") {
+    WatchioCard(modifier = Modifier.fillMaxWidth().testTag("fixture-${fixture.id}"), minHeight = 88.dp, contentDescription = "${fixture.homeTeam} versus ${fixture.awayTeam}") {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TeamLogo(fixture.homeLogoUrl, fixture.homeTeam)
@@ -282,7 +287,7 @@ private fun DateControls(
                 Text(fixture.awayTeam, color = colors.textPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End)
                 TeamLogo(fixture.awayLogoUrl, fixture.awayTeam)
             }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     when {
                         ukBroadcasts.isNotEmpty() -> ukBroadcasts.joinToString(" • ") { it.displayName }
@@ -290,22 +295,55 @@ private fun DateControls(
                         else -> "Checking broadcast information…"
                     },
                     color = colors.textSecondary,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     maxLines = 2,
                 )
-                if (fixture.status == SportsFixtureStatus.Scheduled) {
-                    WatchioButton(
-                        if (reminderOn) "NOTIFICATION ON" else "NOTIFY ME",
-                        { onToggleReminder(fixture) },
-                        modifier = Modifier.width(150.dp).testTag("fixture-reminder-${fixture.id}"),
-                        variant = if (reminderOn) WatchioButtonVariant.Primary else WatchioButtonVariant.Secondary,
-                    )
-                }
-                if (ukBroadcasts.isNotEmpty() && fixture.status != SportsFixtureStatus.Finished && fixture.status != SportsFixtureStatus.Cancelled && fixture.status != SportsFixtureStatus.Postponed) {
-                    WatchioButton(if (fixture.status == SportsFixtureStatus.Live) "WATCH LIVE" else "FIND CHANNEL", { onWatch(fixture) }, modifier = Modifier.width(126.dp), variant = WatchioButtonVariant.CompactAction)
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val compact = maxWidth < 390.dp
+                    if (compact) {
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FixtureActions(fixture, ukBroadcasts.isNotEmpty(), broadcastUnavailable, reminderOn, onWatch, onToggleReminder, Modifier.fillMaxWidth())
+                        }
+                    } else {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FixtureActions(fixture, ukBroadcasts.isNotEmpty(), broadcastUnavailable, reminderOn, onWatch, onToggleReminder, Modifier.width(160.dp))
+                            }
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FixtureActions(
+    fixture: SportsFixture,
+    hasBroadcast: Boolean,
+    broadcastUnavailable: Boolean,
+    reminderOn: Boolean,
+    onWatch: (SportsFixture) -> Unit,
+    onToggleReminder: (SportsFixture) -> Unit,
+    modifier: Modifier,
+) {
+    if (fixture.status == SportsFixtureStatus.Scheduled) {
+        WatchioButton(
+            if (reminderOn) "✓ NOTIFICATION ON" else "♡ NOTIFY ME",
+            { onToggleReminder(fixture) },
+            modifier = modifier.testTag("fixture-reminder-${fixture.id}"),
+            variant = if (reminderOn) WatchioButtonVariant.Primary else WatchioButtonVariant.Secondary,
+        )
+    }
+    if (hasBroadcast && fixture.status !in setOf(SportsFixtureStatus.Finished, SportsFixtureStatus.Cancelled, SportsFixtureStatus.Postponed)) {
+        WatchioButton(
+            if (fixture.status == SportsFixtureStatus.Live) "▶ WATCH LIVE" else "CHOOSE CHANNEL",
+            { onWatch(fixture) },
+            modifier = modifier.testTag("fixture-watch-${fixture.id}"),
+            variant = if (fixture.status == SportsFixtureStatus.Live) WatchioButtonVariant.Primary else WatchioButtonVariant.Secondary,
+        )
+    } else if (broadcastUnavailable && fixture.status == SportsFixtureStatus.Live) {
+        WatchioButton("NO CHANNEL FOUND", {}, modifier = modifier.testTag("fixture-watch-unavailable-${fixture.id}"), variant = WatchioButtonVariant.Secondary, enabled = false)
     }
 }
 
@@ -391,7 +429,7 @@ private fun MatchAlertDialog(reminder: MatchReminder, candidates: List<SportsCha
         },
         confirmButton = {
             if (candidates.isNotEmpty()) WatchioButton(
-                if (candidates.first().v2Confidence == MatchChannelConfidence.POSSIBLE) "CHOOSE CHANNEL" else "WATCH NOW",
+                if (candidates.first().v2Confidence == MatchChannelConfidence.POSSIBLE) "CHOOSE CHANNEL" else "▶ WATCH LIVE",
                 onWatch,
                 modifier = Modifier.testTag("sports-alert-watch"),
             )
@@ -404,14 +442,14 @@ private fun MatchAlertDialog(reminder: MatchReminder, candidates: List<SportsCha
     val colors = LocalWatchioColors.current
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Available channels") },
+        title = { Text("Available channels", color = colors.textPrimary) },
         text = {
             when {
                 state.candidatesLoading -> CircularProgressIndicator()
-                state.candidateError != null -> Text(state.candidateError)
-                state.candidates.isEmpty() -> Text("No matching channel found for this provider.")
+                state.candidateError != null -> Text(state.candidateError, color = colors.textSecondary)
+                state.candidates.isEmpty() -> Text("No matching channel found for this provider.", color = colors.textSecondary)
                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.testTag("sports-candidates")) {
-                    item { Text("Watch on", fontWeight = FontWeight.Bold) }
+                    item { Text("Watch on", color = colors.textPrimary, fontWeight = FontWeight.Bold) }
                     items(state.candidates, key = { "candidate-${it.channel.providerId.value}-${it.channel.id}" }) { CandidateRow(it, onPlay) }
                 }
             }
@@ -428,7 +466,7 @@ private fun MatchAlertDialog(reminder: MatchReminder, candidates: List<SportsCha
             Text("${candidate.v2Confidence?.name ?: candidate.confidence.name} • ${candidate.broadcasterName.orEmpty()}", color = colors.textSecondary)
             candidate.matchedProgrammeTitle?.let { Text(it, color = colors.textSecondary, maxLines = 1) }
         }
-        WatchioButton(if (candidate.v2Confidence == MatchChannelConfidence.POSSIBLE) "TRY" else "WATCH LIVE", { onPlay(candidate.channel) }, modifier = Modifier.width(116.dp), variant = WatchioButtonVariant.CompactAction)
+        WatchioButton(if (candidate.v2Confidence == MatchChannelConfidence.POSSIBLE) "CHOOSE" else "▶ WATCH LIVE", { onPlay(candidate.channel) }, modifier = Modifier.width(132.dp), variant = WatchioButtonVariant.CompactAction)
     }
 }
 

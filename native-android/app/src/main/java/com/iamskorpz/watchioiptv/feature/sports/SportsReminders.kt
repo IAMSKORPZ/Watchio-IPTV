@@ -129,7 +129,10 @@ class SportsReminderRepository(
                         scheduler.cancel(reminder.fixtureKey)
                         reminder.copy(state = MatchReminderState.COMPLETED)
                     }
-                    SportsFixtureStatus.Scheduled -> if (fixture.kickoffUtc.toEpochMilli() != reminder.kickoffEpochMs) {
+                    SportsFixtureStatus.Scheduled -> if (
+                        fixture.kickoffUtc.toEpochMilli() != reminder.kickoffEpochMs ||
+                        reminder.triggerEpochMs != reminderTriggerEpochMs(fixture.kickoffUtc.toEpochMilli(), clock.millis())
+                    ) {
                         val moved = fixture.toReminder(clock)
                         scheduler.schedule(moved)
                         moved
@@ -156,7 +159,7 @@ class SportsReminderRepository(
 
     companion object {
         private val REMINDERS = stringPreferencesKey("sports_match_reminders_v1")
-        val LEAD_TIME: Duration = Duration.ofMinutes(5)
+        val LEAD_TIME: Duration = Duration.ofMinutes(15)
     }
 }
 
@@ -177,9 +180,12 @@ private fun SportsFixture.toReminder(clock: Clock): MatchReminder {
         homeTeam = homeTeam,
         awayTeam = awayTeam,
         kickoffEpochMs = kickoff,
-        triggerEpochMs = (kickoff - SportsReminderRepository.LEAD_TIME.toMillis()).coerceAtLeast(clock.millis()),
+        triggerEpochMs = reminderTriggerEpochMs(kickoff, clock.millis()),
     )
 }
+
+internal fun reminderTriggerEpochMs(kickoffEpochMs: Long, nowEpochMs: Long): Long =
+    (kickoffEpochMs - SportsReminderRepository.LEAD_TIME.toMillis()).coerceAtLeast(nowEpochMs)
 
 class MatchReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {

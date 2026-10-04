@@ -26,7 +26,7 @@ class SportsReminderRepositoryTest {
     private val now = Instant.parse("2026-10-04T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
 
-    @Test fun reminderPersistsAtFiveMinutesBeforeKickoffAndTogglePreventsDuplicates() = runTest {
+    @Test fun reminderPersistsAtFifteenMinutesBeforeKickoffAndTogglePreventsDuplicates() = runTest {
         val file = File.createTempFile("sports-reminders", ".preferences_pb").also { it.delete() }
         val scheduler = FakeScheduler()
         val repository = repository(file, scheduler, this)
@@ -35,7 +35,7 @@ class SportsReminderRepositoryTest {
         assertTrue(repository.toggle(fixture))
         val saved = repository.reminders.first()
         assertEquals(1, saved.size)
-        assertEquals(fixture.kickoffUtc.minusSeconds(300).toEpochMilli(), saved.single().triggerEpochMs)
+        assertEquals(fixture.kickoffUtc.minusSeconds(900).toEpochMilli(), saved.single().triggerEpochMs)
         assertFalse(saved.single().fixtureKey.contains("http"))
         assertEquals(1, scheduler.scheduled.size)
 
@@ -57,7 +57,7 @@ class SportsReminderRepositoryTest {
         val repository = repository(file, scheduler, this)
         repository.toggle(fixture(now.plusSeconds(3600)))
         repository.reconcile(listOf(fixture(now.plusSeconds(7200))))
-        assertEquals(now.plusSeconds(7200).minusSeconds(300).toEpochMilli(), repository.reminders.first().single().triggerEpochMs)
+        assertEquals(now.plusSeconds(7200).minusSeconds(900).toEpochMilli(), repository.reminders.first().single().triggerEpochMs)
         assertEquals(2, scheduler.scheduled.size)
 
         repository.reconcile(listOf(fixture(now.plusSeconds(7200), SportsFixtureStatus.Cancelled)))
