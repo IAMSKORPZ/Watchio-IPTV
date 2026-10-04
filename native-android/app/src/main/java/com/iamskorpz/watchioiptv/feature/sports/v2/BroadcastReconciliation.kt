@@ -69,7 +69,7 @@ internal fun normalizeCountryOrRegion(value: String?): String? {
     return when (normalizeWords(clean)) {
         "gb", "uk", "unitedkingdom", "greatbritain" -> "GB"
         "us", "usa", "unitedstates", "unitedstatesofamerica" -> "US"
-        "england" -> "GB-ENG"
+        "en", "england" -> "GB-ENG"
         "scotland" -> "GB-SCT"
         "wales" -> "GB-WLS"
         "northernireland" -> "GB-NIR"

@@ -1378,3 +1378,16 @@ Final pre-commit validation results:
 - Feature commit: `bb6f16e51394299be8ed302c01f8a474dc67dcc2` (`feat(sports): add broadcast data sources`). Push target: `origin/dev` only.
 - Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Existing 427 untracked evidence files remain preserved. API-22/AFTT compatibility work remains PARKED; BRAVIA and AFTT untouched.
 - Conditional next task: `SPORTS V2 PHASE 4 — PROVIDER CHANNEL MATCHER + EPG VERIFICATION`, only after credentialed live broadcaster proof establishes usable coverage.
+
+## 2026-10-04 - Sports V2 Phase 3.5 live SoccersAPI coverage proof
+
+- Ran a credentialed live proof against only selected SoccersAPI leagues: Premier League `583`, Championship `574`, and UEFA Champions League `539`. All three league records and current seasons were accessible. Credentials remained local, encrypted, unprinted, and outside Git.
+- Used 15 API requests. Final reported allowance was 85 requests remaining; no `429` or other rate-limit response occurred.
+- Examined nine fixture-specific broadcast samples, three per league. All nine returned broadcaster data and UK/home-nation records. Examples included Sky Sports Main Event, Sky Sports Premier League, Sky Sports Football, Sky Sports+, TNT Sports channels, NOW, SKY GO Extra, HBO Max, BBC Radio 5 Live, and TalkSport records.
+- Country metadata was detailed and generally usable. Great Britain records used `cc=gb`; one England record used `cc=en`. International channel records were extensive. Distinct channels survived and exact duplicate records were absent in selected samples.
+- Live fixture identity, ordered teams, competition, kickoff, and source fixture IDs matched Phase 3 reconciliation inputs. Identical live candidates resolve as `EXACT`; existing alias and 15-minute tolerance coverage remains `STRONG`; ambiguous and no-match candidates remain blocked by focused tests.
+- Found and fixed one genuine country-normalization bug: SoccersAPI `cc=en` previously normalized to `EN` instead of `GB-ENG`. Added minimal mapping and regression assertion.
+- Decision: **A - STRONG**. Real fixture-specific UK broadcaster coverage is sufficient to begin ProviderChannelMatcher V2 with provider-channel and EPG verification fallbacks. Recommended Phase 4 inputs remain `SportsFixture`, `SportsBroadcast[]`, active provider channels, and EPG programmes.
+- Canonical broadcaster aliases are feasible, but aliases must preserve distinct services/channels and distinguish TV, streaming, and radio records rather than collapsing by brand.
+- Focused SoccersAPI source, reconciliation, repository, credential-store, and new normalization tests: PASS. Full JVM suite, `lintDebug`, `assembleDebug`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
+- Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. MAIN, API-22 worktree, BRAVIA, AFTT, releases, versions, signing, and updater manifests remained untouched.

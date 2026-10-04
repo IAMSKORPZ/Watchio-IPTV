@@ -44,6 +44,7 @@ class BroadcastReconciliationTest {
         assertEquals("GB", normalizeCountryOrRegion("GB"))
         assertEquals("GB", normalizeCountryOrRegion("UK"))
         assertEquals("GB", normalizeCountryOrRegion("United Kingdom"))
+        assertEquals("GB-ENG", normalizeCountryOrRegion("en"))
         assertEquals("GB-ENG", normalizeCountryOrRegion("England"))
         assertEquals("US", normalizeCountryOrRegion("US"))
         assertEquals("CA", normalizeCountryOrRegion("ca"))
