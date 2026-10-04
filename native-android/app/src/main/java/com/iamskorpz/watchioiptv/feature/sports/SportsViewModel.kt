@@ -18,6 +18,7 @@ data class SportsUiState(
     val candidatesLoading: Boolean = false,
     val candidates: List<SportsChannelCandidate> = emptyList(),
     val candidateError: String? = null,
+    val refreshing: Boolean = false,
 )
 
 class SportsViewModel private constructor(
@@ -35,6 +36,9 @@ class SportsViewModel private constructor(
     val state: StateFlow<SportsUiState> = mutableState.asStateFlow()
     private var loadJob: Job? = null
     private var cooldownJob: Job? = null
+    private var broadcastJob: Job? = null
+    private var livePollingJob: Job? = null
+    private var screenActive = false
 
     init { load() }
 
@@ -45,6 +49,17 @@ class SportsViewModel private constructor(
         val error = mutableState.value.loadState as? SportsLoadState.Error
         if (error != null && !error.retryEnabled) return
         load()
+    }
+
+    fun enter() {
+        screenActive = true
+        if (mutableState.value.loadState !is SportsLoadState.Loading) load()
+    }
+
+    fun leave() {
+        screenActive = false
+        livePollingJob?.cancel()
+        livePollingJob = null
     }
 
     fun watch(fixture: SportsFixture) {
@@ -70,13 +85,46 @@ class SportsViewModel private constructor(
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
             val date = mutableState.value.selectedDate
-            mutableState.value = mutableState.value.copy(loadState = SportsLoadState.Loading)
+            val existing = mutableState.value.loadState
+            mutableState.value = if (existing is SportsLoadState.Ready) {
+                mutableState.value.copy(refreshing = true)
+            } else {
+                mutableState.value.copy(loadState = SportsLoadState.Loading, refreshing = true)
+            }
             scheduleLoader(date).fold(
-                onSuccess = { if (mutableState.value.selectedDate == date) mutableState.value = mutableState.value.copy(loadState = SportsLoadState.Ready(it)) },
+                onSuccess = { schedule ->
+                    if (mutableState.value.selectedDate == date) {
+                        mutableState.value = mutableState.value.copy(loadState = SportsLoadState.Ready(schedule), refreshing = false)
+                        loadBroadcasts(schedule)
+                        scheduleLiveRefresh(schedule)
+                    }
+                },
                 onFailure = { error ->
                     if (mutableState.value.selectedDate == date) applyError(error)
                 },
             )
+        }
+    }
+
+    private fun loadBroadcasts(schedule: SportsDateSchedule) {
+        val repository = repository ?: return
+        broadcastJob?.cancel()
+        broadcastJob = viewModelScope.launch {
+            val fixtures = schedule.competitions.flatMap { it.fixtures }
+            val (broadcasts, unavailable) = repository.broadcasts(fixtures)
+            val ready = mutableState.value.loadState as? SportsLoadState.Ready ?: return@launch
+            if (ready.schedule.date == schedule.date) {
+                mutableState.value = mutableState.value.copy(loadState = ready.copy(broadcasts = broadcasts, broadcastUnavailable = unavailable))
+            }
+        }
+    }
+
+    private fun scheduleLiveRefresh(schedule: SportsDateSchedule) {
+        livePollingJob?.cancel()
+        if (!screenActive || schedule.competitions.none { competition -> competition.fixtures.any { it.status == SportsFixtureStatus.Live } }) return
+        livePollingJob = viewModelScope.launch {
+            delay(60_000L)
+            if (screenActive && mutableState.value.selectedDate == LocalDate.now(clock)) load()
         }
     }
 

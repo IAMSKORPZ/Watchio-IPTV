@@ -56,6 +56,7 @@ import com.iamskorpz.watchioiptv.feature.sports.v2.CachedFixtureRepository
 import com.iamskorpz.watchioiptv.feature.sports.v2.ApiFootballApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.ApiFootballFixtureSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.BroadcastRepository
+import com.iamskorpz.watchioiptv.feature.sports.v2.BroadcasterAliasCatalogue
 import com.iamskorpz.watchioiptv.feature.sports.v2.FootballDataV2FixtureSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.RoomSportsFixtureCache
 import com.iamskorpz.watchioiptv.feature.sports.v2.SecureApiFootballCredentialStore
@@ -64,6 +65,7 @@ import com.iamskorpz.watchioiptv.feature.sports.v2.SecureTheSportsDbCredentialSt
 import com.iamskorpz.watchioiptv.feature.sports.v2.SoccersApiBroadcastApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.SoccersApiBroadcastSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsV2SourceSelector
+import com.iamskorpz.watchioiptv.feature.sports.v2.ProviderChannelMatcherV2
 import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastSource
 
@@ -172,15 +174,16 @@ class AppContainer(context: Context) {
     fun invalidateSportsCache() {
         (footballScheduleSource as? FootballDataScheduleSource)?.invalidateCache()
     }
-    val sportsRepository = SportsRepository(footballScheduleSource, tvGuideRepository)
     val apiFootballCredentialStore = SecureApiFootballCredentialStore(secretStore)
     private val apiFootballApi = networkModule.retrofit("https://v3.football.api-sports.io/").create(ApiFootballApi::class.java)
     private val footballDataV2Source = FootballDataV2FixtureSource(footballDataApi, footballDataCredentialStore)
     private val apiFootballV2Source = ApiFootballFixtureSource(apiFootballApi, apiFootballCredentialStore)
-    // Existing football-data path remains default. Tests/internal development may construct selector with ApiFootball.
-    private val sportsV2SourceSelector = SportsV2SourceSelector(footballDataV2Source, apiFootballV2Source)
     val sportsV2Repository = CachedFixtureRepository(
-        source = sportsV2SourceSelector.selected(),
+        source = footballDataV2Source,
+        cache = RoomSportsFixtureCache(database.sportsCacheDao()),
+    )
+    private val apiFootballSportsRepository = CachedFixtureRepository(
+        source = apiFootballV2Source,
         cache = RoomSportsFixtureCache(database.sportsCacheDao()),
     )
     val soccersApiCredentialStore = SecureSoccersApiCredentialStore(secretStore)
@@ -194,6 +197,18 @@ class AppContainer(context: Context) {
         theSportsDbCredentialStore,
     )
     val sportsBroadcastRepository = BroadcastRepository(soccersApiBroadcastSource, theSportsDbBroadcastSource)
+    private val sportsBroadcasterAliases = BroadcasterAliasCatalogue.parse(
+        appContext.assets.open("sports_broadcaster_aliases.json").bufferedReader().use { it.readText() },
+    )
+    val sportsRepository = SportsRepository(
+        scheduleSource = footballScheduleSource,
+        tvGuideRepository = tvGuideRepository,
+        footballV2Repository = sportsV2Repository,
+        apiFootballV2Repository = apiFootballSportsRepository,
+        apiFootballCredentialStore = apiFootballCredentialStore,
+        broadcastRepository = sportsBroadcastRepository,
+        matcherV2 = ProviderChannelMatcherV2(sportsBroadcasterAliases),
+    )
     val moviesRepository = MoviesRepository(
         database = database,
         settingsRepository = settingsRepository,

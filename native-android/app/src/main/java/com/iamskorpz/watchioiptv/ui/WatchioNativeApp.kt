@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -187,6 +188,8 @@ import com.iamskorpz.watchioiptv.feature.tvguide.EpgCategoriesScreen
 import com.iamskorpz.watchioiptv.feature.tvguide.EpgCategoriesViewModel
 import com.iamskorpz.watchioiptv.feature.sports.SportsScreen
 import com.iamskorpz.watchioiptv.feature.sports.SportsViewModel
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcastSettingsState
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcastSettingsViewModel
 import com.iamskorpz.watchioiptv.core.util.SystemWatchioClock
 import com.iamskorpz.watchioiptv.domain.model.InputMode
 import com.iamskorpz.watchioiptv.domain.model.AnnouncementAction
@@ -429,7 +432,10 @@ fun WatchioNativeApp(
                     },
                 )
                 val sportsState by sportsViewModel.state.collectAsStateWithLifecycle()
-                LaunchedEffect(Unit) { sportsViewModel.retry() }
+                DisposableEffect(sportsViewModel) {
+                    sportsViewModel.enter()
+                    onDispose { sportsViewModel.leave() }
+                }
                 SportsScreen(
                     state = sportsState,
                     onPreviousDay = sportsViewModel::previousDay,
@@ -1098,9 +1104,17 @@ fun WatchioNativeApp(
             composable("settings/football-data") {
                 val footballDataViewModel: FootballDataSettingsViewModel = viewModel(factory = footballDataSettingsFactory(container))
                 val state by footballDataViewModel.state.collectAsStateWithLifecycle()
-                SettingsDetailScreen("Football Data", onBack = { navController.popBackStack() }) {
+                val broadcastViewModel: SportsBroadcastSettingsViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T = SportsBroadcastSettingsViewModel(container.soccersApiCredentialStore) as T
+                    },
+                )
+                val broadcastState by broadcastViewModel.state.collectAsStateWithLifecycle()
+                SettingsDetailScreen("Sports Data", onBack = { navController.popBackStack() }) {
                     FootballDataSettingsContent(
                         state = state,
+                        broadcastState = broadcastState,
                         onInputChanged = footballDataViewModel::updateInput,
                         onSave = footballDataViewModel::validateAndSave,
                         onRemove = footballDataViewModel::requestRemove,
@@ -1108,6 +1122,10 @@ fun WatchioNativeApp(
                         onConfirmRemove = footballDataViewModel::confirmRemove,
                         onGetFreeApiKey = { openExternalUrl(context, FOOTBALL_DATA_REGISTRATION_URL) },
                         onOpenAttribution = { openExternalUrl(context, FOOTBALL_DATA_HOME_URL) },
+                        onBroadcastUsernameChanged = broadcastViewModel::updateUsername,
+                        onBroadcastTokenChanged = broadcastViewModel::updateToken,
+                        onSaveBroadcast = broadcastViewModel::save,
+                        onRemoveBroadcast = broadcastViewModel::remove,
                     )
                 }
             }
@@ -2884,7 +2902,7 @@ private fun SettingsRootScreen(
             SettingsCategory("Quick Login", "Move your login from phone to TV", WatchioIconKind.QuickLogin, WatchioIconKind.QuickLogin.identityColor(), onQuickLogin, "settings-quick-login"),
             SettingsCategory("Player Settings", "Playback and video settings", WatchioIconKind.Player, WatchioIconKind.Player.identityColor(), onPlayer, "settings-player-settings"),
             SettingsCategory("EPG Settings", "Guide and programme settings", WatchioIconKind.Guide, WatchioIconKind.Guide.identityColor(), onEpg, "settings-epg-settings"),
-            SettingsCategory("Football Data", "Configure Sports fixture data", WatchioIconKind.Football, WatchioIconColors.Football, onFootballData, "settings-football-data"),
+            SettingsCategory("Sports Data", "Configure fixture and broadcast data", WatchioIconKind.Football, WatchioIconColors.Football, onFootballData, "settings-football-data"),
             SettingsCategory("Parental Controls", "Restrict content and settings", WatchioIconKind.Parental, WatchioIconKind.Parental.identityColor(), onParental, "settings-parental-controls"),
             SettingsCategory("Stream Format", "Choose your preferred format", WatchioIconKind.StreamFormat, WatchioIconKind.StreamFormat.identityColor(), onStreamFormat, "settings-stream-format"),
             SettingsCategory("Input Mode", "Mobile touch or TV remote controls", WatchioIconKind.InputMode, WatchioIconKind.InputMode.identityColor(), onInputMode, "settings-input-mode"),
@@ -2998,6 +3016,7 @@ private fun SettingsPlaceholderScreen(title: String, message: String, onBack: ()
 @Composable
 private fun FootballDataSettingsContent(
     state: FootballDataSettingsUiState,
+    broadcastState: SportsBroadcastSettingsState,
     onInputChanged: (String) -> Unit,
     onSave: () -> Unit,
     onRemove: () -> Unit,
@@ -3005,6 +3024,10 @@ private fun FootballDataSettingsContent(
     onConfirmRemove: () -> Unit,
     onGetFreeApiKey: () -> Unit,
     onOpenAttribution: () -> Unit,
+    onBroadcastUsernameChanged: (String) -> Unit,
+    onBroadcastTokenChanged: (String) -> Unit,
+    onSaveBroadcast: () -> Unit,
+    onRemoveBroadcast: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
@@ -3038,6 +3061,44 @@ private fun FootballDataSettingsContent(
         }
         TextButton(onClick = onOpenAttribution, modifier = Modifier.testTag("football-data-attribution")) {
             Text("Data provided by football-data.org")
+        }
+        HorizontalDivider(color = colors.surfaceElevated)
+        Text("Broadcast matching", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+        Text("Optional credentials add official broadcaster information. Stored values are never displayed.", color = colors.textSecondary)
+        OutlinedTextField(
+            value = broadcastState.usernameInput,
+            onValueChange = onBroadcastUsernameChanged,
+            label = { Text("Broadcast service user") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().testTag("sports-broadcast-user"),
+        )
+        OutlinedTextField(
+            value = broadcastState.tokenInput,
+            onValueChange = onBroadcastTokenChanged,
+            label = { Text("Broadcast service token") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onSaveBroadcast() }),
+            modifier = Modifier.fillMaxWidth().testTag("sports-broadcast-token"),
+        )
+        Text(
+            when {
+                broadcastState.saved -> "Broadcast credentials saved"
+                broadcastState.configured -> "Broadcast matching configured"
+                else -> "Broadcast matching not configured"
+            },
+            color = colors.textSecondary,
+            modifier = Modifier.testTag("sports-broadcast-status"),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
+            WatchioButton(
+                "Save Broadcast Access",
+                onSaveBroadcast,
+                enabled = broadcastState.usernameInput.isNotBlank() && broadcastState.tokenInput.isNotBlank(),
+                modifier = Modifier.testTag("sports-broadcast-save"),
+            )
+            if (broadcastState.configured) WatchioButton("Remove Broadcast Access", onRemoveBroadcast, modifier = Modifier.testTag("sports-broadcast-remove"), variant = WatchioButtonVariant.Secondary)
         }
     }
     if (state.removeConfirmationVisible) {

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "broadcasters": [
+    { "canonical": "Sky Sports Main Event", "serviceType": "LINEAR_TV", "aliases": ["sky sports main event", "sky main event", "sky sports me"] },
+    { "canonical": "Sky Sports Premier League", "serviceType": "LINEAR_TV", "aliases": ["sky sports premier league", "sky premier league", "sky sports pl"] },
+    { "canonical": "Sky Sports Football", "serviceType": "LINEAR_TV", "aliases": ["sky sports football", "sky football"] },
+    { "canonical": "Sky Sports+", "serviceType": "LINEAR_TV", "aliases": ["sky sports plus", "sky sports+"] },
+    { "canonical": "TNT Sports 1", "serviceType": "LINEAR_TV", "aliases": ["tnt sports 1", "tnt sport 1", "tnt1"] },
+    { "canonical": "TNT Sports 2", "serviceType": "LINEAR_TV", "aliases": ["tnt sports 2", "tnt sport 2", "tnt2"] },
+    { "canonical": "TNT Sports 3", "serviceType": "LINEAR_TV", "aliases": ["tnt sports 3", "tnt sport 3", "tnt3"] },
+    { "canonical": "TNT Sports 4", "serviceType": "LINEAR_TV", "aliases": ["tnt sports 4", "tnt sport 4", "tnt4"] },
+    { "canonical": "TNT Sports 5", "serviceType": "LINEAR_TV", "aliases": ["tnt sports 5", "tnt sport 5", "tnt5"] },
+    { "canonical": "TNT Sports 6", "serviceType": "LINEAR_TV", "aliases": ["tnt sports 6", "tnt sport 6", "tnt6"] },
+    { "canonical": "TNT Sports 7", "serviceType": "LINEAR_TV", "aliases": ["tnt sports 7", "tnt sport 7", "tnt7"] },
+    { "canonical": "Premier Sports 1", "serviceType": "LINEAR_TV", "aliases": ["premier sports 1", "premier sport 1"] },
+    { "canonical": "Premier Sports 2", "serviceType": "LINEAR_TV", "aliases": ["premier sports 2", "premier sport 2"] },
+    { "canonical": "NOW", "serviceType": "STREAMING", "aliases": ["now", "now tv"] },
+    { "canonical": "Sky Go", "serviceType": "STREAMING", "aliases": ["sky go", "sky go uk", "sky go extra"] },
+    { "canonical": "HBO Max", "serviceType": "STREAMING", "aliases": ["hbo max", "max"] },
+    { "canonical": "BBC Radio 5 Live", "serviceType": "RADIO", "aliases": ["bbc radio 5 live", "radio 5 live"] },
+    { "canonical": "TalkSport", "serviceType": "RADIO", "aliases": ["talksport", "talksport 2", "talksport radio uk"] }
+  ]
+}

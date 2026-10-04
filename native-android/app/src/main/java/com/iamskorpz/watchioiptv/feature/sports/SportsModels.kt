@@ -3,6 +3,8 @@ package com.iamskorpz.watchioiptv.feature.sports
 import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import java.time.Instant
 import java.time.LocalDate
+import com.iamskorpz.watchioiptv.feature.sports.v2.MatchChannelConfidence
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcast
 
 enum class SportsFixtureStatus { Scheduled, Live, Finished, Postponed, Cancelled }
 
@@ -16,6 +18,10 @@ data class SportsFixture(
     val status: SportsFixtureStatus,
     val homeScore: Int? = null,
     val awayScore: Int? = null,
+    val homeLogoUrl: String? = null,
+    val awayLogoUrl: String? = null,
+    val minute: Int? = null,
+    val v2Fixture: com.iamskorpz.watchioiptv.feature.sports.v2.SportsFixture? = null,
 )
 
 data class SportsCompetition(val id: String, val name: String, val displayOrder: Int, val fixtures: List<SportsFixture>)
@@ -29,13 +35,22 @@ data class SportsChannelCandidate(
     val confidence: SportsMatchConfidence,
     val matchedProgrammeTitle: String? = null,
     val reasons: List<String> = emptyList(),
+    val v2Confidence: MatchChannelConfidence? = null,
+    val broadcasterName: String? = null,
+    val broadcasterCountry: String? = null,
+    val isBackup: Boolean = false,
 )
 
 sealed interface SportsLoadState {
     data object Loading : SportsLoadState
     data object SetupRequired : SportsLoadState
     data object CredentialNeedsAttention : SportsLoadState
-    data class Ready(val schedule: SportsDateSchedule) : SportsLoadState
+    data class Ready(
+        val schedule: SportsDateSchedule,
+        val broadcasts: Map<String, List<SportsBroadcast>> = emptyMap(),
+        val broadcastUnavailable: Set<String> = emptySet(),
+        val fromCache: Boolean = false,
+    ) : SportsLoadState
     data class Error(
         val message: String,
         val detail: String? = null,

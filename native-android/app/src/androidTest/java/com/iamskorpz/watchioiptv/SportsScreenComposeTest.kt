@@ -3,11 +3,13 @@ package com.iamskorpz.watchioiptv
 import androidx.activity.ComponentActivity
 import android.content.pm.ActivityInfo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.unit.dp
@@ -59,7 +61,7 @@ class SportsScreenComposeTest {
 
     @Test fun competitionGroupingAndFixtureAreVisible() {
         setContent(readyState())
-        composeRule.onNodeWithText("Premier League").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Premier League").assertCountEquals(2)
         composeRule.onNodeWithText("Arsenal").assertIsDisplayed()
         composeRule.onNodeWithText("Chelsea").assertIsDisplayed()
     }
@@ -68,7 +70,7 @@ class SportsScreenComposeTest {
         setContent(readyState())
         val bounds = composeRule.onNodeWithTag("fixture-1").getUnclippedBoundsInRoot()
         val height = bounds.bottom - bounds.top
-        assertTrue(height <= 72.dp)
+        assertTrue(height <= 132.dp)
     }
 
     @Test fun emptyStateIsPolishedAndBoundedToContent() {
@@ -97,7 +99,7 @@ class SportsScreenComposeTest {
     @Test fun watchInvokesFixtureSelection() {
         var watched: SportsFixture? = null
         setContent(readyState(), onWatch = { watched = it })
-        composeRule.onNodeWithText("WATCH").performClick()
+        composeRule.onNodeWithTag("fixture-1").performClick()
         composeRule.runOnIdle { assertEquals(fixture, watched) }
     }
 
@@ -106,13 +108,13 @@ class SportsScreenComposeTest {
         val candidate = SportsChannelCandidate(channel, 130, SportsMatchConfidence.High, "Arsenal v Chelsea")
         setContent(readyState().copy(selectedFixture = fixture, candidates = listOf(candidate)), onPlay = { played = it })
         composeRule.onNodeWithText("Available channels").assertIsDisplayed()
-        composeRule.onNodeWithText("PLAY").performClick()
+        composeRule.onNodeWithText("WATCH LIVE").performClick()
         composeRule.runOnIdle { assertEquals(channel, played) }
     }
 
     @Test fun noMatchMessageIsVisible() {
         setContent(readyState().copy(selectedFixture = fixture))
-        composeRule.onNodeWithText("No matching TV guide entries were found. No sports channels are available in this provider.").assertIsDisplayed()
+        composeRule.onNodeWithText("No matching channel found for this provider.").assertIsDisplayed()
     }
 
     @Test fun rateLimitShowsFriendlyMessageAndDisablesRetry() {

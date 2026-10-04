@@ -82,6 +82,16 @@ class SoccersApiBroadcastSourceTest {
         assertEquals(SportsSourceResult.Failure(SportsSourceError.RateLimited(null)), source().broadcasts(fixture()))
     }
 
+    @Test fun sameDateFixturesReuseOneBroadcastScheduleRequest() = runTest {
+        val first = match(id = "500")
+        val second = """{"id":"501","time":{"timestamp":"1791126000"},"teams":{"home":{"id":3,"name":"Liverpool"},"away":{"id":4,"name":"Everton"}},"league":{"id":39,"name":"Premier League"},"tvs":[${tv("12", "Sky Sports Premier League", "gb")}]}"""
+        server.enqueue(json(envelope(listOf(first, second))))
+        val source = source()
+        assertTrue(source.broadcasts(fixture()) is SportsSourceResult.Success)
+        assertTrue(source.broadcasts(fixture("101", "Liverpool", "Everton", "2026-10-04T15:00:00Z")) is SportsSourceResult.Success)
+        assertEquals(1, server.requestCount)
+    }
+
     private fun source(credentials: SoccersApiCredentials? = SoccersApiCredentials("synthetic-user", "synthetic-token"), timeoutMs: Long = 2_000): SoccersApiBroadcastSource {
         val client = OkHttpClient.Builder().readTimeout(timeoutMs, TimeUnit.MILLISECONDS).build()
         val api = Retrofit.Builder().baseUrl(server.url("/")).client(client)
@@ -94,12 +104,12 @@ class SoccersApiBroadcastSourceTest {
         }, Clock.fixed(now, ZoneOffset.UTC))
     }
 
-    private fun fixture() = SportsFixture(
-        SportsSourceIdentity(SportsDataSource.ApiFootball, "100"),
+    private fun fixture(id: String = "100", home: String = "Arsenal", away: String = "Chelsea", kickoff: String = "2026-10-04T14:00:00Z") = SportsFixture(
+        SportsSourceIdentity(SportsDataSource.ApiFootball, id),
         competition = SportsCompetition(SportsSourceIdentity(SportsDataSource.ApiFootball, "39"), name = "Premier League"),
-        homeTeam = SportsTeam(SportsSourceIdentity(SportsDataSource.ApiFootball, "1"), displayName = "Arsenal"),
-        awayTeam = SportsTeam(SportsSourceIdentity(SportsDataSource.ApiFootball, "2"), displayName = "Chelsea"),
-        kickoff = Instant.parse("2026-10-04T14:00:00Z"), state = SportsFixtureState.Scheduled, fetchedAt = now,
+        homeTeam = SportsTeam(SportsSourceIdentity(SportsDataSource.ApiFootball, "$id-home"), displayName = home),
+        awayTeam = SportsTeam(SportsSourceIdentity(SportsDataSource.ApiFootball, "$id-away"), displayName = away),
+        kickoff = Instant.parse(kickoff), state = SportsFixtureState.Scheduled, fetchedAt = now,
     )
 
     private fun match(id: String = "500", tvs: String = "${tv("10", "Sky Sports Main Event", "gb")},${tv("11", "NBC", "us")}") =

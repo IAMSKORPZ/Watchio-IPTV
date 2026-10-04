@@ -3,12 +3,15 @@ package com.iamskorpz.watchioiptv.feature.sports.v2
 import java.io.IOException
 import java.time.Clock
 import java.time.Instant
+import java.time.Duration
 import java.time.ZoneOffset
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import java.time.LocalDate
+import java.util.concurrent.ConcurrentHashMap
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Query
@@ -72,31 +75,38 @@ class SoccersApiBroadcastSource(
 
     @Volatile var requestsLeft: Int? = null
         private set
+    private val schedules = ConcurrentHashMap<LocalDate, CachedSchedule>()
 
     override suspend fun broadcasts(fixture: SportsFixture): SportsSourceResult<List<SportsBroadcast>> {
         val credentials = credentialStore.get()
             ?: return SportsSourceResult.Failure(SportsSourceError.Unauthorized)
         val fetchedAt = clock.instant()
         return try {
-            val matches = mutableListOf<SoccersApiMatchDto>()
-            var page = 1
-            var pages: Int
-            do {
-                val response = api.schedule(
-                    username = credentials.username,
-                    token = credentials.token,
-                    date = fixture.kickoff.atZone(ZoneOffset.UTC).toLocalDate().toString(),
-                    page = page,
-                )
-                val failure = response.toSoccersError(fetchedAt)
-                if (failure != null) return failure
-                val body = response.body() ?: return SportsSourceResult.NoData
-                if (body.meta.msg.isNotBlank()) return body.meta.msg.toSoccersError()
-                requestsLeft = body.meta.requestsLeft
-                matches += body.data
-                pages = body.meta.pages.coerceAtLeast(1)
-                page++
-            } while (page <= pages)
+            val date = fixture.kickoff.atZone(ZoneOffset.UTC).toLocalDate()
+            val cached = schedules[date]?.takeIf { Duration.between(it.fetchedAt, fetchedAt) < Duration.ofMinutes(30) }
+            val matches = cached?.matches ?: run {
+                val loaded = mutableListOf<SoccersApiMatchDto>()
+                var page = 1
+                var pages: Int
+                do {
+                    val response = api.schedule(
+                        username = credentials.username,
+                        token = credentials.token,
+                        date = date.toString(),
+                        page = page,
+                    )
+                    val failure = response.toSoccersError(fetchedAt)
+                    if (failure != null) return failure
+                    val body = response.body() ?: return SportsSourceResult.NoData
+                    if (body.meta.msg.isNotBlank()) return body.meta.msg.toSoccersError()
+                    requestsLeft = body.meta.requestsLeft
+                    loaded += body.data
+                    pages = body.meta.pages.coerceAtLeast(1)
+                    page++
+                } while (page <= pages)
+                schedules[date] = CachedSchedule(fetchedAt, loaded)
+                loaded
+            }
 
             val candidates = matches.mapNotNull(SoccersApiMatchDto::toCandidate)
             when (val reconciliation = BroadcastFixtureReconciler.reconcile(fixture, candidates)) {
@@ -119,6 +129,8 @@ class SoccersApiBroadcastSource(
         }
     }
 }
+
+private data class CachedSchedule(val fetchedAt: Instant, val matches: List<SoccersApiMatchDto>)
 
 private fun SoccersApiMatchDto.toCandidate(): BroadcastFixtureCandidate? {
     val sourceId = id.text().takeIf(String::isNotBlank) ?: return null

@@ -1391,3 +1391,20 @@ Final pre-commit validation results:
 - Canonical broadcaster aliases are feasible, but aliases must preserve distinct services/channels and distinguish TV, streaming, and radio records rather than collapsing by brand.
 - Focused SoccersAPI source, reconciliation, repository, credential-store, and new normalization tests: PASS. Full JVM suite, `lintDebug`, `assembleDebug`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
 - Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. MAIN, API-22 worktree, BRAVIA, AFTT, releases, versions, signing, and updater manifests remained untouched.
+
+## 2026-10-04 - Sports V2 Phase 4 complete experience
+
+- Completed the one-path Sports V2 experience: API-Football when securely configured and healthy, football-data.org fallback, cached fixture presentation, official broadcast lookup, active-provider channel matching, EPG verification, confidence ranking, explicit channel selection, and the existing Live TV/Media3 playback route.
+- Added a strict versioned bundled broadcaster-alias catalogue and deterministic `ProviderChannelMatcherV2`. Normalization handles Unicode, separators, country prefixes, quality/codec labels, backup/raw/VIP penalties, and numbered-channel conflicts. Linear TV is matchable; streaming and radio records remain metadata only.
+- EPG verification independently scores team aliases, competition, and timezone-safe kickoff proximity while rejecting a clearly conflicting fixture. Confidence is classified as VERIFIED, STRONG, or POSSIBLE; generic sports naming alone never creates a recommendation.
+- Active-provider isolation is retained. Multiple legitimate broadcasters remain available, obvious provider variants are bounded and deterministically ranked, and no provider credentials or stream URLs enter Sports domain records.
+- Removed the obsolete heuristic `SportsChannelMatcher`; V2 is the sole user-visible candidate path.
+- SoccersAPI date schedules now use a 30-minute date cache so fixture cards do not duplicate schedule requests. Broadcast cache remains process-memory; Room remains v7.
+- Sports UI now includes competition filters, compact responsive fixture cards, team-logo fallback, scheduled/live score and minute states, UK/home-nation broadcaster labels, explicit channel chooser, neutral unavailable/no-match states, and refresh-with-cached-content behavior. Playback requires an explicit action and reuses the existing Live TV route.
+- Added minimal Sports Data settings for secure SoccersAPI username/token entry. Stored secrets are never redisplayed. API-Football remains optional; football-data.org remains functional fallback.
+- Full JVM suite: PASS, 1,683/1,683 with zero failures, errors, or skips. `lintDebug`, `assembleDebug`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
+- Authorized S22 isolated Sports Compose class: PASS, 15/15 after correcting one test-only duplicate-text assertion. Replacement debug install: PASS; existing provider/session preserved. Sports opened without crash and empty/date navigation rendered correctly. Seven adjacent days contained no fixtures, so real broadcaster candidates and real playback were not physically verifiable in this pass; deterministic candidate/playback callback coverage passed.
+- Evidence added as untracked files and intentionally excluded from Git. All 427 pre-existing untracked evidence files remain preserved.
+- Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- API-22/AFTT compatibility work remains PARKED. The customer reports the experimental API-22 build works, but compatibility promotion/reconciliation has not been performed.
+- MAIN, API-22 worktree, BRAVIA, AFTT, releases, tags, version metadata, signing, package IDs, update channels, and Room schema were untouched. Push target: `origin/dev` only.
