@@ -1408,3 +1408,4 @@ Final pre-commit validation results:
 - Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - API-22/AFTT compatibility work remains PARKED. The customer reports the experimental API-22 build works, but compatibility promotion/reconciliation has not been performed.
 - MAIN, API-22 worktree, BRAVIA, AFTT, releases, tags, version metadata, signing, package IDs, update channels, and Room schema were untouched. Push target: `origin/dev` only.
+- Feature commit `fb99e109074f12ab8d8d4a5b81d9549199b5cb5b` (`feat(sports): complete sports v2 experience`) pushed successfully to `origin/dev`.
