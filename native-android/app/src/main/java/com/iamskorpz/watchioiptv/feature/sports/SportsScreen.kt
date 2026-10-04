@@ -1,8 +1,15 @@
 package com.iamskorpz.watchioiptv.feature.sports
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -31,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.focus.FocusRequester
@@ -51,13 +60,18 @@ import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.window.Dialog
 import com.iamskorpz.watchioiptv.feature.sports.v2.MatchChannelConfidence
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcast
 
@@ -74,15 +88,33 @@ fun SportsScreen(
     onConfigureApiKey: () -> Unit,
     onGetFreeApiKey: () -> Unit,
     onBack: () -> Unit,
+    onSelectDate: (LocalDate) -> Unit = {},
+    onToggleReminder: (SportsFixture) -> Unit = {},
+    onDismissAlert: () -> Unit = {},
+    onWatchAlert: () -> Unit = {},
 ) {
     val colors = LocalWatchioColors.current
     var selectedCompetition by remember(state.selectedDate) { mutableStateOf<String?>(null) }
-    BackHandler(onBack = if (state.selectedFixture != null) onCloseCandidates else onBack)
+    var calendarOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val requestReminder: (SportsFixture) -> Unit = { fixture ->
+        onToggleReminder(fixture)
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    BackHandler(onBack = when {
+        calendarOpen -> ({ calendarOpen = false })
+        state.selectedFixture != null -> onCloseCandidates
+        state.matchAlert != null -> onDismissAlert
+        else -> onBack
+    })
     Box(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).testTag("sports-background")) {
     Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp).testTag("sports-screen")) {
         WatchioPageHeader(title = "SPORTS", onBack = onBack, testTagPrefix = "sports")
         Spacer(Modifier.height(8.dp))
-        SportsDateNavigator(state.selectedDate, onPreviousDay, onToday, onNextDay)
+        SportsDateNavigator(state.selectedDate, onPreviousDay, { calendarOpen = true }, onNextDay)
         if (state.refreshing) {
             Spacer(Modifier.height(4.dp))
             Text("Refreshing sports data…", color = colors.textSecondary, modifier = Modifier.testTag("sports-refreshing"))
@@ -113,7 +145,7 @@ fun SportsScreen(
                 }
                 is SportsLoadState.Ready -> if (load.schedule.competitions.isEmpty()) {
                     Column(Modifier.align(Alignment.Center).testTag("sports-empty"), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(if (state.selectedDate == LocalDate.now()) "No football fixtures today" else "No football fixtures on this date", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+                        Text("NO MATCHES ON THIS DATE", color = colors.textPrimary, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(6.dp))
                         Text("Try another date using the controls above.", color = colors.textSecondary)
                     }
@@ -135,7 +167,14 @@ fun SportsScreen(
                             }
                         }
                         items(competition.fixtures, key = { "fixture-${it.id}" }) { fixture ->
-                            FixtureCard(fixture, load.broadcasts[fixture.id].orEmpty(), fixture.id in load.broadcastUnavailable, onWatch)
+                            FixtureCard(
+                                fixture,
+                                load.broadcasts[fixture.id].orEmpty(),
+                                fixture.id in load.broadcastUnavailable,
+                                fixture.reminderKey() in state.reminderKeys,
+                                onWatch,
+                                requestReminder,
+                            )
                         }
                     }
                     }
@@ -144,7 +183,9 @@ fun SportsScreen(
         }
     }
     }
+    if (calendarOpen) SportsCalendarDialog(state.selectedDate, { calendarOpen = false }, { calendarOpen = false; onSelectDate(it) })
     if (state.selectedFixture != null) CandidateDialog(state, onCloseCandidates, onPlay)
+    state.matchAlert?.let { MatchAlertDialog(it, state.alertCandidates, state.alertCandidatesLoading, onDismissAlert, onWatchAlert) }
 }
 
 @Composable
@@ -175,7 +216,7 @@ private fun FootballDataSetupState(
 private fun SportsDateNavigator(
     date: LocalDate,
     onPreviousDay: () -> Unit,
-    onToday: () -> Unit,
+    onOpenCalendar: () -> Unit,
     onNextDay: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
@@ -183,13 +224,11 @@ private fun SportsDateNavigator(
         val compact = maxWidth < 600.dp
         if (compact) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(date.format(DateTimeFormatter.ofPattern("EEEE d MMMM")), color = colors.textPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.testTag("sports-date"))
-                Spacer(Modifier.height(6.dp))
-                DateControls(onPreviousDay, onToday, onNextDay)
+                DateControls(onPreviousDay, onOpenCalendar, onNextDay, date)
             }
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                DateControls(onPreviousDay, onToday, onNextDay, date)
+                DateControls(onPreviousDay, onOpenCalendar, onNextDay, date)
             }
         }
     }
@@ -198,7 +237,7 @@ private fun SportsDateNavigator(
 @Composable
 private fun DateControls(
     onPreviousDay: () -> Unit,
-    onToday: () -> Unit,
+    onOpenCalendar: () -> Unit,
     onNextDay: () -> Unit,
     date: LocalDate? = null,
 ) {
@@ -215,13 +254,20 @@ private fun DateControls(
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         WatchioButton("‹", onPreviousDay, Modifier.width(52.dp).focusRequester(previousFocus).focusProperties { right = todayFocus }.testTag("sports-previous").semantics { contentDescription = "Previous day" }, WatchioButtonVariant.Ghost)
-        if (date != null) Text(date.format(DateTimeFormatter.ofPattern("EEEE d MMMM")), color = colors.textPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.widthIn(min = 220.dp).testTag("sports-date"), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        WatchioButton("TODAY", onToday, Modifier.width(96.dp).focusRequester(todayFocus).focusProperties { left = previousFocus; right = nextFocus }.testTag("sports-today"), WatchioButtonVariant.Secondary)
+        val label = if (date == LocalDate.now()) "TODAY • ${date.format(DateTimeFormatter.ofPattern("d MMM"))}" else date?.format(DateTimeFormatter.ofPattern("EEE • d MMM")) ?: "CHOOSE DATE"
+        WatchioButton(label, onOpenCalendar, Modifier.width(190.dp).focusRequester(todayFocus).focusProperties { left = previousFocus; right = nextFocus }.testTag("sports-today").semantics { contentDescription = "Choose sports date" }, WatchioButtonVariant.Secondary)
         WatchioButton("›", onNextDay, Modifier.width(52.dp).focusRequester(nextFocus).focusProperties { left = todayFocus }.testTag("sports-next").semantics { contentDescription = "Next day" }, WatchioButtonVariant.Ghost)
     }
 }
 
-@Composable private fun FixtureCard(fixture: SportsFixture, broadcasts: List<SportsBroadcast>, broadcastUnavailable: Boolean, onWatch: (SportsFixture) -> Unit) {
+@Composable private fun FixtureCard(
+    fixture: SportsFixture,
+    broadcasts: List<SportsBroadcast>,
+    broadcastUnavailable: Boolean,
+    reminderOn: Boolean,
+    onWatch: (SportsFixture) -> Unit,
+    onToggleReminder: (SportsFixture) -> Unit,
+) {
     val colors = LocalWatchioColors.current
     val ukBroadcasts = broadcasts.filter { it.countryOrRegion == "GB" || it.countryOrRegion?.startsWith("GB-") == true }.take(3)
     WatchioCard(modifier = Modifier.fillMaxWidth().testTag("fixture-${fixture.id}"), minHeight = 88.dp, onClick = { onWatch(fixture) }, contentDescription = "Open ${fixture.homeTeam} versus ${fixture.awayTeam}") {
@@ -247,7 +293,17 @@ private fun DateControls(
                     modifier = Modifier.weight(1f),
                     maxLines = 2,
                 )
-                if (ukBroadcasts.isNotEmpty()) WatchioButton("FIND CHANNEL", { onWatch(fixture) }, modifier = Modifier.width(126.dp), variant = WatchioButtonVariant.CompactAction)
+                if (fixture.status == SportsFixtureStatus.Scheduled) {
+                    WatchioButton(
+                        if (reminderOn) "NOTIFICATION ON" else "NOTIFY ME",
+                        { onToggleReminder(fixture) },
+                        modifier = Modifier.width(150.dp).testTag("fixture-reminder-${fixture.id}"),
+                        variant = if (reminderOn) WatchioButtonVariant.Primary else WatchioButtonVariant.Secondary,
+                    )
+                }
+                if (ukBroadcasts.isNotEmpty() && fixture.status != SportsFixtureStatus.Finished && fixture.status != SportsFixtureStatus.Cancelled && fixture.status != SportsFixtureStatus.Postponed) {
+                    WatchioButton(if (fixture.status == SportsFixtureStatus.Live) "WATCH LIVE" else "FIND CHANNEL", { onWatch(fixture) }, modifier = Modifier.width(126.dp), variant = WatchioButtonVariant.CompactAction)
+                }
             }
         }
     }
@@ -260,6 +316,88 @@ private fun DateControls(
             Text(name.take(1), color = colors.textPrimary, fontWeight = FontWeight.Bold)
         }
     } else AsyncImage(url, name, Modifier.size(34.dp).clip(CircleShape), contentScale = ContentScale.Fit)
+}
+
+@Composable
+private fun SportsCalendarDialog(selectedDate: LocalDate, onDismiss: () -> Unit, onSelect: (LocalDate) -> Unit) {
+    val colors = LocalWatchioColors.current
+    var month by remember(selectedDate) { mutableStateOf(YearMonth.from(selectedDate)) }
+    val first = month.atDay(1)
+    val leading = first.dayOfWeek.value - 1
+    val days = List(leading) { null } + (1..month.lengthOfMonth()).map(month::atDay)
+    val cells = days + List((7 - days.size % 7) % 7) { null }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.widthIn(max = 720.dp).clip(RoundedCornerShape(24.dp)).background(colors.dialogSurface).padding(18.dp).testTag("sports-calendar"),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                WatchioButton("‹", { month = month.minusMonths(1) }, Modifier.width(52.dp).testTag("sports-calendar-previous-month"), WatchioButtonVariant.Ghost)
+                Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")), color = colors.textPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.testTag("sports-calendar-month"))
+                WatchioButton("›", { month = month.plusMonths(1) }, Modifier.width(52.dp).testTag("sports-calendar-next-month"), WatchioButtonVariant.Ghost)
+            }
+            Row(Modifier.fillMaxWidth()) { listOf("M", "T", "W", "T", "F", "S", "S").forEach { Text(it, color = colors.textSecondary, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
+            cells.chunked(7).forEach { week ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    week.forEach { day ->
+                        if (day == null) Spacer(Modifier.weight(1f).height(42.dp)) else CalendarDayCell(day, day == selectedDate, { onSelect(day) }, Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarDayCell(day: LocalDate, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalWatchioColors.current
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier.height(42.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .border(if (focused) 3.dp else 0.dp, if (focused) colors.focusBorder else Color.Transparent, shape)
+            .padding(if (focused) 4.dp else 0.dp)
+            .clip(shape)
+            .background(if (selected) colors.liveTvAccent else colors.surfaceElevated)
+            .clickable(onClick = onClick)
+            .testTag("sports-calendar-day-$day"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(day.dayOfMonth.toString(), color = if (selected) colors.surfaceBase else colors.textPrimary, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun MatchAlertDialog(reminder: MatchReminder, candidates: List<SportsChannelCandidate>, loading: Boolean, onDismiss: () -> Unit, onWatch: () -> Unit) {
+    val colors = LocalWatchioColors.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("sports-match-alert"),
+        title = { Text("MATCH STARTING SOON", color = colors.liveTvAccent, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(reminder.homeTeam, color = colors.textPrimary, fontWeight = FontWeight.Bold)
+                Text("vs", color = colors.textSecondary)
+                Text(reminder.awayTeam, color = colors.textPrimary, fontWeight = FontWeight.Bold)
+                Text("Kick-off • ${formatKickoff(Instant.ofEpochMilli(reminder.kickoffEpochMs))}", color = colors.textSecondary)
+                Text(reminder.competitionName, color = colors.textSecondary)
+                when {
+                    loading -> Text("Checking your provider…", color = colors.textSecondary)
+                    candidates.isEmpty() -> Text("No matching channel currently available", color = colors.textSecondary)
+                    else -> Text(candidates.first().channel.name, color = colors.textPrimary)
+                }
+            }
+        },
+        confirmButton = {
+            if (candidates.isNotEmpty()) WatchioButton(
+                if (candidates.first().v2Confidence == MatchChannelConfidence.POSSIBLE) "CHOOSE CHANNEL" else "WATCH NOW",
+                onWatch,
+                modifier = Modifier.testTag("sports-alert-watch"),
+            )
+        },
+        dismissButton = { WatchioButton("DISMISS", onDismiss, modifier = Modifier.testTag("sports-alert-dismiss"), variant = WatchioButtonVariant.Ghost) },
+    )
 }
 
 @Composable private fun CandidateDialog(state: SportsUiState, onClose: () -> Unit, onPlay: (LiveTvChannel) -> Unit) {

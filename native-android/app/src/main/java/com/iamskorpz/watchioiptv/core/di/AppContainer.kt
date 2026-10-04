@@ -51,6 +51,8 @@ import com.iamskorpz.watchioiptv.feature.sports.RemoteFootballDataCredentialVali
 import com.iamskorpz.watchioiptv.feature.sports.SecureFootballDataCredentialStore
 import com.iamskorpz.watchioiptv.feature.sports.FootballDataScheduleSource
 import com.iamskorpz.watchioiptv.feature.sports.SportsRepository
+import com.iamskorpz.watchioiptv.feature.sports.SportsReminderRepository
+import com.iamskorpz.watchioiptv.feature.sports.WorkManagerSportsReminderScheduler
 import com.iamskorpz.watchioiptv.feature.sports.UitestFootballScheduleSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.CachedFixtureRepository
 import com.iamskorpz.watchioiptv.feature.sports.v2.ApiFootballApi
@@ -208,6 +210,10 @@ class AppContainer(context: Context) {
         apiFootballCredentialStore = apiFootballCredentialStore,
         broadcastRepository = sportsBroadcastRepository,
         matcherV2 = ProviderChannelMatcherV2(sportsBroadcasterAliases),
+    )
+    val sportsReminderRepository = SportsReminderRepository(
+        appContext.watchioDataStore,
+        WorkManagerSportsReminderScheduler(appContext),
     )
     val moviesRepository = MoviesRepository(
         database = database,

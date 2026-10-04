@@ -270,6 +270,8 @@ internal fun navigateHomeAsRoot(navController: NavHostController) {
 fun WatchioNativeApp(
     container: AppContainer,
     navController: NavHostController = rememberNavController(),
+    openSportsRequest: String? = null,
+    onSportsRequestConsumed: () -> Unit = {},
 ) {
     val themeState by container.settingsRepository.theme.collectAsStateWithLifecycle(initialValue = com.iamskorpz.watchioiptv.ui.theme.WatchioThemeState())
     val activeAppearance by container.settingsRepository.activeAppearance.collectAsStateWithLifecycle(initialValue = WatchioThemeDefinition.WatchioDefault)
@@ -278,6 +280,12 @@ fun WatchioNativeApp(
     val context = LocalContext.current
     val detectedDeviceInput = remember(context) { context.detectDeviceInput() }
     val effectiveInputMode = if (inputMode == InputMode.Auto) detectedDeviceInput.inputMode else inputMode
+    LaunchedEffect(openSportsRequest) {
+        if (openSportsRequest != null) {
+            navController.navigate("sports") { launchSingleTop = true }
+            onSportsRequestConsumed()
+        }
+    }
     val announcementsViewModel: AnnouncementsViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -428,7 +436,7 @@ fun WatchioNativeApp(
                 val sportsViewModel: SportsViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T = SportsViewModel(container.sportsRepository) as T
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T = SportsViewModel(container.sportsRepository, container.sportsReminderRepository) as T
                     },
                 )
                 val sportsState by sportsViewModel.state.collectAsStateWithLifecycle()
@@ -453,6 +461,10 @@ fun WatchioNativeApp(
                     onConfigureApiKey = { navController.navigate("settings/football-data") },
                     onGetFreeApiKey = { openExternalUrl(context, FOOTBALL_DATA_REGISTRATION_URL) },
                     onBack = { navController.popBackStack() },
+                    onSelectDate = sportsViewModel::chooseDate,
+                    onToggleReminder = sportsViewModel::toggleReminder,
+                    onDismissAlert = sportsViewModel::dismissMatchAlert,
+                    onWatchAlert = sportsViewModel::watchMatchAlert,
                 )
             }
             composable("announcements") {

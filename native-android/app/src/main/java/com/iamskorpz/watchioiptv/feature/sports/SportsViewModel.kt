@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 data class SportsUiState(
@@ -19,18 +20,23 @@ data class SportsUiState(
     val candidates: List<SportsChannelCandidate> = emptyList(),
     val candidateError: String? = null,
     val refreshing: Boolean = false,
+    val reminderKeys: Set<String> = emptySet(),
+    val matchAlert: MatchReminder? = null,
+    val alertCandidates: List<SportsChannelCandidate> = emptyList(),
+    val alertCandidatesLoading: Boolean = false,
 )
 
 class SportsViewModel private constructor(
     private val repository: SportsRepository?,
+    private val reminderRepository: SportsReminderRepository?,
     private val clock: Clock = Clock.systemDefaultZone(),
     private val scheduleLoader: suspend (LocalDate) -> Result<SportsDateSchedule>,
 ) : ViewModel() {
-    constructor(repository: SportsRepository, clock: Clock = Clock.systemDefaultZone()) :
-        this(repository, clock, repository::schedule)
+    constructor(repository: SportsRepository, reminderRepository: SportsReminderRepository? = null, clock: Clock = Clock.systemDefaultZone()) :
+        this(repository, reminderRepository, clock, repository::schedule)
 
     internal constructor(clock: Clock, scheduleLoader: suspend (LocalDate) -> Result<SportsDateSchedule>) :
-        this(null, clock, scheduleLoader)
+        this(null, null, clock, scheduleLoader)
 
     private val mutableState = MutableStateFlow(SportsUiState(LocalDate.now(clock)))
     val state: StateFlow<SportsUiState> = mutableState.asStateFlow()
@@ -39,12 +45,32 @@ class SportsViewModel private constructor(
     private var broadcastJob: Job? = null
     private var livePollingJob: Job? = null
     private var screenActive = false
+    private var currentReminders: List<MatchReminder> = emptyList()
 
-    init { load() }
+    init {
+        load()
+        reminderRepository?.let { reminders ->
+            viewModelScope.launch {
+                reminders.reminders.collectLatest { rows ->
+                    currentReminders = rows
+                    val scheduled = rows.filter { it.state == MatchReminderState.SCHEDULED }
+                    val due = scheduled.firstOrNull { it.triggerEpochMs <= clock.millis() }
+                    mutableState.value = mutableState.value.copy(
+                        reminderKeys = scheduled.mapTo(mutableSetOf(), MatchReminder::fixtureKey),
+                        matchAlert = if (screenActive) due else mutableState.value.matchAlert,
+                    )
+                    if (screenActive && due != null && mutableState.value.matchAlert?.fixtureKey == due.fixtureKey && !mutableState.value.alertCandidatesLoading && mutableState.value.alertCandidates.isEmpty()) {
+                        resolveAlertCandidates(due)
+                    }
+                }
+            }
+        }
+    }
 
     fun previousDay() = selectDate(mutableState.value.selectedDate.minusDays(1))
     fun nextDay() = selectDate(mutableState.value.selectedDate.plusDays(1))
     fun today() = selectDate(LocalDate.now(clock))
+    fun chooseDate(date: LocalDate) = selectDate(date)
     fun retry() {
         val error = mutableState.value.loadState as? SportsLoadState.Error
         if (error != null && !error.retryEnabled) return
@@ -53,6 +79,7 @@ class SportsViewModel private constructor(
 
     fun enter() {
         screenActive = true
+        showDueReminder()
         if (mutableState.value.loadState !is SportsLoadState.Loading) load()
     }
 
@@ -75,6 +102,47 @@ class SportsViewModel private constructor(
 
     fun closeCandidates() { mutableState.value = mutableState.value.copy(selectedFixture = null, candidates = emptyList(), candidateError = null) }
 
+    fun toggleReminder(fixture: SportsFixture) {
+        val reminders = reminderRepository ?: return
+        viewModelScope.launch { reminders.toggle(fixture) }
+    }
+
+    fun dismissMatchAlert() {
+        val alert = mutableState.value.matchAlert ?: return
+        mutableState.value = mutableState.value.copy(matchAlert = null, alertCandidates = emptyList(), alertCandidatesLoading = false)
+        viewModelScope.launch { reminderRepository?.dismiss(alert.fixtureKey) }
+    }
+
+    fun watchMatchAlert() {
+        val alert = mutableState.value.matchAlert ?: return
+        val ready = mutableState.value.loadState as? SportsLoadState.Ready
+        val fixture = ready?.schedule?.competitions?.flatMap { it.fixtures }?.firstOrNull { it.reminderKey() == alert.fixtureKey } ?: alert.toFixture()
+        val available = mutableState.value.alertCandidates
+        mutableState.value = mutableState.value.copy(matchAlert = null, selectedFixture = fixture, candidates = available, candidatesLoading = false, alertCandidates = emptyList())
+        viewModelScope.launch { reminderRepository?.dismiss(alert.fixtureKey) }
+    }
+
+    private fun resolveAlertCandidates(reminder: MatchReminder) {
+        val sports = repository ?: return
+        val ready = mutableState.value.loadState as? SportsLoadState.Ready
+        val fixture = ready?.schedule?.competitions?.flatMap { it.fixtures }?.firstOrNull { it.reminderKey() == reminder.fixtureKey } ?: reminder.toFixture()
+        mutableState.value = mutableState.value.copy(alertCandidatesLoading = true)
+        viewModelScope.launch {
+            val candidates = sports.candidates(fixture).getOrDefault(emptyList())
+            if (mutableState.value.matchAlert?.fixtureKey == reminder.fixtureKey) {
+                mutableState.value = mutableState.value.copy(alertCandidatesLoading = false, alertCandidates = candidates)
+            }
+        }
+    }
+
+    private fun showDueReminder() {
+        val due = currentReminders.firstOrNull { it.state == MatchReminderState.SCHEDULED && it.triggerEpochMs <= clock.millis() } ?: return
+        if (mutableState.value.matchAlert?.fixtureKey != due.fixtureKey) {
+            mutableState.value = mutableState.value.copy(matchAlert = due, alertCandidates = emptyList())
+            resolveAlertCandidates(due)
+        }
+    }
+
     private fun selectDate(date: LocalDate) {
         if (date == mutableState.value.selectedDate) return
         mutableState.value = mutableState.value.copy(selectedDate = date)
@@ -95,6 +163,7 @@ class SportsViewModel private constructor(
                 onSuccess = { schedule ->
                     if (mutableState.value.selectedDate == date) {
                         mutableState.value = mutableState.value.copy(loadState = SportsLoadState.Ready(schedule), refreshing = false)
+                        reminderRepository?.reconcile(schedule.competitions.flatMap { it.fixtures })
                         loadBroadcasts(schedule)
                         scheduleLiveRefresh(schedule)
                     }

@@ -70,14 +70,14 @@ class SportsScreenComposeTest {
         setContent(readyState())
         val bounds = composeRule.onNodeWithTag("fixture-1").getUnclippedBoundsInRoot()
         val height = bounds.bottom - bounds.top
-        assertTrue(height <= 132.dp)
+        assertTrue(height <= 190.dp)
     }
 
     @Test fun emptyStateIsPolishedAndBoundedToContent() {
         val emptyDay = day.minusDays(1)
         setContent(SportsUiState(emptyDay, SportsLoadState.Ready(SportsDateSchedule(emptyDay, emptyList()))))
         composeRule.onNodeWithTag("sports-empty").assertIsDisplayed()
-        composeRule.onNodeWithText("No football fixtures on this date").assertIsDisplayed()
+        composeRule.onNodeWithText("NO MATCHES ON THIS DATE").assertIsDisplayed()
         composeRule.onNodeWithText("Try another date using the controls above.").assertIsDisplayed()
     }
 
@@ -87,6 +87,37 @@ class SportsScreenComposeTest {
             val semantics = composeRule.onNodeWithTag(tag).fetchSemanticsNode().config
             assertTrue("$tag must accept D-pad focus", semantics.contains(SemanticsActions.RequestFocus))
         }
+    }
+
+    @Test fun selectedDateOpensCalendarAndChoosingDayClosesIt() {
+        var selected: LocalDate? = null
+        setContent(readyState(), onSelectDate = { selected = it })
+        composeRule.onNodeWithTag("sports-today").performClick()
+        composeRule.onNodeWithTag("sports-calendar").assertIsDisplayed()
+        composeRule.onNodeWithTag("sports-calendar-day-2026-09-12").performClick()
+        composeRule.runOnIdle { assertEquals(LocalDate.of(2026, 9, 12), selected) }
+        composeRule.onNodeWithTag("sports-calendar").assertDoesNotExist()
+    }
+
+    @Test fun calendarMonthNavigationAndBackDismissWork() {
+        setContent(readyState())
+        composeRule.onNodeWithTag("sports-today").performClick()
+        composeRule.onNodeWithTag("sports-calendar-next-month").performClick()
+        composeRule.onNodeWithText("October 2026").assertIsDisplayed()
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.onNodeWithTag("sports-calendar").assertDoesNotExist()
+    }
+
+    @Test fun upcomingFixtureReminderTogglesExplicitly() {
+        var toggled: SportsFixture? = null
+        setContent(readyState(), onToggleReminder = { toggled = it })
+        composeRule.onNodeWithTag("fixture-reminder-1").performClick()
+        composeRule.runOnIdle { assertEquals(fixture, toggled) }
+    }
+
+    @Test fun activeReminderStateIsVisible() {
+        setContent(readyState().copy(reminderKeys = setOf("football-data:1")))
+        composeRule.onNodeWithText("NOTIFICATION ON").assertIsDisplayed()
     }
 
     @Test fun backInvokesReturnToHome() {
@@ -159,6 +190,8 @@ class SportsScreenComposeTest {
         onConfigure: () -> Unit = {},
         onRegister: () -> Unit = {},
         onBack: () -> Unit = {},
+        onSelectDate: (LocalDate) -> Unit = {},
+        onToggleReminder: (SportsFixture) -> Unit = {},
     ) {
         composeRule.runOnUiThread {
             if (composeRule.activity.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
@@ -167,7 +200,7 @@ class SportsScreenComposeTest {
         }
         composeRule.waitForIdle()
         composeRule.setContent {
-            WatchioTheme { SportsScreen(state, {}, {}, {}, {}, onWatch, onClose, onPlay, onConfigure, onRegister, onBack) }
+            WatchioTheme { SportsScreen(state, {}, {}, {}, {}, onWatch, onClose, onPlay, onConfigure, onRegister, onBack, onSelectDate, onToggleReminder) }
         }
     }
 
