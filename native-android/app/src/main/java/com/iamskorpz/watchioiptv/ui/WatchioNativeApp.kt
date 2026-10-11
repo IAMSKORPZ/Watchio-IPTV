@@ -1731,8 +1731,17 @@ internal fun XtreamProviderScreen(
     val quickLoginBringIntoView = remember { BringIntoViewRequester() }
     val cancelBringIntoView = remember { BringIntoViewRequester() }
     val formScope = rememberCoroutineScope()
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    var tvKeyboardRequested by remember { mutableStateOf(false) }
     val busy = state.importState is XtreamImportState.Importing
-    DismissImeBeforeNavigationBack(connectFocus, onBack, imeVisibleOverride)
+    DismissImeBeforeNavigationBack(
+        fallbackFocus = connectFocus,
+        onNavigateBack = onBack,
+        imeVisibleOverride = imeVisibleOverride,
+        keyboardRequested = tvKeyboardRequested,
+        onKeyboardDismissed = { tvKeyboardRequested = false },
+    )
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary,
         unfocusedTextColor = colors.textPrimary,
@@ -1787,7 +1796,7 @@ internal fun XtreamProviderScreen(
                     keyboardActions = KeyboardActions(onNext = { usernameFocus.requestFocus() }),
                     colors = textFieldColors,
                     shape = RoundedCornerShape(radii.md),
-                    modifier = Modifier.fillMaxWidth().height(56.dp).focusProperties { down = usernameFocus }.tvVerticalFocus(down = usernameFocus).focusRequester(firstFocus).bringIntoViewOnFocus().testTag("xtream-provider-name"),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).trackTvKeyboardRequest { tvKeyboardRequested = true }.focusProperties { down = usernameFocus }.tvVerticalFocus(down = usernameFocus).focusRequester(firstFocus).bringIntoViewOnFocus().testTag("xtream-provider-name"),
                 )
                 Spacer(Modifier.height(6.dp))
                 OutlinedTextField(
@@ -1799,7 +1808,7 @@ internal fun XtreamProviderScreen(
                     keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
                     colors = textFieldColors,
                     shape = RoundedCornerShape(radii.md),
-                    modifier = Modifier.fillMaxWidth().height(56.dp).focusProperties { up = firstFocus; down = passwordFocus }.tvVerticalFocus(up = firstFocus, down = passwordFocus).focusRequester(usernameFocus).bringIntoViewOnFocus().testTag("xtream-username"),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).trackTvKeyboardRequest { tvKeyboardRequested = true }.focusProperties { up = firstFocus; down = passwordFocus }.tvVerticalFocus(up = firstFocus, down = passwordFocus).focusRequester(usernameFocus).bringIntoViewOnFocus().testTag("xtream-username"),
                 )
                 Spacer(Modifier.height(6.dp))
                 OutlinedTextField(
@@ -1809,10 +1818,15 @@ internal fun XtreamProviderScreen(
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { onConnect() }),
+                    keyboardActions = KeyboardActions(onDone = {
+                        tvKeyboardRequested = false
+                        keyboardController?.hide()
+                        focusManager.clearFocus(force = true)
+                        connectFocus.requestFocus()
+                    }),
                     colors = textFieldColors,
                     shape = RoundedCornerShape(radii.md),
-                    modifier = Modifier.fillMaxWidth().height(56.dp).focusProperties { up = usernameFocus; down = connectFocus }.tvVerticalFocus(up = usernameFocus, down = connectFocus, downBringIntoView = connectBringIntoView, scope = formScope).focusRequester(passwordFocus).bringIntoViewOnFocus().testTag("xtream-password"),
+                    modifier = Modifier.fillMaxWidth().height(56.dp).trackTvKeyboardRequest { tvKeyboardRequested = true }.focusProperties { up = usernameFocus; down = connectFocus }.tvVerticalFocus(up = usernameFocus, down = connectFocus, downBringIntoView = connectBringIntoView, scope = formScope).focusRequester(passwordFocus).bringIntoViewOnFocus().testTag("xtream-password"),
                 )
                 state.errorMessage?.let {
                     Spacer(Modifier.height(10.dp))
@@ -1877,8 +1891,17 @@ internal fun DnsLoginScreen(
     val passwordFocus = remember { FocusRequester() }
     val loginFocus = remember { FocusRequester() }
     val backFocus = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    var tvKeyboardRequested by remember { mutableStateOf(false) }
     val busy = state.importState is XtreamImportState.Importing
-    DismissImeBeforeNavigationBack(loginFocus, onBack, imeVisibleOverride)
+    DismissImeBeforeNavigationBack(
+        fallbackFocus = loginFocus,
+        onNavigateBack = onBack,
+        imeVisibleOverride = imeVisibleOverride,
+        keyboardRequested = tvKeyboardRequested,
+        onKeyboardDismissed = { tvKeyboardRequested = false },
+    )
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary, unfocusedTextColor = colors.textPrimary,
         cursorColor = colors.focusBorder, focusedBorderColor = colors.focusBorder,
@@ -1905,13 +1928,18 @@ internal fun DnsLoginScreen(
                 value = state.username, onValueChange = onUsername, label = { Text("Username") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }), colors = fieldColors,
-                modifier = Modifier.fillMaxWidth().height(56.dp).focusRequester(usernameFocus).focusProperties { down = passwordFocus }.tvVerticalFocus(down = passwordFocus).testTag("dns-username"),
+                modifier = Modifier.fillMaxWidth().height(56.dp).trackTvKeyboardRequest { tvKeyboardRequested = true }.focusRequester(usernameFocus).focusProperties { down = passwordFocus }.tvVerticalFocus(down = passwordFocus).testTag("dns-username"),
             )
             OutlinedTextField(
                 value = state.password, onValueChange = onPassword, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onConnect() }), colors = fieldColors,
-                modifier = Modifier.fillMaxWidth().height(56.dp).focusRequester(passwordFocus).focusProperties { up = usernameFocus; down = loginFocus }.tvVerticalFocus(up = usernameFocus, down = loginFocus).testTag("dns-password"),
+                keyboardActions = KeyboardActions(onDone = {
+                    tvKeyboardRequested = false
+                    keyboardController?.hide()
+                    focusManager.clearFocus(force = true)
+                    loginFocus.requestFocus()
+                }), colors = fieldColors,
+                modifier = Modifier.fillMaxWidth().height(56.dp).trackTvKeyboardRequest { tvKeyboardRequested = true }.focusRequester(passwordFocus).focusProperties { up = usernameFocus; down = loginFocus }.tvVerticalFocus(up = usernameFocus, down = loginFocus).testTag("dns-password"),
             )
             state.errorMessage?.let { Text(it, color = Color(0xFFFF6B7A), style = type.body, modifier = Modifier.fillMaxWidth().testTag("dns-error")) }
             XtreamLoginAction(
@@ -1996,6 +2024,13 @@ private fun Modifier.tvVerticalFocus(
         focusRequester.requestFocus()
     }
     true
+}
+
+private fun Modifier.trackTvKeyboardRequest(onRequest: () -> Unit): Modifier = onPreviewKeyEvent { event ->
+    if (event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.DirectionCenter)) {
+        onRequest()
+    }
+    false
 }
 
 @Composable
@@ -2125,8 +2160,19 @@ private fun M3uUrlProviderScreen(
 ) {
     val colors = LocalWatchioColors.current
     val firstFocus = remember { FocusRequester() }
+    val urlFocus = remember { FocusRequester() }
+    val userAgentFocus = remember { FocusRequester() }
     val connectFocus = remember { FocusRequester() }
-    DismissImeBeforeNavigationBack(connectFocus, onBack)
+    val cancelFocus = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    var tvKeyboardRequested by remember { mutableStateOf(false) }
+    DismissImeBeforeNavigationBack(
+        fallbackFocus = connectFocus,
+        onNavigateBack = onBack,
+        keyboardRequested = tvKeyboardRequested,
+        onKeyboardDismissed = { tvKeyboardRequested = false },
+    )
     LaunchedEffect(Unit) { firstFocus.requestFocus() }
     ProviderFormContainer {
         Text("M3U URL", color = colors.textPrimary, fontWeight = FontWeight.Bold)
@@ -2137,7 +2183,9 @@ private fun M3uUrlProviderScreen(
             onValueChange = onProviderName,
             label = { Text("Provider Name") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().focusRequester(firstFocus).bringIntoViewOnFocus(),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { urlFocus.requestFocus() }),
+            modifier = Modifier.fillMaxWidth().trackTvKeyboardRequest { tvKeyboardRequested = true }.focusRequester(firstFocus).focusProperties { down = urlFocus }.tvVerticalFocus(down = urlFocus).bringIntoViewOnFocus(),
         )
         Spacer(Modifier.height(10.dp))
         OutlinedTextField(
@@ -2145,7 +2193,9 @@ private fun M3uUrlProviderScreen(
             onValueChange = onPlaylistUrl,
             label = { Text("Playlist URL") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions(onNext = { userAgentFocus.requestFocus() }),
+            modifier = Modifier.fillMaxWidth().trackTvKeyboardRequest { tvKeyboardRequested = true }.focusRequester(urlFocus).focusProperties { up = firstFocus; down = userAgentFocus }.tvVerticalFocus(up = firstFocus, down = userAgentFocus).bringIntoViewOnFocus(),
         )
         Spacer(Modifier.height(10.dp))
         OutlinedTextField(
@@ -2153,14 +2203,21 @@ private fun M3uUrlProviderScreen(
             onValueChange = onUserAgent,
             label = { Text("Custom User-Agent") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                tvKeyboardRequested = false
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+                connectFocus.requestFocus()
+            }),
+            modifier = Modifier.fillMaxWidth().trackTvKeyboardRequest { tvKeyboardRequested = true }.focusRequester(userAgentFocus).focusProperties { up = urlFocus; down = connectFocus }.tvVerticalFocus(up = urlFocus, down = connectFocus).bringIntoViewOnFocus(),
         )
         Spacer(Modifier.height(16.dp))
         M3uImportStatus(state)
         Spacer(Modifier.height(20.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.focusRequester(connectFocus).bringIntoViewOnFocus())
-            WatchioFocusableCard("Cancel", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.bringIntoViewOnFocus())
+            WatchioFocusableCard("Connect", accent = colors.seriesAccent, onClick = onConnect, modifier = Modifier.focusRequester(connectFocus).focusProperties { up = userAgentFocus; right = cancelFocus }.bringIntoViewOnFocus())
+            WatchioFocusableCard("Cancel", accent = colors.focusGlow, onClick = onBack, modifier = Modifier.focusRequester(cancelFocus).focusProperties { left = connectFocus }.bringIntoViewOnFocus())
         }
     }
 }
@@ -2219,6 +2276,8 @@ private fun DismissImeBeforeNavigationBack(
     fallbackFocus: FocusRequester,
     onNavigateBack: () -> Unit,
     imeVisibleOverride: Boolean? = null,
+    keyboardRequested: Boolean = false,
+    onKeyboardDismissed: () -> Unit = {},
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -2230,6 +2289,7 @@ private fun DismissImeBeforeNavigationBack(
     fun restoreRemoteFocus() {
         keyboardController?.hide()
         focusManager.clearFocus(force = true)
+        onKeyboardDismissed()
         fallbackFocus.requestFocus()
     }
 
@@ -2245,7 +2305,7 @@ private fun DismissImeBeforeNavigationBack(
     }
 
     BackHandler {
-        if (imeVisible && !imeDismissed) {
+        if ((imeVisible || keyboardRequested) && !imeDismissed) {
             imeDismissed = true
             restoreRemoteFocus()
         } else {

@@ -22,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
@@ -244,5 +245,64 @@ class ProviderFormComposeTest {
         composeRule.runOnIdle { imeVisible = false }
         composeRule.onNodeWithContentDescription("LOGIN").assertIsFocused()
         composeRule.runOnIdle { assertEquals(0, backCount) }
+    }
+
+    @Test
+    fun xtreamTvBackUsesKeyboardRequestFallbackWhenImeInsetsAreUnavailable() {
+        var backCount = 0
+        composeRule.activity.setContent {
+            WatchioTheme {
+                XtreamProviderScreen(
+                    state = XtreamProviderFormState(providerName = "Test", username = "User", password = "Password"),
+                    onProviderName = {}, onUsername = {}, onPassword = {}, onConnect = {}, onQuickLogin = {},
+                    onBack = { backCount++ },
+                    imeVisibleOverride = false,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("xtream-username").performKeyInput { pressKey(Key.DirectionCenter) }
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
+        composeRule.runOnIdle { assertEquals(0, backCount) }
+
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        composeRule.runOnIdle { assertEquals(1, backCount) }
+    }
+
+    @Test
+    fun passwordDoneDismissesImeAndFocusesLoginWithoutSubmitting() {
+        var xtreamSubmissions = 0
+        composeRule.activity.setContent {
+            WatchioTheme {
+                XtreamProviderScreen(
+                    state = XtreamProviderFormState(providerName = "Test", username = "User", password = "Password"),
+                    onProviderName = {}, onUsername = {}, onPassword = {}, onConnect = { xtreamSubmissions++ },
+                    onQuickLogin = {}, onBack = {}, imeVisibleOverride = true,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("xtream-password").performClick().performImeAction()
+        composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
+        composeRule.runOnIdle { assertEquals(0, xtreamSubmissions) }
+    }
+
+    @Test
+    fun dnsPasswordDoneDismissesImeAndFocusesLoginWithoutSubmitting() {
+        var submissions = 0
+        composeRule.activity.setContent {
+            WatchioTheme {
+                DnsLoginScreen(
+                    state = XtreamProviderFormState(username = "User", password = "Password"),
+                    onUsername = {}, onPassword = {}, onConnect = { submissions++ }, onBack = {},
+                    imeVisibleOverride = true,
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("dns-password").performClick().performImeAction()
+        composeRule.onNodeWithContentDescription("LOGIN").assertIsFocused()
+        composeRule.runOnIdle { assertEquals(0, submissions) }
     }
 }
