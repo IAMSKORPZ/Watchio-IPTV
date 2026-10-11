@@ -5,6 +5,18 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+/** Lean projection used by the shared in-memory search index. Not a Room table. */
+data class CatalogSearchRow(
+    val contentId: String,
+    val title: String,
+    val normalizedTitle: String,
+    val imageUrl: String?,
+    val subtitle: String?,
+    val rating: String?,
+    val sourceOrder: Int,
+    val seriesName: String? = null,
+)
+
 @Entity(
     tableName = "providers",
     indices = [Index("type"), Index("enabled")],

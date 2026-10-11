@@ -84,6 +84,7 @@ import com.iamskorpz.watchioiptv.data.series.SeriesRepository
 import com.iamskorpz.watchioiptv.data.series.WatchioEpisodeItem
 import com.iamskorpz.watchioiptv.data.series.WatchioSeason
 import com.iamskorpz.watchioiptv.data.series.WatchioSeriesItem
+import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
 import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncState
 import com.iamskorpz.watchioiptv.feature.movies.HeartIcon
 import com.iamskorpz.watchioiptv.feature.movies.extractReleaseYear
@@ -100,6 +101,8 @@ import com.iamskorpz.watchioiptv.ui.components.watchioSemanticBorder
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
+import com.iamskorpz.watchioiptv.ui.components.UnifiedSearchLayout
+import com.iamskorpz.watchioiptv.ui.components.UnifiedSearchOverlay
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
@@ -119,6 +122,7 @@ fun SeriesScreen(
     onBack: () -> Unit,
     onLoadMore: () -> Unit = {},
     initialSearchVisible: Boolean = false,
+    onSearchResult: (WatchioSearchResult) -> Unit = {},
 ) {
     val colors = LocalWatchioColors.current
     val posterTokens = LocalWatchioPosterTokens.current
@@ -255,14 +259,18 @@ fun SeriesScreen(
             }
         }
         if (searchVisible) {
-            SeriesSearchOverlay(
+            UnifiedSearchOverlay(
+                title = "Search series",
                 query = state.searchQuery,
-                results = if (state.searchQuery.isBlank()) emptyList() else state.series,
-                onSearch = onSearch,
-                onSelect = { item ->
+                results = if (state.searchQuery.isBlank()) emptyList() else state.searchResults,
+                loading = state.searchLoading,
+                layout = UnifiedSearchLayout.Posters,
+                testTagPrefix = "series-search",
+                onQuery = onSearch,
+                onResult = { result ->
                     searchVisible = false
                     onSearch("")
-                    onSeries(item)
+                    onSearchResult(result)
                 },
                 onDismiss = {
                     searchVisible = false
@@ -1540,4 +1548,3 @@ internal fun formatSeriesMetaLine(details: SeriesDetails): String {
     return listOfNotNull(year, genre, rating)
         .joinToString(" • ")
 }
-

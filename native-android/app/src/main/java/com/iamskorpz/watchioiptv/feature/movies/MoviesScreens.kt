@@ -94,6 +94,7 @@ import com.iamskorpz.watchioiptv.data.movies.MovieCategory
 import com.iamskorpz.watchioiptv.data.movies.MovieCategoryKind
 import com.iamskorpz.watchioiptv.data.movies.MovieDetails
 import com.iamskorpz.watchioiptv.data.movies.WatchioMovieItem
+import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
 import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncState
 import com.iamskorpz.watchioiptv.domain.repository.ControlAutoHideDelay
 import com.iamskorpz.watchioiptv.domain.repository.PlayerSettings
@@ -108,6 +109,9 @@ import com.iamskorpz.watchioiptv.ui.components.watchioSemanticBorder
 import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
+import com.iamskorpz.watchioiptv.ui.components.UnifiedSearchLayout
+import com.iamskorpz.watchioiptv.ui.components.UnifiedSearchOverlay
+import com.iamskorpz.watchioiptv.ui.components.UnifiedPosterSearchCard
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
 import com.iamskorpz.watchioiptv.ui.components.WatchioProgressBar
@@ -129,6 +133,7 @@ fun MoviesScreen(
     onBack: () -> Unit,
     onLoadMore: () -> Unit = {},
     initialSearchVisible: Boolean = false,
+    onSearchResult: (WatchioSearchResult) -> Unit = { result -> state.movies.firstOrNull { it.id == result.contentId }?.let(onMovie) },
 ) {
     val colors = LocalWatchioColors.current
     val posterTokens = LocalWatchioPosterTokens.current
@@ -267,12 +272,14 @@ fun MoviesScreen(
         if (searchVisible) {
             MovieSearchOverlay(
                 query = state.searchQuery,
-                results = if (state.searchQuery.isBlank()) emptyList() else state.movies,
+                results = if (state.searchQuery.isBlank()) emptyList() else state.searchResults,
+                loading = state.searchLoading,
+                searchStartedAtElapsedMs = state.searchStartedAtElapsedMs,
                 onSearch = onSearch,
-                onSelect = { movie ->
+                onSelect = { result ->
                     searchVisible = false
                     onSearch("")
-                    onMovie(movie)
+                    onSearchResult(result)
                 },
                 onDismiss = {
                     searchVisible = false
@@ -481,12 +488,25 @@ private fun MovieCategoryRow(
 @Composable
 private fun MovieSearchOverlay(
     query: String,
-    results: List<WatchioMovieItem>,
+    results: List<WatchioSearchResult>,
+    loading: Boolean,
+    searchStartedAtElapsedMs: Long?,
     onSearch: (String) -> Unit,
-    onSelect: (WatchioMovieItem) -> Unit,
+    onSelect: (WatchioSearchResult) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
+    var firstCardsReported by remember(query) { mutableStateOf(false) }
+    var firstPosterReported by remember(query) { mutableStateOf(false) }
+    LaunchedEffect(query, results) {
+        if (!firstCardsReported && query.isNotBlank() && results.isNotEmpty() && searchStartedAtElapsedMs != null) {
+            firstCardsReported = true
+            android.util.Log.d(
+                "WatchioMovieSearchUi",
+                "event=first_cards elapsedMs=${android.os.SystemClock.elapsedRealtime() - searchStartedAtElapsedMs} resultCount=${results.size}",
+            )
+        }
+    }
     BackHandler(onBack = onDismiss)
     Box(
         Modifier
@@ -496,54 +516,95 @@ private fun MovieSearchOverlay(
             .testTag("movie-search-overlay"),
         contentAlignment = Alignment.Center,
     ) {
-        WatchioCard(
-            modifier = Modifier.fillMaxWidth(0.76f).fillMaxHeight(0.84f).testTag("movie-search-panel"),
-            surfaceRole = WatchioSurfaceRole.Panel,
-            accent = colors.moviesAccent,
-            minWidth = 0.dp,
-            minHeight = 0.dp,
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.76f).fillMaxHeight(0.98f).testTag("movie-search-panel"),
+            color = colors.dialogSurface,
+            shape = RoundedCornerShape(LocalWatchioRadii.current.lg),
         ) {
-            Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().height(36.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
                     Text("Search movies", color = colors.textPrimary, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = onDismiss, modifier = Modifier.testTag("movie-search-close")) { Text("Close") }
+                    TextButton(onClick = onDismiss, modifier = Modifier.height(36.dp).testTag("movie-search-close")) { Text("Close") }
                 }
                 WatchioSearchTextField(
                     value = query,
                     onValueChange = onSearch,
                     label = "Search movies",
                     testTag = "movie-search-field",
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { onSearch("") }, modifier = Modifier.testTag("movie-search-clear")) { Text("Clear") }
+                Row(
+                    modifier = Modifier.height(36.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { onSearch("") }, modifier = Modifier.height(36.dp).testTag("movie-search-clear")) { Text("Clear") }
                     Text(
-                        text = if (query.isBlank()) "Type to search movies" else "${results.size} results",
+                        text = when {
+                            query.isBlank() -> "Type to search movies"
+                            loading -> "Searching…"
+                            else -> "${results.size} results"
+                        },
                         color = colors.textSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 118.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp),
+                    columns = GridCells.Adaptive(minSize = 100.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 8.dp),
                     modifier = Modifier.fillMaxSize().testTag("movie-search-results"),
                 ) {
                     items(
-                        items = results.take(120),
-                        key = { "${it.providerId.value}:${it.id}" },
+                        items = results,
+                        key = { "${it.providerId.value}:${it.contentId}" },
                         contentType = { "movie_card" },
                     ) { movie ->
                         Box(Modifier.testTag("movie-search-result")) {
-                            MovieCard(movie = movie, onMovie = onSelect, onMovieOptions = { onSelect(it) })
+                            MovieCard(
+                                movie = movie,
+                                onMovie = onSelect,
+                                onMovieOptions = { onSelect(it) },
+                                onPosterLoaded = {
+                                    if (!firstPosterReported && searchStartedAtElapsedMs != null) {
+                                        firstPosterReported = true
+                                        android.util.Log.d(
+                                            "WatchioMovieSearchUi",
+                                            "event=first_poster elapsedMs=${android.os.SystemClock.elapsedRealtime() - searchStartedAtElapsedMs}",
+                                        )
+                                    }
+                                },
+                            )
                         }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun MovieCard(
+    movie: WatchioSearchResult,
+    onMovie: (WatchioSearchResult) -> Unit,
+    onMovieOptions: (WatchioSearchResult) -> Unit,
+    onPosterLoaded: (() -> Unit)? = null,
+) {
+    UnifiedPosterSearchCard(
+        result = movie,
+        testTagPrefix = "movie-search",
+        onResult = onMovie,
+        onArtworkLoaded = onPosterLoaded,
+    )
 }
 
 // --------------------------------------------------------------------------
@@ -874,6 +935,7 @@ private fun MovieCard(
     showProgress: Boolean = false,
     onMovie: (WatchioMovieItem) -> Unit,
     onMovieOptions: (WatchioMovieItem) -> Unit,
+    onPosterLoaded: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
@@ -898,7 +960,7 @@ private fun MovieCard(
             .padding(6.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(2f / 3f)) {
-            Poster(movie.posterUrl, Modifier.fillMaxSize().testTag("movie-poster"))
+            Poster(movie.posterUrl, Modifier.fillMaxSize().testTag("movie-poster"), onPosterLoaded)
             if (formattedRating != null) {
                 Box(
                     modifier = Modifier
@@ -956,13 +1018,14 @@ private fun MovieCard(
 // --------------------------------------------------------------------------
 
 @Composable
-private fun Poster(url: String?, modifier: Modifier) {
+private fun Poster(url: String?, modifier: Modifier, onLoaded: () -> Unit = {}) {
     val colors = LocalWatchioColors.current
     Box(modifier.background(colors.surfaceElevated), contentAlignment = Alignment.Center) {
         if (url.isNullOrBlank()) Text("No Image", color = colors.textPrimary) else AsyncImage(
             model = url,
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            onSuccess = { onLoaded() },
             modifier = Modifier.fillMaxSize(),
         )
     }
@@ -1259,4 +1322,3 @@ fun openYoutubeTrailer(context: android.content.Context, key: String) {
 @Suppress("unused")
 private fun resumeTitle(movie: WatchioMovieItem): String =
     if ((movie.resumePositionMs ?: 0L) > 60_000L) "Resume" else "Play"
-

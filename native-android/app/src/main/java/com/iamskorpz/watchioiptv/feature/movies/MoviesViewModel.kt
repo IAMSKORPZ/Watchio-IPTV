@@ -11,6 +11,9 @@ import com.iamskorpz.watchioiptv.data.movies.MovieCategory
 import com.iamskorpz.watchioiptv.data.movies.MovieDetails
 import com.iamskorpz.watchioiptv.data.movies.MoviesRepository
 import com.iamskorpz.watchioiptv.data.movies.WatchioMovieItem
+import com.iamskorpz.watchioiptv.data.library.SearchRepository
+import com.iamskorpz.watchioiptv.data.library.SearchScope
+import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
 import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncKey
 import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncState
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
@@ -33,13 +36,20 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@OptIn(kotlinx.coroutines.FlowPreview::class)
+internal fun kotlinx.coroutines.flow.Flow<String>.debouncedMovieSearchQueries() =
+    debounce(50L).distinctUntilChanged()
+
 data class MoviesUiState(
     val loading: Boolean = true,
     val errorMessage: String? = null,
     val categories: List<MovieCategory> = emptyList(),
     val selectedCategory: MovieCategory? = null,
     val movies: List<WatchioMovieItem> = emptyList(),
+    val searchResults: List<WatchioSearchResult> = emptyList(),
     val searchQuery: String = "",
+    val searchLoading: Boolean = false,
+    val searchStartedAtElapsedMs: Long? = null,
     val categorySearchQuery: String = "",
     val loadingMore: Boolean = false,
     val hasMore: Boolean = false,
@@ -62,6 +72,7 @@ class MoviesViewModel(
     private val playerManager: WatchioPlayerManager,
     private val clock: WatchioClock,
     private val xtreamRepository: XtreamRepository,
+    private val searchRepository: SearchRepository? = null,
 ) : ViewModel() {
     private val mutableMovies = MutableStateFlow(MoviesUiState())
     private val mutableDetails = MutableStateFlow(MovieDetailsUiState())
@@ -69,6 +80,7 @@ class MoviesViewModel(
     private var selectedMovie: WatchioMovieItem? = null
     private var progressJob: Job? = null
     private var categoryJob: Job? = null
+    private var searchCacheWarmupJob: Job? = null
     private var categoryProviderId: ProviderId? = null
     private var manualCategorySelected = false
     private var manualCategoryId: String? = null
@@ -91,8 +103,7 @@ class MoviesViewModel(
         }
         viewModelScope.launch {
             searchQueryFlow
-                .debounce(250L)
-                .distinctUntilChanged()
+                .debouncedMovieSearchQueries()
                 .collectLatest { query ->
                     if (query.isNotBlank()) {
                         executeSearch(query)
@@ -155,16 +166,26 @@ class MoviesViewModel(
                     if (current.catalogSyncState != CatalogSyncState.Syncing) initialCategoryResolved = true
                 }
             }
+            val activeQuery = mutableMovies.value.searchQuery
             val items = load.items
+            if (mutableMovies.value.searchQuery != activeQuery) return@launch
             mutableMovies.value = MoviesUiState(
                 loading = false,
                 errorMessage = if (mutableMovies.value.catalogSyncState == CatalogSyncState.Failed) "Movies couldn't finish syncing." else null,
                 categories = categories,
                 selectedCategory = selected,
                 movies = items,
-                hasMore = items.size == MoviesRepository.PAGE_SIZE,
+                searchResults = current.searchResults,
+                searchQuery = activeQuery,
+                searchLoading = false,
+                categorySearchQuery = current.categorySearchQuery,
+                hasMore = activeQuery.isBlank() && items.size == MoviesRepository.PAGE_SIZE,
                 catalogSyncState = mutableMovies.value.catalogSyncState,
             )
+            searchCacheWarmupJob?.cancel()
+            searchCacheWarmupJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                searchRepository?.warm(providerId) ?: moviesRepository.getOrLoadCatalog(providerId)
+            }
         }
     }
 
@@ -173,18 +194,23 @@ class MoviesViewModel(
         manualCategorySelected = true
         manualCategoryId = category.id
         initialCategoryResolved = true
-        val currentQuery = mutableMovies.value.searchQuery
         mutableMovies.value = mutableMovies.value.copy(selectedCategory = category, movies = emptyList(), loadingMore = false, hasMore = false)
         categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val providerId = moviesRepository.selectedProviderId() ?: return@launch
-            val items = moviesRepository.moviePage(providerId, category, 0, MoviesRepository.PAGE_SIZE, currentQuery)
-            mutableMovies.value = mutableMovies.value.copy(movies = items, hasMore = currentQuery.isBlank() && items.size == MoviesRepository.PAGE_SIZE)
+            val items = moviesRepository.moviePage(providerId, category, 0, MoviesRepository.PAGE_SIZE)
+            mutableMovies.value = mutableMovies.value.copy(movies = items, hasMore = items.size == MoviesRepository.PAGE_SIZE)
         }
     }
 
     fun updateSearch(query: String) {
         val state = mutableMovies.value
-        mutableMovies.value = state.copy(searchQuery = query)
+        mutableMovies.value = state.copy(
+            searchQuery = query,
+            searchResults = emptyList(),
+            searchLoading = query.isNotBlank(),
+            searchStartedAtElapsedMs = if (query.isBlank()) null else android.os.SystemClock.elapsedRealtime(),
+            hasMore = false,
+        )
         if (query.isBlank()) {
             searchQueryFlow.value = ""
             categoryJob?.cancel()
@@ -193,22 +219,70 @@ class MoviesViewModel(
                 val currentCategory = mutableMovies.value.selectedCategory
                     ?: mutableMovies.value.categories.firstOrNull()
                     ?: return@launch
-                val items = moviesRepository.moviePage(providerId, currentCategory, 0, MoviesRepository.PAGE_SIZE)
-                mutableMovies.value = mutableMovies.value.copy(movies = items, hasMore = items.size == MoviesRepository.PAGE_SIZE)
+                if (mutableMovies.value.movies.isEmpty()) {
+                    val items = moviesRepository.moviePage(providerId, currentCategory, 0, MoviesRepository.PAGE_SIZE)
+                    mutableMovies.value = mutableMovies.value.copy(movies = items, searchLoading = false, hasMore = items.size == MoviesRepository.PAGE_SIZE)
+                } else mutableMovies.value = mutableMovies.value.copy(searchLoading = false)
             }
         } else {
+            categoryJob?.cancel()
             searchQueryFlow.value = query
         }
     }
 
     private suspend fun executeSearch(query: String) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
         val providerId = moviesRepository.selectedProviderId() ?: return@withContext
-        val state = mutableMovies.value
-        val allCategory = state.categories.firstOrNull { it.kind == com.iamskorpz.watchioiptv.data.movies.MovieCategoryKind.All }
-            ?: state.categories.firstOrNull()
-            ?: return@withContext
-        val results = moviesRepository.moviePage(providerId, allCategory, 0, MoviesRepository.PAGE_SIZE, query)
-        mutableMovies.value = mutableMovies.value.copy(movies = results, hasMore = false)
+        val shared = searchRepository
+        if (shared != null) {
+            val final = shared.searchProgressively(providerId, query, SearchScope.Movies) { strong ->
+                val current = mutableMovies.value
+                if (current.searchQuery == query && shared.selectedProviderId() == providerId) {
+                    mutableMovies.value = current.copy(searchResults = strong.results.movies, searchLoading = true)
+                }
+            }
+            if (shared.selectedProviderId() == providerId && mutableMovies.value.searchQuery == query) {
+                val current = mutableMovies.value
+                mutableMovies.value = current.copy(searchResults = final.results.movies, searchLoading = false)
+                logMovieSearchComplete(current.searchStartedAtElapsedMs, final.results.movies.size)
+            }
+            return@withContext
+        }
+        if (moviesRepository.requiresFuzzySearch(query)) {
+            val strongResults = moviesRepository.searchMovies(providerId, query, includeFuzzy = false)
+            val current = mutableMovies.value
+            if (current.searchQuery == query && moviesRepository.selectedProviderId() == providerId) {
+                mutableMovies.value = current.copy(
+                    searchResults = strongResults.map { it.toSearchResult() },
+                    searchLoading = true,
+                    hasMore = false,
+                )
+            }
+        }
+        val results = moviesRepository.searchMovies(providerId, query, includeFuzzy = true)
+        val providerStillActive = moviesRepository.selectedProviderId() == providerId
+        if (providerStillActive && mutableMovies.value.searchQuery == query) {
+            val current = mutableMovies.value
+            mutableMovies.value = current.copy(searchResults = results.map { it.toSearchResult() }, searchLoading = false, hasMore = false)
+            logMovieSearchComplete(current.searchStartedAtElapsedMs, results.size)
+        }
+    }
+
+    private fun WatchioMovieItem.toSearchResult() = WatchioSearchResult(
+        providerId = providerId,
+        contentType = ContentType.Movie,
+        contentId = id,
+        title = name,
+        subtitle = genre,
+        imageUrl = posterUrl,
+        rating = rating,
+    )
+
+    private fun logMovieSearchComplete(startedAt: Long?, resultCount: Int) {
+        if (!com.iamskorpz.watchioiptv.BuildConfig.DEBUG || startedAt == null) return
+        android.util.Log.d(
+            "WatchioMovieSearchUi",
+            "event=complete elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAt} resultCount=$resultCount",
+        )
     }
 
     fun loadMore() {

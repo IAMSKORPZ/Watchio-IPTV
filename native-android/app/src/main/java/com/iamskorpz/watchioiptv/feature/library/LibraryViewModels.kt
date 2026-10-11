@@ -51,6 +51,7 @@ class GlobalSearchViewModel(
                     loading = false,
                     errorMessage = null,
                 )
+                if (providerId != null) repository.warm(providerId)
                 if (mutableState.value.query.isNotBlank()) runSearch()
             }
         }
@@ -80,9 +81,19 @@ class GlobalSearchViewModel(
         }
         searchJob = viewModelScope.launch {
             mutableState.value = snapshot.copy(loading = true, status = SearchStatus.Searching, errorMessage = null)
-            delay(200L)
-            runCatching { repository.search(providerId, snapshot.query, snapshot.scope) }
-                .onSuccess { results ->
+            delay(50L)
+            runCatching {
+                repository.searchProgressively(providerId, snapshot.query, snapshot.scope) { strong ->
+                    val current = mutableState.value
+                    if (current.query == snapshot.query && current.scope == snapshot.scope && current.activeProviderId == providerId) {
+                        mutableState.value = current.copy(
+                            loading = true,
+                            results = strong.results,
+                            status = if (strong.results.isEmpty) SearchStatus.Searching else SearchStatus.Results,
+                        )
+                    }
+                }.results
+            }.onSuccess { results ->
                     val current = mutableState.value
                     if (current.query == snapshot.query && current.scope == snapshot.scope && current.activeProviderId == providerId) {
                         mutableState.value = current.copy(

@@ -11,6 +11,8 @@ import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.core.security.ProviderCredentialStore
 import com.iamskorpz.watchioiptv.core.util.MediaTitleNormalizer
 import com.iamskorpz.watchioiptv.core.util.TextNormalizer
+import com.iamskorpz.watchioiptv.data.library.prepareSearchText
+import com.iamskorpz.watchioiptv.data.library.rankPreparedSearchText
 import com.iamskorpz.watchioiptv.core.util.WatchioClock
 import com.iamskorpz.watchioiptv.data.xtream.XtreamApi
 import com.iamskorpz.watchioiptv.data.xtream.XtreamVodInfoDto
@@ -24,6 +26,8 @@ import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -92,12 +96,12 @@ class MoviesRepository(
                 } else {
                     val providerType = ProviderType.fromPersisted(provider.type)
                     val rows = when (providerType) {
-                        ProviderType.Xtream -> database.vodDao().getByProvider(providerId.value).map { row ->
-                            row.toMovie(providerType)
-                        }
-                        ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao().getByProviderAndType(providerId.value, ContentType.Movie.persisted).map { row ->
-                            row.toMovie(providerType)
-                        }
+                        ProviderType.Xtream -> prepareMovieSearchSnapshot(
+                            database.vodDao().getByProvider(providerId.value).map { row -> row.toMovie(providerType) },
+                        )
+                        ProviderType.M3uUrl, ProviderType.M3uFile -> prepareMovieSearchSnapshot(
+                            database.m3uItemDao().getByProviderAndType(providerId.value, ContentType.Movie.persisted).map { row -> row.toMovie(providerType) },
+                        )
                     }
                     val lookup = rows.associateBy { it.id }
                     val categoryMap = rows.groupBy { it.categoryId.orEmpty() }
@@ -190,12 +194,7 @@ class MoviesRepository(
         val providerType = ProviderType.fromPersisted(provider.type)
         val normalizedQuery = TextNormalizer.normalizeForSearch(query)
         if (normalizedQuery.isNotBlank()) {
-            return@withContext when (providerType) {
-                ProviderType.Xtream -> database.vodDao().search(providerId.value, normalizedQuery, SEARCH_LIMIT).map { it.toMovie(providerType) }
-                ProviderType.M3uUrl, ProviderType.M3uFile -> database.m3uItemDao()
-                    .searchByType(providerId.value, ContentType.Movie.persisted, normalizedQuery, SEARCH_LIMIT)
-                    .map { it.toMovie(providerType) }
-            }
+            return@withContext searchMovies(providerId, query, SEARCH_LIMIT)
         }
 
         when (category.kind) {
@@ -218,6 +217,39 @@ class MoviesRepository(
             else -> targetedMovies(providerId, providerType, category)
         }
     }
+
+    suspend fun searchMovies(
+        providerId: ProviderId,
+        query: String,
+        limit: Int = SEARCH_LIMIT,
+        includeFuzzy: Boolean = true,
+    ): List<WatchioMovieItem> = withContext(Dispatchers.IO) {
+        if (TextNormalizer.normalizeForSearch(query).isBlank()) return@withContext emptyList()
+        val startedNs = System.nanoTime()
+        val cacheWasWarm = catalogCache?.providerId == providerId
+        val candidates = getOrLoadCatalog(providerId).movies
+        val cacheReadyNs = System.nanoTime()
+        val results = withContext(Dispatchers.Default) {
+            val job = currentCoroutineContext()[Job]
+            rankActiveProviderMovieSearchResults(candidates, providerId, query, limit, includeFuzzy) {
+                job?.isActive != false
+            }
+        }
+        if (BuildConfig.DEBUG) {
+            val finishedNs = System.nanoTime()
+            android.util.Log.d(
+                SEARCH_TIMING_TAG,
+                "phase=${if (includeFuzzy) "complete" else "strong"} cacheWarm=$cacheWasWarm candidateCount=${candidates.size} " +
+                    "catalogueMs=${(cacheReadyNs - startedNs) / 1_000_000.0} " +
+                    "rankingMs=${(finishedNs - cacheReadyNs) / 1_000_000.0} " +
+                    "totalMs=${(finishedNs - startedNs) / 1_000_000.0} resultCount=${results.size}",
+            )
+        }
+        results
+    }
+
+    fun requiresFuzzySearch(query: String): Boolean =
+        com.iamskorpz.watchioiptv.data.library.normalizeSearchQuery(query).length >= 5
 
     private suspend fun targetedMovies(
         providerId: ProviderId,
@@ -433,6 +465,7 @@ class MoviesRepository(
         private const val DETAIL_CACHE_MS = 24 * 60 * 60 * 1000L
         private const val TRAILER_CACHE_MS = 30L * 24L * 60L * 60L * 1000L
         private const val TMDB_BASE = "https://api.themoviedb.org/3/"
+        private const val SEARCH_TIMING_TAG = "WatchioMovieSearch"
 
         fun isCompletedPosition(positionMs: Long?, durationMs: Long?): Boolean {
             val position = positionMs ?: return false
@@ -468,3 +501,54 @@ class MoviesRepository(
         }
     }
 }
+
+internal fun prepareMovieSearchSnapshot(items: List<WatchioMovieItem>): List<WatchioMovieItem> = items.map { item ->
+    val prepared = prepareSearchText(item.name)
+    item.copy(normalizedSearchText = prepared.normalized, normalizedSearchWords = prepared.words)
+}
+
+internal fun rankMovieSearchResults(
+    items: List<WatchioMovieItem>,
+    query: String,
+    limit: Int,
+    includeFuzzy: Boolean = true,
+    activeProviderId: ProviderId? = null,
+    keepRunning: () -> Boolean = { true },
+): List<WatchioMovieItem> {
+    val preparedQuery = prepareSearchText(query)
+    val ranked = ArrayList<Triple<WatchioMovieItem, com.iamskorpz.watchioiptv.data.library.SearchRank, Int>>()
+    items.forEachIndexed { index, item ->
+        if (index and 127 == 0 && !keepRunning()) throw CancellationException("Movie search superseded")
+        if (activeProviderId == null || item.providerId == activeProviderId) {
+            val prepared = if (item.normalizedSearchText.isNotBlank()) null else prepareSearchText(item.name)
+            val normalized = prepared?.normalized ?: item.normalizedSearchText
+            val words = prepared?.words ?: item.normalizedSearchWords
+            rankPreparedSearchText(normalized, words, null, preparedQuery, includeFuzzy)?.let { rank ->
+                ranked += Triple(item, rank, index)
+            }
+        }
+    }
+    return ranked
+        .sortedWith(compareBy<Triple<WatchioMovieItem, com.iamskorpz.watchioiptv.data.library.SearchRank, Int>> { it.second.type.rank }
+            .thenBy { it.second.distance }
+            .thenBy { it.third })
+        .map { it.first }
+        .distinctBy { it.providerId to it.id }
+        .take(limit)
+}
+
+internal fun rankActiveProviderMovieSearchResults(
+    items: List<WatchioMovieItem>,
+    activeProviderId: ProviderId,
+    query: String,
+    limit: Int,
+    includeFuzzy: Boolean = true,
+    keepRunning: () -> Boolean = { true },
+): List<WatchioMovieItem> = rankMovieSearchResults(
+    items = items,
+    query = query,
+    limit = limit,
+    includeFuzzy = includeFuzzy,
+    activeProviderId = activeProviderId,
+    keepRunning = keepRunning,
+)

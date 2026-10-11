@@ -33,6 +33,7 @@ data class WatchioMovieItem(
     val resumePositionMs: Long? = null,
     val resumeDurationMs: Long? = null,
     val normalizedSearchText: String = "",
+    val normalizedSearchWords: List<String> = emptyList(),
     val formattedRating: String? = null,
 )
 

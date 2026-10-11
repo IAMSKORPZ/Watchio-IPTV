@@ -7,6 +7,11 @@ internal enum class SearchMatchType(val rank: Int) { Exact(0), Prefix(1), TokenP
 
 internal data class SearchRank(val type: SearchMatchType, val distance: Int = 0)
 
+internal data class PreparedSearchText(
+    val normalized: String,
+    val words: List<String>,
+)
+
 private val leadingCountry = Regex("^(uk|us|usa|de|fr|es|it|ca|au|ie)\\s+")
 private val trailingQuality = Regex("\\s+(hd|fhd|uhd|4k|hevc|h265|h264)$")
 
@@ -22,30 +27,69 @@ internal fun normalizeSearchQuery(value: String): String {
 }
 
 internal fun rankSearchResult(item: WatchioSearchResult, rawQuery: String): SearchRank? {
-    val query = normalizeSearchQuery(rawQuery)
-    if (query.isBlank()) return null
-    val title = normalizeSearchQuery(item.title)
-    val queryWords = query.split(' ')
-    val titleWords = title.split(' ')
+    return rankSearchText(item.title, item.subtitle, rawQuery)
+}
+
+internal fun rankSearchText(titleValue: String, subtitleValue: String?, rawQuery: String): SearchRank? {
+    val query = prepareSearchText(rawQuery)
+    val title = prepareSearchText(titleValue)
+    return rankPreparedSearchText(title, subtitleValue?.let(::prepareSearchText), query)
+}
+
+internal fun prepareSearchText(value: String): PreparedSearchText {
+    val normalized = normalizeSearchQuery(value)
+    return PreparedSearchText(normalized, normalized.split(' ').filter(String::isNotBlank))
+}
+
+internal fun rankPreparedSearchText(
+    title: PreparedSearchText,
+    subtitle: PreparedSearchText?,
+    query: PreparedSearchText,
+    includeFuzzy: Boolean = true,
+): SearchRank? = rankPreparedSearchText(
+    titleNormalized = title.normalized,
+    titleWords = title.words,
+    subtitleNormalized = subtitle?.normalized,
+    query = query,
+    includeFuzzy = includeFuzzy,
+)
+
+internal fun rankPreparedSearchText(
+    titleNormalized: String,
+    titleWords: List<String>,
+    subtitleNormalized: String?,
+    query: PreparedSearchText,
+    includeFuzzy: Boolean = true,
+): SearchRank? {
+    val queryValue = query.normalized
+    if (queryValue.isBlank()) return null
     return when {
-        title == query -> SearchRank(SearchMatchType.Exact)
-        title.startsWith("$query ") -> SearchRank(SearchMatchType.Prefix)
-        queryWords.all { queryWord -> titleWords.any { it.startsWith(queryWord) } } -> SearchRank(SearchMatchType.TokenPrefix)
-        query.length >= 5 && title.contains(query) -> SearchRank(SearchMatchType.Contains)
-        query.length >= 5 && item.subtitle?.let(::normalizeSearchQuery)?.contains(query) == true -> SearchRank(SearchMatchType.Contains, 1)
-        query.length >= 5 -> fuzzyRank(query, title)
+        titleNormalized == queryValue -> SearchRank(SearchMatchType.Exact)
+        titleNormalized.startsWith("$queryValue ") -> SearchRank(SearchMatchType.Prefix)
+        query.words.all { queryWord -> titleWords.any { it.startsWith(queryWord) } } -> SearchRank(SearchMatchType.TokenPrefix)
+        queryValue.length >= 5 && titleNormalized.contains(queryValue) -> SearchRank(SearchMatchType.Contains)
+        queryValue.length >= 5 && subtitleNormalized?.contains(queryValue) == true -> SearchRank(SearchMatchType.Contains, 1)
+        includeFuzzy && queryValue.length >= 5 -> fuzzyRank(query, titleNormalized, titleWords)
         else -> null
     }
 }
 
-private fun fuzzyRank(query: String, title: String): SearchRank? {
-    val threshold = if (query.length <= 7) 1 else 2
-    val candidates = buildList {
-        add(title)
-        if (!query.contains(' ')) addAll(title.split(' '))
+private fun fuzzyRank(query: PreparedSearchText, titleNormalized: String, titleWords: List<String>): SearchRank? {
+    val queryValue = query.normalized
+    val threshold = if (queryValue.length <= 7) 1 else 2
+    var best = threshold + 1
+    if (kotlin.math.abs(queryValue.length - titleNormalized.length) <= threshold) {
+        best = levenshtein(queryValue, titleNormalized, threshold)
     }
-    val distance = candidates.minOfOrNull { levenshtein(query, it, threshold) } ?: return null
-    return if (distance <= threshold) SearchRank(SearchMatchType.Fuzzy, distance) else null
+    if (query.words.size == 1) {
+        for (word in titleWords) {
+            if (kotlin.math.abs(queryValue.length - word.length) <= threshold) {
+                best = minOf(best, levenshtein(queryValue, word, threshold))
+                if (best == 0) break
+            }
+        }
+    }
+    return if (best <= threshold) SearchRank(SearchMatchType.Fuzzy, best) else null
 }
 
 private fun levenshtein(left: String, right: String, cutoff: Int): Int {

@@ -41,6 +41,9 @@ interface LiveStreamDao {
     @Query("SELECT * FROM live_streams WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC")
     suspend fun getByProvider(providerId: String): List<LiveStreamEntity>
 
+    @Query("SELECT streamId AS contentId, name AS title, normalizedName AS normalizedTitle, iconUrl AS imageUrl, categoryId AS subtitle, NULL AS rating, serverOrder AS sourceOrder, NULL AS seriesName FROM live_streams WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC")
+    suspend fun getSearchRows(providerId: String): List<CatalogSearchRow>
+
     @Query("SELECT * FROM live_streams WHERE providerId = :providerId AND normalizedName LIKE '%' || :query || '%' ORDER BY serverOrder ASC, name ASC LIMIT :limit")
     suspend fun search(providerId: String, query: String, limit: Int): List<LiveStreamEntity>
 
@@ -64,6 +67,9 @@ interface VodDao {
 
     @Query("SELECT * FROM vod_streams WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC")
     suspend fun getByProvider(providerId: String): List<VodStreamEntity>
+
+    @Query("SELECT streamId AS contentId, name AS title, normalizedName AS normalizedTitle, posterUrl AS imageUrl, genre AS subtitle, rating AS rating, serverOrder AS sourceOrder, NULL AS seriesName FROM vod_streams WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC")
+    suspend fun getSearchRows(providerId: String): List<CatalogSearchRow>
 
     @Query("SELECT * FROM vod_streams WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC, streamId ASC LIMIT :limit OFFSET :offset")
     suspend fun getPage(providerId: String, limit: Int, offset: Int): List<VodStreamEntity>
@@ -121,6 +127,9 @@ interface SeriesDao {
 
     @Query("SELECT * FROM series WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC")
     suspend fun getByProvider(providerId: String): List<SeriesEntity>
+
+    @Query("SELECT seriesId AS contentId, name AS title, normalizedName AS normalizedTitle, coverUrl AS imageUrl, genre AS subtitle, rating AS rating, serverOrder AS sourceOrder, NULL AS seriesName FROM series WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC")
+    suspend fun getSearchRows(providerId: String): List<CatalogSearchRow>
 
     @Query("SELECT * FROM series WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC, seriesId ASC LIMIT :limit OFFSET :offset")
     suspend fun getPage(providerId: String, limit: Int, offset: Int): List<SeriesEntity>
@@ -296,6 +305,9 @@ interface M3uItemDao {
 
     @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND contentType = :contentType ORDER BY playlistOrder ASC, name ASC")
     suspend fun getByProviderAndType(providerId: String, contentType: String): List<M3uItemEntity>
+
+    @Query("SELECT itemId AS contentId, name AS title, normalizedName AS normalizedTitle, tvgLogo AS imageUrl, groupTitle AS subtitle, NULL AS rating, playlistOrder AS sourceOrder, seriesName AS seriesName FROM m3u_items WHERE providerId = :providerId AND contentType = :contentType ORDER BY playlistOrder ASC, name ASC")
+    suspend fun getSearchRowsByType(providerId: String, contentType: String): List<CatalogSearchRow>
 
     @Query("SELECT * FROM m3u_items WHERE providerId = :providerId AND contentType = :contentType ORDER BY playlistOrder ASC, name ASC, itemId ASC LIMIT :limit OFFSET :offset")
     suspend fun getPageByType(providerId: String, contentType: String, limit: Int, offset: Int): List<M3uItemEntity>

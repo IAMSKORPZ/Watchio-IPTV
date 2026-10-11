@@ -253,10 +253,22 @@ class AppContainer(context: Context) {
     val updateRepository = AppVariantBindings.createUpdateRepository(appContext, networkModule.okHttpClient)
 
     init {
-        xtreamRepository.onMoviesUpdated = { moviesRepository.invalidateCache(it) }
-        m3uRepository.onMoviesUpdated = { moviesRepository.invalidateCache(it) }
-        xtreamRepository.onSeriesUpdated = { seriesRepository.invalidateCache(it) }
-        m3uRepository.onSeriesUpdated = { seriesRepository.invalidateCache(it) }
+        xtreamRepository.onMoviesUpdated = {
+            moviesRepository.invalidateCache(it)
+            searchRepository.invalidate(it)
+        }
+        m3uRepository.onMoviesUpdated = {
+            moviesRepository.invalidateCache(it)
+            searchRepository.invalidate(it)
+        }
+        xtreamRepository.onSeriesUpdated = {
+            seriesRepository.invalidateCache(it)
+            searchRepository.invalidate(it)
+        }
+        m3uRepository.onSeriesUpdated = {
+            seriesRepository.invalidateCache(it)
+            searchRepository.invalidate(it)
+        }
     }
 
 }

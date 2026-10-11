@@ -383,6 +383,9 @@ fun WatchioNativeApp(
                 LaunchedEffect(state.providersLoaded, state.providerId, state.liveCount, state.movieCount, state.seriesCount) {
                     if (state.providersLoaded && state.providerId != null) QuickLoginBootstrapTrace.finishUiReady()
                 }
+                LaunchedEffect(state.providersLoaded, state.providerId) {
+                    if (state.providersLoaded) state.providerId?.let { container.searchRepository.warm(it) }
+                }
                 LaunchedEffect(state.providersLoaded, state.providerType) {
                     if (state.providersLoaded && state.providerType != ProviderType.Xtream) {
                         navController.navigate("providers/xtream/add") {
@@ -596,6 +599,7 @@ fun WatchioNativeApp(
                             navController.navigate("series/${item.series.id}")
                         }
                     },
+                    onSearchResult = { result -> navController.navigate("series/${result.contentId}") },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -702,6 +706,7 @@ fun WatchioNativeApp(
                     onSearch = moviesViewModel::updateSearch,
                     onLoadMore = moviesViewModel::loadMore,
                     onMovie = { movie -> navController.navigate("movies/${movie.id}") },
+                    onSearchResult = { result -> navController.navigate("movies/${result.contentId}") },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -790,6 +795,7 @@ fun WatchioNativeApp(
                     onCategory = liveViewModel::selectCategory,
                     onCategorySearch = liveViewModel::updateCategorySearch,
                     onLiveSearch = liveViewModel::updateLiveSearch,
+                    onSearchChannel = liveViewModel::selectChannelById,
                     onChannel = liveViewModel::selectChannel,
                     onChannelBrowsed = liveViewModel::browseChannel,
                     onFavorite = liveViewModel::toggleFavorite,
@@ -2806,6 +2812,7 @@ private fun moviesFactory(container: AppContainer): ViewModelProvider.Factory =
                 playerManager = container.playerManager,
                 clock = SystemWatchioClock,
                 xtreamRepository = container.xtreamRepository,
+                searchRepository = container.searchRepository,
             ) as T
         }
     }
@@ -2822,6 +2829,7 @@ private fun seriesFactory(container: AppContainer): ViewModelProvider.Factory =
                 playerManager = container.playerManager,
                 clock = SystemWatchioClock,
                 xtreamRepository = container.xtreamRepository,
+                searchRepository = container.searchRepository,
             ) as T
         }
     }
@@ -3671,6 +3679,7 @@ private fun liveTvFactory(container: AppContainer, initialChannel: LiveTvChannel
                 playerManager = container.playerManager,
                 clock = SystemWatchioClock,
                 initialChannel = initialChannel,
+                searchRepository = container.searchRepository,
             ) as T
         }
     }

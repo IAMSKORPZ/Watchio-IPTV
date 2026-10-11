@@ -34,6 +34,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
@@ -314,7 +315,12 @@ class LandscapeResponsiveComposeTest {
         var movieQuery by mutableStateOf("")
         var categoryQuery by mutableStateOf("")
         val openedMovie = AtomicReference<WatchioMovieItem?>(null)
-        setLandscapeContent {
+        val searchMovies = buildList {
+            add(action)
+            add(drama)
+            repeat(10) { index -> add(movie("search-$index").copy(name = "Action Extra $index")) }
+        }
+        setLandscapeKeyboardContent {
             WatchioTheme {
                 Box(Modifier.fillMaxSize()) {
                     MoviesScreen(
@@ -322,7 +328,7 @@ class LandscapeResponsiveComposeTest {
                             loading = false,
                             categories = listOf(movieCategory("all"), movieCategory("favorites").copy(name = "FAVOURITES"), movieCategory("history").copy(name = "HISTORY"), movieCategory("action").copy(name = "ACTION", kind = MovieCategoryKind.Provider, sourceCategoryId = "action")),
                             selectedCategory = movieCategory("all"),
-                            movies = if (movieQuery.isBlank()) emptyList() else listOf(action, drama).filter { it.name.contains(movieQuery, ignoreCase = true) },
+                            movies = if (movieQuery.isBlank()) emptyList() else searchMovies.filter { it.name.contains(movieQuery, ignoreCase = true) },
                             searchQuery = movieQuery,
                             categorySearchQuery = categoryQuery,
                         ),
@@ -339,6 +345,23 @@ class LandscapeResponsiveComposeTest {
 
         composeRule.onNodeWithTag("movies-search", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("movie-search-panel").assertIsDisplayed()
+        assertFalse(
+            "movie search panel must remain structural and must not own focus",
+            composeRule.onNodeWithTag("movie-search-panel").fetchSemanticsNode().config
+                .contains(SemanticsActions.RequestFocus),
+        )
+        assertFalse(
+            "movie search grid must remain structural and must not own focus",
+            composeRule.onNodeWithTag("movie-search-results").fetchSemanticsNode().config
+                .contains(SemanticsActions.RequestFocus),
+        )
+        assertTrue(
+            "movie search grid must remain vertically scrollable",
+            composeRule.onNodeWithTag("movie-search-results").fetchSemanticsNode().config
+                .contains(SemanticsActions.ScrollBy),
+        )
+        assertTrue(composeRule.onNodeWithTag("movie-search-close").fetchSemanticsNode().config.contains(SemanticsActions.RequestFocus))
+        assertTrue(composeRule.onNodeWithTag("movie-search-clear").fetchSemanticsNode().config.contains(SemanticsActions.RequestFocus))
         composeRule.onNodeWithTag("movie-search-field").assertIsDisplayed()
         composeRule.onNodeWithTag("movie-search-field").performSemanticsAction(SemanticsActions.RequestFocus) { requestFocus ->
             assertTrue("movie search field should accept initial focus", requestFocus())
@@ -350,18 +373,57 @@ class LandscapeResponsiveComposeTest {
         composeRule.onNodeWithTag("movie-search-field").assertIsFocused()
         composeRule.onNodeWithTag("movies-title").assertIsDisplayed()
         composeRule.onNodeWithTag("movies-clock").assertIsDisplayed()
-        val headerBounds = composeRule.onNodeWithTag("movies-header", useUnmergedTree = true).getUnclippedBoundsInRoot()
+        val panelBounds = composeRule.onNodeWithTag("movie-search-panel", useUnmergedTree = true).getUnclippedBoundsInRoot()
         val fieldBounds = composeRule.onNodeWithTag("movie-search-field", useUnmergedTree = true).getUnclippedBoundsInRoot()
-        assertTrue("movie search field must not be embedded in header", fieldBounds.top > headerBounds.bottom)
+        assertTrue("movie search field must sit below modal title row", fieldBounds.top > panelBounds.top)
+        val fieldHeight = fieldBounds.bottom - fieldBounds.top
+        assertTrue("field must preserve Material single-line content height; height=$fieldHeight", fieldHeight >= 55.9.dp)
+        assertTrue("field must remain compact; height=$fieldHeight", fieldHeight <= 58.dp)
+
+        listOf("cars", "GYPQ", "123").forEach { query ->
+            composeRule.runOnUiThread { movieQuery = query }
+            composeRule.waitForIdle()
+            val editable = composeRule.onNodeWithTag("movie-search-field").fetchSemanticsNode().config
+                .getOrElse(SemanticsProperties.EditableText) { AnnotatedString("") }
+            assertEquals("full query must remain in visible editable field", query, editable.text)
+        }
 
         composeRule.runOnUiThread { movieQuery = "Action" }
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag("movie-search-result", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNode(
+        composeRule.onNodeWithTag("movie-search-field").performImeAction()
+        composeRule.waitForIdle()
+        val movieResults = composeRule.onAllNodes(
             hasTestTag("movie-card").and(hasAnyAncestor(hasTestTag("movie-search-result"))),
             useUnmergedTree = true,
-        ).performSemanticsAction(SemanticsActions.OnClick) { click ->
+        )
+        val movieResult = movieResults[0]
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            val bounds = composeRule.onNodeWithTag("movie-search-results").getUnclippedBoundsInRoot()
+            bounds.bottom - bounds.top >= 180.dp
+        }
+        val posterBounds = composeRule.onAllNodesWithTag("movie-poster", useUnmergedTree = true)[0].getUnclippedBoundsInRoot()
+        val gridBounds = composeRule.onNodeWithTag("movie-search-results").getUnclippedBoundsInRoot()
+        val gridHeight = gridBounds.bottom - gridBounds.top
+        assertTrue("poster viewport must retain substantial height; height=$gridHeight", gridHeight >= 180.dp)
+        val posterRatio = (posterBounds.bottom - posterBounds.top).value / (posterBounds.right - posterBounds.left).value
+        assertTrue("search poster must retain 2:3 portrait ratio; ratio=$posterRatio", posterRatio in 1.45f..1.55f)
+        val posterHeight = posterBounds.bottom - posterBounds.top
+        assertTrue("search poster must have useful height; height=$posterHeight", posterHeight >= 130.dp)
+        assertTrue(
+            "first search poster must be fully visible; poster=$posterBounds grid=$gridBounds",
+            posterBounds.bottom <= gridBounds.bottom + 1.dp,
+        )
+        movieResult.performSemanticsAction(SemanticsActions.RequestFocus) { requestFocus ->
+            assertTrue("movie result should accept focus", requestFocus())
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            movieResult.fetchSemanticsNode().config.getOrElse(SemanticsProperties.Focused) { false }
+        }
+        movieResult.assertIsFocused()
+        composeRule.runOnIdle { assertEquals("focus must not activate movie", null, openedMovie.get()) }
+        movieResult.performSemanticsAction(SemanticsActions.OnClick) { click ->
             assertTrue("movie search result click action should execute", click())
         }
         composeRule.runOnIdle {
@@ -2177,7 +2239,13 @@ class LandscapeResponsiveComposeTest {
         }
 
         assertTrue(composeRule.onAllNodesWithText("Titanic", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
-        composeRule.onAllNodesWithTag("movie-search-result", useUnmergedTree = true)[0].performClick()
+        composeRule.onNodeWithTag("movie-search-field").performImeAction()
+        composeRule.waitForIdle()
+        composeRule.onAllNodes(
+            hasTestTag("movie-card").and(hasAnyAncestor(hasTestTag("movie-search-result"))),
+            useUnmergedTree = true,
+        )[0]
+            .performSemanticsAction(SemanticsActions.OnClick) { click -> assertTrue(click()) }
         composeRule.waitForIdle()
 
         assertTrue("Selecting movie opens details", openedMovie?.id == dramaMovie.id)
@@ -2293,6 +2361,16 @@ class LandscapeResponsiveComposeTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("global-search-overlay", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("global-search-panel", useUnmergedTree = true).assertIsDisplayed()
+        assertFalse(
+            "global search panel must remain structural and must not own focus",
+            composeRule.onNodeWithTag("global-search-panel", useUnmergedTree = true).fetchSemanticsNode().config
+                .contains(SemanticsActions.RequestFocus),
+        )
+        assertFalse(
+            "global search results container must remain structural and must not own focus",
+            composeRule.onNodeWithTag("global-search-results", useUnmergedTree = true).fetchSemanticsNode().config
+                .contains(SemanticsActions.RequestFocus),
+        )
         composeRule.onNodeWithTag("global-search-field", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("global-search-field", useUnmergedTree = true).assertIsFocused()
 

@@ -72,6 +72,7 @@ import com.iamskorpz.watchioiptv.core.player.WatchioPlayerState
 import com.iamskorpz.watchioiptv.data.live.LiveTvCategory
 import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import com.iamskorpz.watchioiptv.data.live.LiveTvNowNext
+import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
 import com.iamskorpz.watchioiptv.domain.repository.ControlAutoHideDelay
 import com.iamskorpz.watchioiptv.domain.repository.PlayerSettings
 import com.iamskorpz.watchioiptv.ui.components.WatchioButton
@@ -85,6 +86,8 @@ import com.iamskorpz.watchioiptv.ui.components.WatchioFocusableCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
 import com.iamskorpz.watchioiptv.ui.components.WatchioPlayerSurface
+import com.iamskorpz.watchioiptv.ui.components.UnifiedSearchLayout
+import com.iamskorpz.watchioiptv.ui.components.UnifiedSearchOverlay
 import com.iamskorpz.watchioiptv.ui.focus.CategoryContentFocusTransferEffect
 import com.iamskorpz.watchioiptv.ui.focus.rememberCategoryContentFocusTransferState
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
@@ -109,6 +112,7 @@ fun LiveTvScreen(
     onRefreshEpg: () -> Unit,
     onFullscreen: () -> Unit,
     onBack: () -> Unit,
+    onSearchChannel: (String) -> Unit = {},
 ) {
     val colors = LocalWatchioColors.current
     val firstCategoryFocus = remember { FocusRequester() }
@@ -186,15 +190,25 @@ fun LiveTvScreen(
                 onBack = onBack,
             )
             if (liveSearchVisible) {
-                LiveChannelSearchOverlay(
+                UnifiedSearchOverlay(
+                    title = "Search channels",
                     query = uiState.liveSearchQuery,
-                    results = if (uiState.liveSearchQuery.isBlank()) emptyList() else uiState.channels,
-                    selectedChannel = uiState.selectedChannel,
-                    onSearch = onLiveSearch,
-                    onSelect = { channel ->
+                    results = if (uiState.liveSearchQuery.isBlank()) emptyList() else uiState.liveSearchResults,
+                    loading = uiState.liveSearchLoading,
+                    layout = UnifiedSearchLayout.Channels,
+                    testTagPrefix = "live-search",
+                    onQuery = onLiveSearch,
+                    metadata = { result ->
+                        val guide = uiState.channelProgrammes[result.contentId]
+                        listOfNotNull(
+                            guide?.currentTitle?.let { "Now: $it" },
+                            guide?.nextTitle?.let { "Next: $it" },
+                        )
+                    },
+                    onResult = { result ->
                         liveSearchVisible = false
                         onLiveSearch("")
-                        if (channel.id != uiState.selectedChannel?.id) onChannel(channel)
+                        if (result.contentId != uiState.selectedChannel?.id) onSearchChannel(result.contentId)
                     },
                     onDismiss = {
                         liveSearchVisible = false

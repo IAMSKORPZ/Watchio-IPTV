@@ -13,6 +13,9 @@ import com.iamskorpz.watchioiptv.data.series.SeriesDetails
 import com.iamskorpz.watchioiptv.data.series.SeriesRepository
 import com.iamskorpz.watchioiptv.data.series.WatchioEpisodeItem
 import com.iamskorpz.watchioiptv.data.series.WatchioSeriesItem
+import com.iamskorpz.watchioiptv.data.library.SearchRepository
+import com.iamskorpz.watchioiptv.data.library.SearchScope
+import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
 import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncKey
 import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncState
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
@@ -41,6 +44,8 @@ data class SeriesUiState(
     val selectedCategory: SeriesCategory? = null,
     val series: List<SeriesCardUiModel> = emptyList(),
     val searchQuery: String = "",
+    val searchResults: List<WatchioSearchResult> = emptyList(),
+    val searchLoading: Boolean = false,
     val loadingMore: Boolean = false,
     val hasMore: Boolean = false,
     val catalogSyncState: CatalogSyncState = CatalogSyncState.Idle,
@@ -71,6 +76,7 @@ class SeriesViewModel(
     private val playerManager: WatchioPlayerManager,
     private val clock: WatchioClock,
     private val xtreamRepository: XtreamRepository,
+    private val searchRepository: SearchRepository? = null,
 ) : ViewModel() {
     private val mutableSeries = MutableStateFlow(SeriesUiState())
     private val mutableDetails = MutableStateFlow(SeriesDetailsUiState())
@@ -104,21 +110,43 @@ class SeriesViewModel(
         }
         viewModelScope.launch {
             searchQueryFlow
-                .debounce(250)
+                .debounce(50)
                 .distinctUntilChanged()
                 .collectLatest { query ->
                     val providerId = seriesRepository.selectedProviderId() ?: return@collectLatest
-                    val allCategory = mutableSeries.value.categories.firstOrNull { it.id == "all" }
-                        ?: mutableSeries.value.selectedCategory
-                        ?: return@collectLatest
-                    val category = if (query.isBlank()) mutableSeries.value.selectedCategory ?: allCategory else allCategory
-                    val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE, query)
-                    // A delayed result may complete after the IME has already produced a
-                    // newer edit. Result loading must never write editable text back.
-                    mutableSeries.value = mutableSeries.value.copy(
-                        series = items,
-                        hasMore = query.isBlank() && items.size == SeriesRepository.PAGE_SIZE,
-                    )
+                    if (query.isBlank()) return@collectLatest
+                    mutableSeries.value = mutableSeries.value.copy(searchLoading = true, searchResults = emptyList())
+                    val shared = searchRepository
+                    if (shared != null) {
+                        shared.searchProgressively(providerId, query, SearchScope.Series) { strong ->
+                            if (mutableSeries.value.searchQuery == query && shared.selectedProviderId() == providerId) {
+                                mutableSeries.value = mutableSeries.value.copy(searchResults = strong.results.series, searchLoading = true)
+                            }
+                        }.also { final ->
+                            if (mutableSeries.value.searchQuery == query && shared.selectedProviderId() == providerId) {
+                                mutableSeries.value = mutableSeries.value.copy(searchResults = final.results.series, searchLoading = false)
+                            }
+                        }
+                    } else {
+                        val all = mutableSeries.value.categories.firstOrNull { it.id == "all" }
+                            ?: mutableSeries.value.selectedCategory
+                            ?: return@collectLatest
+                        val items = seriesRepository.seriesPage(providerId, all, 0, 500, query)
+                        val results = items.map { item ->
+                            WatchioSearchResult(
+                                providerId = item.series.providerId,
+                                contentType = ContentType.Series,
+                                contentId = item.series.id,
+                                title = item.series.name,
+                                subtitle = item.series.genre,
+                                imageUrl = item.series.coverUrl,
+                                rating = item.series.rating,
+                            )
+                        }
+                        if (mutableSeries.value.searchQuery == query) {
+                            mutableSeries.value = mutableSeries.value.copy(searchResults = results, searchLoading = false)
+                        }
+                    }
                 }
         }
         viewModelScope.launch {
@@ -197,35 +225,30 @@ class SeriesViewModel(
                 hasMore = items.size == SeriesRepository.PAGE_SIZE,
                 catalogSyncState = mutableSeries.value.catalogSyncState,
             )
+            searchRepository?.warm(providerId)
         }
     }
 
     fun selectCategory(category: SeriesCategory) {
         categoryJob?.cancel()
-        val currentQuery = mutableSeries.value.searchQuery
         mutableSeries.value = mutableSeries.value.copy(selectedCategory = category, series = emptyList(), loadingMore = false, hasMore = false)
         categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val providerId = seriesRepository.selectedProviderId() ?: return@launch
-            val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE, currentQuery)
-            mutableSeries.value = mutableSeries.value.copy(series = items, hasMore = currentQuery.isBlank() && items.size == SeriesRepository.PAGE_SIZE)
+            val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE)
+            mutableSeries.value = mutableSeries.value.copy(series = items, hasMore = items.size == SeriesRepository.PAGE_SIZE)
         }
     }
 
     fun updateSearch(query: String) {
         // Text ownership must update synchronously. The debounced flow owns only
         // result loading; delaying this echo makes IMEs edit against stale text.
-        mutableSeries.value = mutableSeries.value.copy(searchQuery = query)
+        mutableSeries.value = mutableSeries.value.copy(
+            searchQuery = query,
+            searchResults = if (query.isBlank()) emptyList() else mutableSeries.value.searchResults,
+            searchLoading = query.isNotBlank(),
+        )
         if (query.isBlank()) {
             searchQueryFlow.value = ""
-            categoryJob?.cancel()
-            categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
-                val providerId = seriesRepository.selectedProviderId() ?: return@launch
-                val category = mutableSeries.value.selectedCategory
-                    ?: mutableSeries.value.categories.firstOrNull { it.id == "all" }
-                    ?: return@launch
-                val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE)
-                mutableSeries.value = mutableSeries.value.copy(series = items, hasMore = items.size == SeriesRepository.PAGE_SIZE)
-            }
         } else {
             searchQueryFlow.value = query
         }

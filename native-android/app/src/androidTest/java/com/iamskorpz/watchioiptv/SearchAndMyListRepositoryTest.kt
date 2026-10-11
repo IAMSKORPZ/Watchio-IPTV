@@ -107,6 +107,52 @@ class SearchAndMyListRepositoryTest {
         assertEquals(listOf("m2"), repository.search("harry poter", SearchScope.Movies).movies.map { it.contentId })
     }
 
+    @Test fun progressiveSearchPublishesStrongBeforeConservativeFuzzy() = runBlocking {
+        seedProvider("provider-a")
+        database.vodDao().upsertAll(
+            listOf(
+                movie("provider-a", "exact", "Harry Potter"),
+                movie("provider-a", "fuzzy", "Harry Poter"),
+            ),
+        )
+        val repository = SearchRepository(database, settings)
+        var strongIds = emptyList<String>()
+
+        val final = repository.searchProgressively(ProviderId("provider-a"), "harry potter", SearchScope.Movies) {
+            strongIds = it.results.movies.map { row -> row.contentId }
+        }
+
+        assertEquals(listOf("exact"), strongIds)
+        assertEquals("exact", final.results.movies.first().contentId)
+        assertTrue(final.results.movies.any { it.contentId == "fuzzy" })
+    }
+
+    @Test fun oneSnapshotKeepsRankingParityAcrossScopedAndGlobalSearch() = runBlocking {
+        seedProvider("provider-a")
+        database.liveStreamDao().upsertAll(listOf(live("provider-a", "l1", "Sky Sports News"), live("provider-a", "l2", "Sky Sports Racing")))
+        database.vodDao().upsertAll(listOf(movie("provider-a", "m1", "Sky Sports Story"), movie("provider-a", "m2", "The Sky Story")))
+        database.seriesDao().upsertAll(listOf(series("provider-a", "s1", "Sky Sports Series"), series("provider-a", "s2", "Under The Sky")))
+        val repository = SearchRepository(database, settings)
+
+        val global = repository.search("sky sports", SearchScope.Global)
+
+        assertEquals(repository.search("sky sports", SearchScope.Live).live.map { it.contentId }, global.live.map { it.contentId })
+        assertEquals(repository.search("sky sports", SearchScope.Movies).movies.map { it.contentId }, global.movies.map { it.contentId })
+        assertEquals(repository.search("sky sports", SearchScope.Series).series.map { it.contentId }, global.series.map { it.contentId })
+    }
+
+    @Test fun explicitInvalidationRebuildsProviderSnapshot() = runBlocking {
+        seedProvider("provider-a")
+        database.vodDao().upsertAll(listOf(movie("provider-a", "m1", "Original Movie")))
+        val repository = SearchRepository(database, settings)
+        repository.warm(ProviderId("provider-a"))
+        database.vodDao().upsertAll(listOf(movie("provider-a", "m2", "Added Movie")))
+
+        assertTrue(repository.search("added", SearchScope.Movies).movies.isEmpty())
+        repository.invalidate(ProviderId("provider-a"))
+        assertEquals(listOf("m2"), repository.search("added", SearchScope.Movies).movies.map { it.contentId })
+    }
+
     @Test
     fun myListUsesSharedFavoritesAndHistoryWithoutLiveContinue() = runBlocking {
         seedProvider("provider-a")

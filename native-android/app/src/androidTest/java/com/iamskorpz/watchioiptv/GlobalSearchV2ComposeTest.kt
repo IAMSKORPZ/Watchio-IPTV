@@ -6,6 +6,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.data.library.SearchResults
 import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
@@ -27,9 +29,10 @@ class GlobalSearchV2ComposeTest {
         var cleared = false
         setContent(SearchUiState(recentQueries = listOf("Batman", "BBC One")), onRecent = { selected = it }, onClear = { cleared = true })
         composeRule.onNodeWithTag("global-search-home").assertIsDisplayed()
-        composeRule.onNodeWithText("Batman").performClick()
+        composeRule.onNodeWithTag("global-search-recent-Batman").performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.runOnIdle { assertEquals("Batman", selected) }
         composeRule.onNodeWithTag("global-search-clear-recents").performClick()
-        composeRule.runOnIdle { assertEquals("Batman", selected); assertTrue(cleared) }
+        composeRule.runOnIdle { assertTrue(cleared) }
     }
 
     @Test fun noResultsAndErrorStatesAreClear() {

@@ -13,6 +13,9 @@ import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import com.iamskorpz.watchioiptv.data.live.LiveTvNowNext
 import com.iamskorpz.watchioiptv.data.live.LiveTvRepository
 import com.iamskorpz.watchioiptv.data.epg.EpgRefreshCoordinator
+import com.iamskorpz.watchioiptv.data.library.SearchRepository
+import com.iamskorpz.watchioiptv.data.library.SearchScope
+import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
 import com.iamskorpz.watchioiptv.domain.model.ContentType
 import com.iamskorpz.watchioiptv.domain.repository.FavoriteItem
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
@@ -28,6 +31,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -44,10 +50,13 @@ data class LiveTvUiState(
     val channelProgrammes: Map<String, LiveTvNowNext> = emptyMap(),
     val categorySearchQuery: String = "",
     val liveSearchQuery: String = "",
+    val liveSearchResults: List<WatchioSearchResult> = emptyList(),
+    val liveSearchLoading: Boolean = false,
     val epgRefreshing: Boolean = false,
     val epgRefreshMessage: String? = null,
 )
 
+@OptIn(kotlinx.coroutines.FlowPreview::class)
 class LiveTvViewModel(
     private val liveTvRepository: LiveTvRepository,
     private val favoritesRepository: FavoritesRepository,
@@ -57,11 +66,13 @@ class LiveTvViewModel(
     private val playerManager: WatchioPlayerManager,
     private val clock: WatchioClock,
     private val initialChannel: LiveTvChannel? = null,
+    private val searchRepository: SearchRepository? = null,
 ) : ViewModel() {
     private val mutableUi = MutableStateFlow(LiveTvUiState())
     private var playbackJob: Job? = null
     private var epgJob: Job? = null
     private var channelProgrammesJob: Job? = null
+    private val liveSearchFlow = MutableStateFlow("")
 
     val uiState: StateFlow<LiveTvUiState> = mutableUi.asStateFlow()
     val playerState: StateFlow<WatchioPlayerState> = playerManager.state
@@ -71,6 +82,46 @@ class LiveTvViewModel(
 
     init {
         load()
+        viewModelScope.launch {
+            liveSearchFlow.debounce(50).distinctUntilChanged().collectLatest { query ->
+                if (query.isBlank()) return@collectLatest
+                val providerId = liveTvRepository.selectedProviderId() ?: return@collectLatest
+                val shared = searchRepository
+                if (shared == null) {
+                    val all = mutableUi.value.categories.firstOrNull { it.kind == LiveTvCategoryKind.All }
+                    val rows = all?.let { liveTvRepository.channels(providerId, it) }.orEmpty()
+                    val normalizedQuery = query.trim()
+                    val results = rows.filter { it.name.contains(normalizedQuery, ignoreCase = true) }.map { channel ->
+                        WatchioSearchResult(
+                            providerId = channel.providerId,
+                            contentType = ContentType.Live,
+                            contentId = channel.id,
+                            title = channel.name,
+                            subtitle = channel.categoryId,
+                            imageUrl = channel.logoUrl,
+                        )
+                    }
+                    if (mutableUi.value.liveSearchQuery == query && liveTvRepository.selectedProviderId() == providerId) {
+                        mutableUi.value = mutableUi.value.copy(liveSearchResults = results, liveSearchLoading = false)
+                    }
+                    return@collectLatest
+                }
+                val final = shared.searchProgressively(providerId, query, SearchScope.Live) { strong ->
+                    if (mutableUi.value.liveSearchQuery == query) {
+                        mutableUi.value = mutableUi.value.copy(
+                            liveSearchResults = strong.results.live,
+                            liveSearchLoading = true,
+                        )
+                    }
+                }
+                if (mutableUi.value.liveSearchQuery == query && shared.selectedProviderId() == providerId) {
+                    mutableUi.value = mutableUi.value.copy(
+                        liveSearchResults = final.results.live,
+                        liveSearchLoading = false,
+                    )
+                }
+            }
+        }
     }
 
     fun load() {
@@ -140,6 +191,7 @@ class LiveTvViewModel(
 
             )
             loadChannelProgrammes(providerId, channels)
+            searchRepository?.warm(providerId)
 
             if (targetChannel != null) {
                 updateNowNext(targetChannel)
@@ -188,25 +240,12 @@ class LiveTvViewModel(
     fun updateLiveSearch(query: String) {
         // Echo editable text before asynchronous filtering so Compose can keep
         // the IME selection and composition attached to the current value.
-        mutableUi.value = mutableUi.value.copy(liveSearchQuery = query)
-        viewModelScope.launch {
-            val providerId = liveTvRepository.selectedProviderId() ?: return@launch
-            val allCategory = mutableUi.value.categories.firstOrNull { it.id == "all" }
-            val channels = if (query.isBlank()) {
-                val category = mutableUi.value.selectedCategory ?: allCategory
-                category?.let { liveTvRepository.channels(providerId, it) }.orEmpty()
-            } else {
-                allCategory?.let { liveTvRepository.channels(providerId, it) }
-                    .orEmpty()
-                    .filter { it.name.contains(query, ignoreCase = true) }
-            }
-            if (mutableUi.value.liveSearchQuery != query) return@launch
-            mutableUi.value = mutableUi.value.copy(
-                channels = channels,
-                selectedChannel = channels.firstOrNull { it.id == mutableUi.value.selectedChannel?.id } ?: mutableUi.value.selectedChannel,
-            )
-            loadChannelProgrammes(providerId, channels)
-        }
+        mutableUi.value = mutableUi.value.copy(
+            liveSearchQuery = query,
+            liveSearchResults = if (query.isBlank()) emptyList() else mutableUi.value.liveSearchResults,
+            liveSearchLoading = query.isNotBlank(),
+        )
+        liveSearchFlow.value = query
     }
 
     fun selectChannelById(channelId: String) {

@@ -251,6 +251,32 @@ class MoviesRepositoryInstrumentedTest {
     }
 
     @Test
+    fun movieSearchReusesPreparedProviderSnapshotAndRefreshInvalidatesIt() = runBlocking {
+        val provider1 = ProviderId("movie-search-cache-1")
+        val provider2 = ProviderId("movie-search-cache-2")
+        database.providerDao().upsert(ProviderEntity(provider1.value, "M3U 1", "m3u_url", "http://example.invalid/1.m3u", 1, 1, null, true))
+        database.providerDao().upsert(ProviderEntity(provider2.value, "M3U 2", "m3u_url", "http://example.invalid/2.m3u", 1, 1, null, true))
+        database.m3uItemDao().upsertAll(
+            listOf(
+                item(provider1.value, "cars-1", 1).copy(name = "Cars"),
+                item(provider2.value, "cars-2", 1).copy(name = "Cars 2"),
+            ),
+        )
+        val repository = repository(provider1)
+
+        assertEquals(listOf("cars-1"), repository.searchMovies(provider1, "cars").map { it.id })
+        val cached = repository.getOrLoadCatalog(provider1)
+        assertTrue(cached.movies.single().normalizedSearchText.isNotBlank())
+        assertTrue(cached.movies.single().normalizedSearchWords.isNotEmpty())
+        assertTrue(cached === repository.getOrLoadCatalog(provider1))
+        assertEquals(listOf("cars-2"), repository.searchMovies(provider2, "cars").map { it.id })
+
+        database.m3uItemDao().upsertAll(listOf(item(provider1.value, "cars-3", 2).copy(name = "Cars 3")))
+        repository.invalidateCache(provider1)
+        assertEquals(listOf("cars-1", "cars-3"), repository.searchMovies(provider1, "cars").map { it.id })
+    }
+
+    @Test
     fun seriesCatalogLoadsZeroEpisodesAndResolvesContinueWatchingTargeted() = runBlocking {
         val providerId = ProviderId("xtream-perf")
         database.providerDao().upsert(ProviderEntity(providerId.value, "Xtream", "xtream", "http://example.invalid", 1, 1, null, true))

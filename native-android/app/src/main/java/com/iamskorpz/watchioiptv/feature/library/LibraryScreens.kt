@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -64,6 +65,7 @@ import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
 import com.iamskorpz.watchioiptv.ui.components.watchioSemanticBorder
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioRadii
 import com.iamskorpz.watchioiptv.ui.components.tvSearchInput
+import com.iamskorpz.watchioiptv.ui.components.WatchioSearchTextField
 
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
@@ -108,12 +110,10 @@ fun GlobalSearchScreen(
                 panelWidth < 1080.dp -> 5
                 else -> 7
             }
-            WatchioCard(
+            Surface(
                 modifier = Modifier.fillMaxSize(),
-                surfaceRole = WatchioSurfaceRole.Panel,
-                accent = colors.seriesAccent,
-                minWidth = 0.dp,
-                minHeight = 0.dp,
+                color = colors.dialogSurface,
+                shape = RoundedCornerShape(LocalWatchioRadii.current.lg),
             ) {
                 Column(
                     modifier = Modifier
@@ -148,39 +148,15 @@ fun GlobalSearchScreen(
                     }
 
                     // 2. Compact Search Field
-                    BasicTextField(
+                    WatchioSearchTextField(
                         value = state.query,
                         onValueChange = onQuery,
-                        singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            fontSize = 13.sp,
-                            color = colors.textPrimary,
-                        ),
-                        cursorBrush = SolidColor(colors.seriesAccent),
+                        label = "Search Live TV, Movies, and Series",
+                        testTag = "global-search-field",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(36.dp)
-                            .tvSearchInput(firstFocus)
-                            .testTag("global-search-field"),
-                        decorationBox = { innerTextField ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(colors.surfaceElevated, RoundedCornerShape(6.dp))
-                                    .border(1.dp, colors.focusGlow, RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                if (state.query.isEmpty()) {
-                                    Text(
-                                        text = "Search Live TV, Movies, and Series...",
-                                        color = colors.textMuted,
-                                        fontSize = 12.sp,
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        },
+                            .height(56.dp)
+                            .tvSearchInput(firstFocus),
                     )
 
                     // 3. Compact Single Horizontal Filter Toolbar
@@ -223,7 +199,7 @@ fun GlobalSearchScreen(
                     }
 
                     // 4. Expanded Results Area (~75-80% height)
-                    if (state.loading) {
+                    if (state.loading && state.results.isEmpty) {
                         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = colors.seriesAccent)
                         }
