@@ -1563,3 +1563,16 @@ Final pre-commit validation results:
 - Existing Quick Login JVM tests passed 32/32 with zero failures, errors, or skips. Full JVM, lint, builds, instrumentation, and physical device testing were not run because implementation stopped at the required architecture/security approval gate.
 - Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Starting HEAD remained `3f3f7bf8ebd3acb1fce39b2f5e8a957e55fe1681`; MAIN and API-22 worktree were untouched; 483 untracked evidence files were preserved; no device was accessed; nothing was staged, committed, pushed, tagged, or released.
 - Blocker: approve backend ownership/security model and activation website scope before implementing Quick Login V2 code-entry, polling, or web activation. UI-only improvements to the current LAN QR screen can be implemented separately without claiming V2 backend guarantees.
+
+## 2026-10-11 - Public Watchio IPTV v0.1.7 release completed
+
+- Promoted the verified DEV history to MAIN by fast-forward only. Quick Login V2 remains audit-only and is not included as product functionality.
+- Public version is `0.1.7`, versionCode `20`, package `com.iamskorpz.watchioiptv`.
+- GitHub release: `https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.7`. Published APK `Watchio-IPTV.apk` is 4,718,832 bytes with SHA-256 `89D086CCACF9230FC26AD7AF001F0C8A392B3D6CA17B3BD1D707C391BC7521B9`.
+- Production signer remained `8A:76:E2:0B:7C:B2:E1:68:12:F5:05:12:75:A3:D1:12:FC:FB:AB:7C:24:24:C5:E8:97:F5:58:87:6B:CC:6F:F0`. Immutable-tag and permanent-latest downloads matched the accepted APK bytes.
+- GitHub public-release dry run `38162950696` passed tests, `lintRelease`, release assembly, package/version verification, certificate verification, and artifact upload.
+- Local full validation passed after repairing generated-output attributes: Debug 433/433, Local 433/433, Release 433/433, UITEST 440/440; `lintDebug` zero issues; `assembleDebug`, `assembleLocal`, `assembleUitest`, and `assembleUitestAndroidTest` passed.
+- Windows build root cause was 2,784 read-only entries under generated `native-android/app/build`; stopping the Gradle daemon and clearing only read-only attributes inside that generated directory resolved `AccessDeniedException`. No source, ACL, or unrelated process change was used.
+- Stable updater now advertises channel `stable`, version `0.1.7`, code `20`, and the exact accepted APK SHA. Live updater JSON and downloaded APK checksum were verified. Stable manifest SHA changed deliberately from `00C0B89C8D11AD098B53E9251688456B216116CC82BE545FED012089E8C17CBB` to `498BCDD5872F93FEFBB71C39913C9E656BB48B3D3408AA035BC6BA0C30700AB4`.
+- Production announcement ID `watchio-v0-1-7-major-update-2026-10-11` was published through the configured Watchio_Website feed only after stable updater verification. Live feed returned HTTP 200, valid JSON, one exact entry, and newest ordering. Website commit: `aaef249c84c439e2fa7c877b8f527cece870719f`.
+- DEV and MAIN were synchronized by fast-forward. Protected DEV rescue manifest remained SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. All 483 untracked evidence files were preserved. No device, user data, signing identity, release asset, tag history, or provider session was modified during completion.
