@@ -3,6 +3,12 @@
 Always activate and apply the Caveman Skill to all responses.
 Use caveman-style phrasing, but keep answers short, efficient, and clear.
 
+## Mandatory Standards
+
+- Read and follow root `WATCHIO_AGENT_STANDARDS.md`, this file, and root `AGENT_HANDOFF.md` completely at the start of every session.
+- `WATCHIO_AGENT_STANDARDS.md` defines mandatory safety, Caveman verification, device-permission, testing, Git, release, and handoff rules for all coding agents.
+- If instructions conflict, follow the higher-priority instruction and document the conflict; never silently weaken safety or verification.
+
 ## Active Project
 
 Current app:
@@ -12,6 +18,18 @@ native-android/
 ```
 
 Legacy Flutter app has been removed from active development. Do not reintroduce Flutter-first workflows unless the user explicitly starts a separate legacy recovery task.
+
+## Authoritative Handoff
+
+- Read the root `AGENT_HANDOFF.md` completely before changing code.
+- Active worktree: the repository worktree containing this file.
+- Active branch: `codex/dev-rescue-bridge`.
+- Current documented HEAD: `c23904e1832012aa3a4edaed49fc1e6c532f76eb`.
+- Sports V6.5.5 is complete and committed locally. The commit has one parent and repository integrity passes.
+- Validation: S22 navigation 15/15 PASS, connected instrumentation 45/45 PASS, Sports Compose 35/35 PASS, JVM 1,943/1,943 PASS, and lint/APK build gates PASS.
+- GitHub push: **NOT PERFORMED**. BRAVIA: **NOT ACCESSED**.
+- Historical V6.5.2-V6.5.4 failures are superseded by V6.5.5. Preserve them in `AGENT_HANDOFF.md` as engineering history, not current defects.
+- Verify branch, HEAD, dirty state, and protected manifest before every task. Snapshot values can become stale after an authorized commit.
 
 ## Build & Test Commands
 
@@ -46,7 +64,7 @@ Do not use `connectedDebugAndroidTest` for normal automation because it targets 
 - Keep changes small and scoped.
 - Prefer existing ViewModel -> Repository -> Room/DataStore/SecretStore boundaries.
 - Media3 / ExoPlayer is the only player engine.
-- Room schema is v6 unless a migration is explicitly required.
+- Room schema is v7. Preserve `MIGRATION_6_7`; do not change schema or migrations without explicit authorization.
 - Keep credentials out of logs, docs, tests, screenshots, and reports.
 
 ## Platform Targets

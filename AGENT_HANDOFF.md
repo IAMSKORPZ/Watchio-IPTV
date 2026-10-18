@@ -1,5 +1,322 @@
 # Watchio Agent Handoff
 
+## Latest Authoritative State - Sports V6.5.5
+
+This section is current. Older V6.5.2-V6.5.4 defects and investigations below are historical engineering records. They are resolved or superseded where stated by the V6.5.5 validation evidence.
+
+| Item | Current status |
+|---|---|
+| Sports V6.5.5 implementation | **COMPLETE** |
+| Git implementation commit | **COMPLETE - LOCAL ONLY**: `c23904e1832012aa3a4edaed49fc1e6c532f76eb` |
+| Branch | `codex/dev-rescue-bridge` |
+| Commit topology | One parent: `9fb917427c4fe6420fe96c9a2fbff94fdfeededf` |
+| Approved implementation tree | `2a2d1f6a642eea6b63e351bc61f0e4a53aa11eb4` |
+| GitHub push | **PENDING USER APPROVAL** |
+| S22 physical navigation acceptance | **15/15 PASS** |
+| Connected instrumentation | **45/45 PASS** |
+| Sports Compose | **35/35 PASS** |
+| JVM | **1,943/1,943 PASS** |
+| Lint and APK build gates | **PASS** |
+| Git integrity | **PASS** |
+| BRAVIA | **NOT ACCESSED** |
+
+The 15/15 physical S22 navigation acceptance belongs to the validated navigation implementation. The later APK containing Compose-test corrections was not independently subjected to all 15 physical navigation trials. The approved Git implementation tree matches the validated integration snapshot. No new physical testing is claimed by this documentation update.
+
+## 2026-10-17 - Sports V6.5.3 S22 physical validation (FAIL)
+
+- Authorised Samsung S22 test device reconnected through Android Studio wireless ADB. Model `SM-S901B` verified; no other device was accessed.
+- Installed `app-debug.apk` in place with `adb install -r`: PASS. APK SHA-256 `FB6F71FA405324E1976B0BC510A4466537D8904930E3E369747C5518F7DABA9E`, 32,060,846 bytes. Package remained `com.iamskorpz.watchioiptv.debug`, version `0.1.7-debug` / code 20. Original `firstInstallTime` remained `2026-09-14 23:02:57`; provider/session remained visible.
+- Connected isolated UITEST run: 40/45 PASS, 5 FAIL. `LivePlaybackNavigationComposeTest` passed 10/10. `SportsScreenComposeTest` passed 30/35; failures remained `unavailableLiveFixtureShowsDisabledNoChannelAction`, `refreshActionSupportsDpadEnter`, `candidatePlayInvokesExistingChannelCallback`, `dpadTraversalMovesAcrossCompetitionFilters`, and `broadcasterTeamAndFixtureChannelsUseSeparateCompactGroups`.
+- Physical Sports regression setup passed: fixtures loaded; Aston Villa FC vs Manchester City FC appeared for 24 October; Sports offered `CHOOSE CHANNEL`; candidate dialog showed `Aston Villa - EPL Premier League` as `TEAM CHANNEL - UNVERIFIED`; Media3 playback initialized. Active provider/session remained present.
+- Hidden-controls rapid double-Back: FAIL on first valid trial. Fullscreen controls were hidden before input. Result was Watchio Home, not restored Sports. This reproduces the navigation defect at a less severe destination than the previous launcher exit, but still fails required behavior.
+- Four later scripted loop rows were invalid because the first failure changed navigation state; they are discarded and not counted as trials. Per instruction to stop on failure, visible-controls 0/5, normal Back 0/5, and Live TV regression remain PENDING.
+- No current-session Watchio fatal exception or ANR was found. Later launcher/settings UI records came from invalid follow-on inputs after setup was lost, not valid Sports trials.
+- V6.5.3 physical decision: FAIL. Automated harness still does not reproduce physical Back ownership/order. Do not commit or describe this fix as accepted.
+- No uninstall, data clear, credential change, source-code change during validation, staging, commit, push, release, or deployment occurred. Protected updater manifest remains unchanged.
+
+## 2026-10-17 - Sports V6.5.3 S22 validation attempt (device unavailable)
+
+- Fresh testing approval received for the authorised Samsung S22 test device, model `SM-S901B`.
+- Device preflight failed: approved serial was not present after ADB daemon startup and one read-only `adb devices -l` retry. Only `emulator-5554` appeared, in `offline` state; it was not accessed.
+- Per authorization instructions, testing stopped before package inspection, installation, launch, instrumentation, or interaction.
+- APK installation, connected instrumentation, five hidden-controls rapid double-Back tests, five visible-controls rapid double-Back tests, five normal Back tests, and regression checks remain PENDING.
+- No application data, provider accounts, credentials, devices, source code, Git state, release, or deployment was modified by this validation attempt.
+
+## 2026-10-17 - Sports V6.5.3 rapid Back transition ownership (uncommitted)
+
+- Git recovery preflight passed on `codex/dev-rescue-bridge` at `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`. `git fsck --full --no-reflogs` reported only the eight previously documented dangling objects; no missing, corrupt, or broken objects.
+- Root cause: the fullscreen destination's `BackHandler` is disposed before the restored Sports destination's `BackHandler` is attached. A second physical Back arriving in that NavHost transition gap bypasses both destination-owned callbacks and reaches the Activity fallback. The existing origin guard was valid but had no registered callback capable of consuming the event during that gap.
+- Added a root-scoped `OnBackPressedCallback` transition catcher in `WatchioNativeApp.kt`. Destination callbacks retain priority. The catcher consumes only the already-armed, origin-scoped trailing Back during the existing 250 ms protection window; otherwise it temporarily disables itself and delegates to the current destination or normal Activity fallback. No timeout increase, navigation redesign, or permanent Back block was added.
+- Added JVM regression coverage for a rapid Back received without an origin handler, one-shot consumption, and expiry/delegation of a later deliberate Back.
+- Focused `LivePlaybackCloseGuardTest`: PASS. Full JVM suite: 1,931/1,931 PASS across Debug, Local, Release, and UITEST. `lintDebug`: PASS with 0 errors and the existing 29 warnings. `assembleDebug`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
+- Connected instrumentation and Samsung S22 physical validation: PENDING. Current task requires fresh user approval before any device access, installation, or interaction. No device was accessed.
+- Existing five `SportsScreenComposeTest` device failures remain PENDING fresh connected execution; source compiles, but no device pass is claimed.
+- Files changed by V6.5.3: `native-android/app/src/main/java/com/iamskorpz/watchioiptv/ui/WatchioNativeApp.kt`, `native-android/app/src/test/java/com/iamskorpz/watchioiptv/LivePlaybackCloseGuardTest.kt`, and this existing handoff.
+- Protected updater manifest remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Provider accounts, app data, Room v7, Media3, signing, remotes, branches, and existing Sports changes were preserved. Nothing staged, committed, pushed, released, installed, or deployed.
+
+## Mandatory agent standards
+
+Before any analysis, edit, build, test, installation, or device access, read and follow root [`WATCHIO_AGENT_STANDARDS.md`](WATCHIO_AGENT_STANDARDS.md) and root [`AGENTS.md`](AGENTS.md) completely. The standards define Caveman source verification, concise communication, protected project state, explicit device permission, honest acceptance reporting, Git/release approval boundaries, and required handoff updates.
+
+## 2026-10-16 - Coding agent standards (documentation only)
+
+- Added root `WATCHIO_AGENT_STANDARDS.md` with mandatory session-start checks, verified Caveman source/install rules, token-efficient communication, protected identity/data controls, narrow-change rules, explicit device permission, honest `PASS`/`FAIL`/`PENDING` reporting, Git/release approval boundaries, and handoff requirements.
+- Linked the standards from root `AGENTS.md` and this handoff without removing existing content.
+- Repository verified as `IAMSKORPZ/Watchio-IPTV`, active rescue worktree, branch `codex/dev-rescue-bridge`, HEAD `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`, origin `https://github.com/IAMSKORPZ/Watchio-IPTV.git`.
+- Current state after documentation edits: 47 tracked status entries, 752 untracked files (including the new standards file), 0 staged files.
+- Protected manifest SHA-256 verified unchanged: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Documentation inspection/link checks: PASS. `git diff --check`: PENDING because Git reported missing object `7a3b970dcb8bf162398dc72aef7f9db120c3a751`; no repair attempted because this task forbids destructive or unrelated repository operations.
+- Product code changed: NO. Builds/tests run: NO. Devices accessed: NO. Caveman installed/changed: NO. Staged/committed/pushed/released/deployed: NO.
+
+## Historical Current-State Snapshot - 2026-10-15
+
+This section records the project state on 2026-10-15. It no longer overrides the latest authoritative state above.
+
+### Repository state
+
+| Item | Verified value |
+|---|---|
+| Canonical repository | `IAMSKORPZ/Watchio-IPTV` |
+| Origin | `https://github.com/IAMSKORPZ/Watchio-IPTV.git` |
+| Active worktree | Rescue worktree containing this file |
+| Active branch | `codex/dev-rescue-bridge` |
+| HEAD | `9fb917427c4fe6420fe96c9a2fbff94fdfeededf` |
+| `origin/dev` | `9fb917427c4fe6420fe96c9a2fbff94fdfeededf` |
+| `origin/main` | `9fb917427c4fe6420fe96c9a2fbff94fdfeededf` |
+| Latest commit | `Record Watchio IPTV v0.1.7 release` |
+| Modified tracked files | 47 |
+| Untracked files | 751 (`git ls-files --others --exclude-standard`) |
+| Collapsed `git status --short` entries | 545 |
+| Staged files | 0 |
+| Working tree | Intentionally dirty; preserve every tracked change and untracked evidence file |
+
+Counts are a verified snapshot. Recalculate before future work. Never delete files to restore these numbers.
+
+### Current acceptance status
+
+| Area | Result | Current fact |
+|---|---|---|
+| Sports V6.2 | IMPLEMENTED / LOCALLY VALIDATED | Matching moved off Main; provider indexes/caches and compact controls added |
+| Sports V6.3 | IMPLEMENTED | UK broadcaster and EPL matching foundation; physical pass exposed missing team candidates and Back failure |
+| Sports V6.4 | IMPLEMENTED | Real catalogue patterns identified; physical team candidates still absent |
+| Sports V6.5 | IMPLEMENTED | Complete active-provider catalogue now feeds Sports; EPG optional for discovery |
+| Sports V6.5.1 | FAILED PHYSICALLY | Rapid Back returned to Home |
+| Sports V6.5.2 | **FAILED PHYSICALLY** | Rapid hidden-controls Back failed 0/5 and exited Watchio to Samsung launcher |
+| Normal Sports Back | PASS | Returns to Sports with date/filter context |
+| EPL matching | PASS | Newcastle and Aston Villa team channels found as unverified/POSSIBLE |
+| Local JVM suite | PASS | 1,923/1,923 |
+| Lint | PASS WITH WARNINGS | 0 errors and 29 warnings; never claim zero warnings |
+| Navigation instrumentation | PASS | 10/10 |
+| Sports instrumentation | FAIL | 30/35; five failures remain |
+| Public stable | UNCHANGED BY SPORTS | v0.1.7 |
+| Next task | SPORTS V6.5.3 | Diagnose physical Back dispatch and fix five Sports Compose failures |
+
+Do not describe Sports V6.5.2 as stable, accepted, or ready to commit.
+
+## Sports V6.2 through V6.5.2 progression
+
+### Sports V6.2 — performance and compact layout
+
+- Moved expensive matching, normalization, EPG indexing, and catalogue work off Main.
+- Added provider-scoped channel indexing and match-cache reuse.
+- Preserved date-switch cancellation and persistent V6 caches.
+- Added compact date controls and horizontally scrollable competition chips.
+- Reduced control-stack height so fixtures start higher.
+- Local gates passed. Physical S22 lag and row-count improvement were not yet proven.
+
+### Sports V6.3 — UK broadcaster and EPL foundation
+
+- First S22 acceptance confirmed fixture loading and UK broadcaster matching.
+- EPL team channels were not detected physically.
+- Sports player Back navigation failed.
+- Added EPL category/team matching with conservative aliases.
+- Separated UK broadcaster and EPL team-channel groups.
+- EPG remained mandatory for `VERIFIED`; team-name evidence remained `POSSIBLE`.
+
+### Sports V6.4 — real provider discovery
+
+- Inspected the preserved provider catalogue snapshot read-only.
+- Found 178 live categories and approximately 11,055 channels.
+- Identified `UK | EPL HUB` and `<team> - EPL Premier League` patterns.
+- Expanded EPL category recognition and safe team/fixture parsing.
+- Added separate broadcaster, team-channel, and match-specific groups.
+- Physical V6.4 testing still failed to display EPL team candidates.
+
+Evidence:
+
+- [Provider discovery report](evidence/sports-v64-provider-discovery/SPORTS_PROVIDER_DISCOVERY.md)
+- [V6.4 S22 evidence](evidence/sports-v64-s22-acceptance/)
+
+### Sports V6.5 — complete provider catalogue pipeline
+
+- Root cause: Sports depended on a TV Guide-derived projection instead of the complete provider catalogue.
+- `TvGuideRepository.liveCatalogueForProvider` now supplies the complete active-provider live catalogue.
+- EPG remains optional for discovery and required for verification.
+- Team channels without EPG rows can reach matching.
+- Sports match-cache model/fingerprint advanced to 65.
+- Removed duplicate player-local Back ownership.
+
+Physical result:
+
+- `UK | EPL HUB` recognized.
+- Newcastle and Aston Villa EPL team channels found.
+- UK broadcaster group worked.
+- Intermittent Back navigation escaped Watchio.
+- Some streams were unavailable; availability did not count as verification.
+- TV Guide playback remained unverified.
+
+Evidence: [V6.5 S22 evidence](evidence/sports-v65-s22-acceptance/)
+
+### Sports V6.5.1 — close guard and explicit origins
+
+- Added `LivePlaybackCloseGuard` against duplicate player-close callbacks.
+- Added explicit Sports, Live TV, and TV Guide origins.
+- Added missing-stack restoration and corrected TV Guide route handling.
+- Normal Sports Back passed, but rapid Back returned to Home.
+- Live TV, Movies, and Series Back passed.
+- Sports Compose instrumentation had six failures.
+
+Evidence: [V6.5.1 S22 evidence](evidence/sports-v651-s22-acceptance/)
+
+### Sports V6.5.2 — parent return guard
+
+- Added parent-owned `LivePlaybackReturnBackGuard`.
+- Intended to consume one trailing Back during a 250 ms window.
+- Added navigation tests, D-pad refresh activation, and stale lazy-list/focus test updates.
+- Preserved EPL matching, Media3, provider isolation, and origin restoration.
+
+Physical result: **FAIL**.
+
+- Rapid hidden-controls Back: 0/5 PASS.
+- Measured request gaps: 111–201 ms.
+- Every attempt exited Watchio to Samsung launcher.
+- Normal Sports Back: PASS.
+- EPL matching: PASS.
+- Navigation instrumentation: 10/10 PASS.
+- Sports instrumentation: 30/35 PASS.
+- Combined connected result: 40/45 PASS.
+
+Evidence:
+
+- [V6.5.2 implementation report](evidence/sports-v652-navigation-fix/SPORTS_V652_NAVIGATION_FIX.md)
+- [V6.5.2 lint report](evidence/sports-v652-lint-cleanup/SPORTS_V652_LINT_CLEANUP.md)
+- [V6.5.2 S22 report](evidence/sports-v652-s22-acceptance/SPORTS_V652_S22_ACCEPTANCE.md)
+
+## Current Sports functionality
+
+Working and retained:
+
+- Football fixtures, date selection, and competition filtering.
+- Provider-scoped discovery from the complete active-provider catalogue.
+- EPG-independent discovery with EPG-dependent verification.
+- EPL HUB recognition and EPL team-channel matching.
+- Separate UK broadcaster, team-channel, and match-specific groups.
+- Candidate confidence/evidence labels and Media3 playback integration.
+- Normal Sports playback return.
+- Previously accepted Live TV, Movies, and Series playback returns.
+
+Verified EPL fixture:
+
+- Newcastle United FC vs Aston Villa FC.
+- Premier League, 17 October 2026 at 17:30.
+- Provider category: `UK | EPL HUB`.
+- Channels: `Newcastle United - EPL Premier League` and `Aston Villa - EPL Premier League`.
+- Both remain `TEAM CHANNEL - UNVERIFIED` and `POSSIBLE` without EPG proof.
+- UK broadcaster example: `Sky Sports Main Event FHD`.
+
+Never treat a playable stream, team name, or fixture metadata as verified broadcast evidence.
+
+## Historical defect - rapid Back navigation
+
+Reproduction:
+
+1. Open Sports.
+2. Select Newcastle United FC vs Aston Villa FC.
+3. Open an EPL team channel.
+4. Enter fullscreen player.
+5. Wait approximately 900 ms.
+6. Confirm controls are hidden.
+7. Send two rapid Back presses.
+
+Expected: return once to Sports and remain inside Watchio.
+
+Actual: Watchio exits to Samsung launcher. Result: FAIL 0/5 with 111–201 ms request gaps.
+
+The 250 ms parent guard failed physically. Do not increase its timeout without identifying the mechanism.
+
+Sports V6.5.3 must investigate Android Back dispatch, `OnBackPressedDispatcher`, Compose `BackHandler`, NavHost lifecycle, destination transitions, Activity finishing, task-stack behavior, guard registration/disposal, and physical-versus-instrumentation ordering.
+
+## Test discrepancy and remaining failures
+
+- JVM: 1,923/1,923 PASS.
+- Navigation instrumentation: 10/10 PASS.
+- Sports instrumentation: 30/35 PASS.
+- Physical rapid Back: 0/5 PASS.
+
+Helper/navigation tests do not reproduce physical Android Back dispatch. Automated PASS is not physical proof.
+
+Five Sports Compose failures remain:
+
+- `unavailableLiveFixtureShowsDisabledNoChannelAction`
+- `refreshActionSupportsDpadEnter`
+- `candidatePlayInvokesExistingChannelCallback`
+- `dpadTraversalMovesAcrossCompetitionFilters`
+- `broadcasterTeamAndFixtureChannelsUseSeparateCompactGroups`
+
+Investigate each. Do not ignore, remove, or weaken tests to obtain a passing count.
+
+## Lint and latest validated build
+
+- Original `lintDebug`: 63 warnings, 0 errors.
+- Current `lintDebug`: 29 warnings, 0 errors.
+- Resolved: 34 warnings.
+- Remaining: 27 dependency/toolchain notices, one required HTTP IPTV compatibility warning, and one intentional landscape warning.
+- Do not suppress warnings merely to claim zero.
+
+Latest gates:
+
+- Focused Sports/navigation: PASS.
+- Full JVM: 1,923/1,923 PASS.
+- `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
+- `lintDebug`: PASS with 29 warnings.
+- `git diff --check`: PASS.
+
+Latest physical S22 APK:
+
+- Package: `com.iamskorpz.watchioiptv.debug`.
+- Version: `0.1.7-debug`; version code 20.
+- SHA-256: `CDE52994BD71D844B82FBEC3D517F8D8A848F2A02B31D6DE442E7A4E0D45329E`.
+- Installed in place; user/provider/session data preserved.
+- Build is not physically accepted or stable.
+
+## Football V7 roadmap — planned only
+
+Potential providers: Sportmonks, API-Football/API-Sports, football-data.org, TheSportsDB, and OpenLigaDB.
+
+Planned capabilities: Settings provider management, official signup links, user-supplied keys, secure storage, real connection tests, primary/fallback routing, capability detection, rate-limit handling, normalized fixtures/scores, metadata, and provider-aware caching.
+
+Football V7 is not implemented. Verify current free-tier terms and coverage first. Never bundle private keys. Football metadata does not prove IPTV broadcast availability.
+
+Do not begin Football V7 before the rapid Back defect is resolved unless the user explicitly changes priorities.
+
+## Historical recommendation - Sports V6.5.3
+
+1. Diagnose physical Back ordering at Activity/NavHost level.
+2. Fix the root cause without another arbitrary timeout.
+3. Resolve all five Sports Compose failures.
+4. Preserve current EPL matching and confidence rules.
+5. Run local validation first.
+6. Obtain explicit device authorization before another install or physical test.
+
+## Current protection rules
+
+- Protected file: `native-android/update/update.json`.
+- Required SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Native Android only. Room remains v7 with existing migrations. Media3 remains the only player engine.
+- Preserve package/signing identities, accounts/provider isolation, Quick Login encryption, managed endpoints, active/switch-server behavior, Xtream behavior, user data, update mechanisms, and release channels.
+- Never reset, rebase, clean, stash, discard, stage, commit, push, release, clear data, uninstall, modify MAIN/backend/website, or access devices without explicit authorization.
+- Future device work must specify the exact authorized ADB serial.
+
 > **READ THIS FILE COMPLETELY BEFORE MAKING ANY CHANGE.**
 
 ## Sports V2 Phase 1 — Completed 2026-10-03
@@ -31,7 +348,7 @@ This `AGENT_HANDOFF.md` is the authoritative current handoff for the active resc
 The older file:
 
 ```text
-C:\Users\mrsko\Documents\GitHub\Watchio-IPTV\native-android\docs\AI_HANDOFF.md
+native-android/docs/AI_HANDOFF.md
 ```
 
 is historical/stale for current development and **MUST NOT** override this file.
@@ -42,7 +359,7 @@ is historical/stale for current development and **MUST NOT** override this file.
 
 | Area | Status | Current fact |
 |---|---|---|
-| Branch / Base | PASS | `codex/dev-rescue-bridge` at `e44923f5caf77528b3d0b287f3ba6f689addd288`; `origin/dev` matches |
+| Branch / Base | PASS | `codex/dev-rescue-bridge` at `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`; `origin/dev` matches |
 | Live TV NOW, NEXT & LATER | READY FOR REVIEW (UNCOMMITTED) | Programme info moved from channel rows to right-side EpgPanel. ChannelRow is compact (logo + number + name + star). EpgPanel shows pink NOW label, title, time range, progress bar, NEXT, LATER on channel highlight. Validated on S22. Uncommitted per user instruction. |
 | DNS Login Removal | COMPLETE / PUSHED | Committed (`e44923f`) and pushed to `origin/dev` |
 | Settings Gear Refinement | COMPLETE / PUSHED | Committed (`fa7c77b`) and pushed to `origin/dev` |
@@ -50,11 +367,11 @@ is historical/stale for current development and **MUST NOT** override this file.
 | TV Guide / Player / EPG Categories | COMPLETE / PUSHED | Committed (`8dd6ff3`) and pushed to `origin/dev`; accepted by user |
 | Tracked working tree | MODIFIED (UNCOMMITTED) | Feature implementation uncommitted for user review per explicit instruction |
 | JVM tests | PASS | All unit tests pass across debug, local, release, uitest variants (`.\gradlew.bat test`) |
-| Lint / build gates | PASS | `lintDebug`, `compileDebugKotlin`, `assembleDebug` pass cleanly |
+| Lint / build gates | PASS WITH WARNINGS | Latest `lintDebug` has 0 errors and 29 documented warnings; required builds pass |
 | Android TV / BRAVIA | DEFERRED / UNTOUCHED | TV unavailable; `192.168.1.49:5555` untouched |
 | Rescue bridge manifest | PROTECTED | SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` verified unchanged |
-| Public stable | UNCHANGED | `v0.1.4` (`a0e5bafce943eebecbaeb03e0122ba7c2e0c62e5`); `origin/main` untouched (`0364d24`) |
-| Next update | PENDING REVIEW | Live TV NOW, NEXT & LATER ready for user physical review |
+| Public stable | UNCHANGED BY SPORTS | `v0.1.7`; current Sports work remains uncommitted |
+| Next update | BLOCKED | Sports V6.5.3 rapid Back root-cause investigation |
 
 ---
 
@@ -62,14 +379,14 @@ is historical/stale for current development and **MUST NOT** override this file.
 
 | Item | Verified value |
 |---|---|
-| Worktree | `C:\Users\mrsko\.codex\watchio-dev-rescue-worktree` |
+| Worktree | Rescue worktree containing this file |
 | Branch | `codex/dev-rescue-bridge` |
-| `HEAD` | `e44923f5caf77528b3d0b287f3ba6f689addd288` |
-| `origin/dev` | `e44923f5caf77528b3d0b287f3ba6f689addd288` |
-| `origin/main` | `0364d249ee513f0e814ca8163707e8c2ba47210c` |
-| Latest commit subject | `Remove DNS Login button from Xtream login screen` |
-| Tracked working tree | Modified (uncommitted for review: `LiveTvModels.kt`, `EpgChannelMatcher.kt`, `LiveTvRepository.kt`, `LiveTvScreens.kt`, `LiveTvViewModel.kt`, `TvGuideRepository.kt`, `LiveTvBrowsingStateTest.kt`, `AGENT_HANDOFF.md`) |
-| Untracked files | `EpgNowNextCalculator.kt`, `EpgNowNextCalculatorTest.kt`, intentional `s22-*`, `current-temp.xml`, `tvguide-*`, `watchio-*` evidence files |
+| `HEAD` | `9fb917427c4fe6420fe96c9a2fbff94fdfeededf` |
+| `origin/dev` | `9fb917427c4fe6420fe96c9a2fbff94fdfeededf` |
+| `origin/main` | `9fb917427c4fe6420fe96c9a2fbff94fdfeededf` |
+| Latest commit subject | `Record Watchio IPTV v0.1.7 release` |
+| Tracked working tree | 47 modified tracked files; uncommitted Sports/lint/handoff work |
+| Untracked files | 751 files, including intentional evidence and new Sports sources/tests; preserve all |
 
 Untracked `s22-*`, `tvguide-*`, `watchio-*` evidence files are intentional and **MUST NOT** be blindly staged, committed, cleaned, or deleted.
 
@@ -187,7 +504,7 @@ Theme Builder Phase 2 is **COMPLETE / ACCEPTED / COMMITTED / PUSHED TO origin/de
 | S22 Full Instrumentation | `.\gradlew.bat connectedUitestAndroidTest` | PASS (247 / 247 passed, 0 failed, 0 errors, 11m 53s) |
 | Git whitespace/conflict check | `git diff --check` | PASS (clean exit 0) |
 
-*Note on S22 Instrumentation History:* Earlier runs failed due to environmental instability (device screen timeout/lock, portrait rotation lock, and third-party background memory pressure). Once stabilized (screen stay-on, landscape locked, keyguard dismissed, heavy social apps force-stopped), the unchanged 247-test suite completed 100% clean on device `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp`. No test or production code modifications were needed.
+*Note on S22 Instrumentation History:* Earlier runs failed due to environmental instability (device screen timeout/lock, portrait rotation lock, and third-party background memory pressure). Once stabilized (screen stay-on, landscape locked, keyguard dismissed, heavy social apps force-stopped), the unchanged 247-test suite completed 100% clean on the authorised Samsung S22 test device. No test or production code modifications were needed.
 
 ### 2. S22 Physical Theme Builder Acceptance (All Passed)
 
@@ -215,7 +532,7 @@ Theme Builder Phase 2 is **COMPLETE / ACCEPTED / COMMITTED / PUSHED TO origin/de
 | Item | Value |
 |---|---|
 | Required SHA-256 | `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` |
-| Genuine DEV backup | `C:\Users\mrsko\.codex\watchio-security-backups\dev-manifest-rescue-20260917\update.json` |
+| Genuine DEV backup | Preserved external security-backup location |
 
 Do not restore, regenerate, reformat, replace, change channel, or merge-overwrite the rescue manifest.
 
@@ -411,15 +728,15 @@ The **FIRST** task of the Sports update must be:
 Set environment before running Gradle:
 
 ```powershell
-$env:JAVA_HOME='C:\Users\mrsko\.jdks\jbr-21.0.11'
-$env:ANDROID_HOME='C:\Users\mrsko\AppData\Local\Android\Sdk'
+$env:JAVA_HOME="$env:USERPROFILE\.jdks\jbr-21.0.11"
+$env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"
 $env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
 ```
 
 Target S22 device:
 
 ```powershell
-$env:ANDROID_SERIAL='adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp'
+$env:ANDROID_SERIAL='<authorised-s22-adb-serial>'
 ```
 
 Gates:
@@ -576,7 +893,7 @@ SAFE TO START SPORTS CODE:         NO (audit and design review required first)
 
 ### S22 physical result
 
-- Exact device: `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp` (`SM-S901B`).
+- Exact target: authorised Samsung S22 test device (`SM-S901B`).
 - Debug APK installed with replacement only; no uninstall or data clear.
 - Guide initial viewport: PASS — NOW line visible near the current time immediately after load.
 - Preview activation: PASS — first channel activation enters the mini-player without the former sizing crash.
@@ -628,7 +945,7 @@ The combined Gradle run emitted a recoverable Kotlin incremental-cache daemon wa
 
 ### S22 physical verification
 
-- Device: `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp` (`SM-S901B`).
+- Device: authorised Samsung S22 test device (`SM-S901B`).
 - Debug app installed with replacement only; no uninstall or data clear.
 - Live TV mini preview: PASS - real moving Sky Cinema video, correctly fitted and not cropped.
 - Live TV fullscreen: PASS - real moving video fills the intended area; no top-left strip.
@@ -702,7 +1019,7 @@ The combined Gradle run emitted a recoverable Kotlin incremental-cache daemon wa
 
 ### S22 physical verification
 
-- Device: `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp` (`SM-S901B`) only.
+- Device: authorised Samsung S22 test device (`SM-S901B`) only.
 - Replacement install only; no uninstall/data clear.
 - Home to EPG Categories, header, two-column layout, real counts, special/provider entries: PASS.
 - Initial visible focus ALL CHANNELS: PASS.
@@ -723,7 +1040,7 @@ Final pre-commit validation results:
 - **Base HEAD:** `2384698ea94ddea751a9ac896e28c7c9345822e2` (matches `origin/dev`)
 - **JVM tests:** PASS (1187 / 1187)
 - **Lint / build gates:** PASS (`lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, `git diff --check`)
-- **S22 Full Connected UITEST:** PASS — 262 / 262 passed, 0 failed, 0 errors (11m 47s) on `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp`
+- **S22 Full Connected UITEST:** PASS — 262 / 262 passed, 0 failed, 0 errors (11m 47s) on the authorised Samsung S22 test device.
 - **Rescue manifest SHA-256:** `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` (verified unchanged)
 - **BRAVIA:** Untouched (`192.168.1.49:5555`)
 - **Public main:** Untouched (`0364d249ee513f0e814ca8163707e8c2ba47210c`)
@@ -777,7 +1094,7 @@ Final pre-commit validation results:
 - `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
 - `git diff --check`: PASS.
 - One Kotlin incremental-cache registration warning occurred during the combined gate run; Gradle fell back to non-incremental compilation and the complete build finished successfully.
-- S22 target: `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp` / `SM-S901B` only.
+- S22 target: authorised Samsung S22 test device / `SM-S901B` only.
 - Targeted `ProviderFormComposeTest`: first run found SIGN IN skipped the new DNS button; focus edge fixed. Clean rerun PASS: 5/5.
 - Replacement-installed debug APK on S22 and launched it. Existing saved provider/session remained present, proving app data was preserved. No uninstall or data clear.
 - Automated S22 UI verified username/password-only DNS form, password masking, no URL field, and D-pad traversal. Real successful DNS resolution was not testable because no backend exists. Manual credential entry was intentionally not performed, so keyboard-dismiss and live Xtream login remain physical-user acceptance items.
@@ -833,7 +1150,7 @@ Final pre-commit validation results:
 - `lintDebug`: PASS, zero errors.
 - `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
 - `git diff --check`: PASS.
-- S22 `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp`: replacement install PASS; app startup PASS; saved `Admin` provider/session preserved; Notifications inbox loaded production announcement entries. No uninstall or data clear.
+- Authorised Samsung S22 test device: replacement install PASS; app startup PASS; saved provider/session preserved; Notifications inbox loaded production announcement entries. No uninstall or data clear.
 - Managed endpoint HTTP/schema validation passed directly. Existing active server remained `MediaTitans`; no credentials were entered or exposed.
 - BRAVIA untouched.
 - Rescue manifest SHA-256 before/after: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
@@ -881,7 +1198,7 @@ Final pre-commit validation results:
 - `lintDebug`: PASS, zero errors.
 - `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
 - `git diff --check`: PASS before this handoff update; rerun after update required and recorded in final report.
-- S22 `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp`: replacement install PASS; no uninstall/data clear. Existing saved provider/session preserved.
+- Authorised Samsung S22 test device: replacement install PASS; no uninstall/data clear. Existing saved provider/session preserved.
 - Exact final debug build physical Xtream flow: keyboard opened; first Back closed it and stayed on login; focus returned to the form action; keyboard did not immediately reopen; D-pad could re-enter an input and reopen the IME; second Back with the IME closed returned to Provider Management. DNS equivalent covered by the 7/7 connected test and its first-Back physical check.
 - Mobile behavior preserved by scoped form-level handling; normal touch/IME field behavior and existing IME actions were not changed.
 - BRAVIA untouched.
@@ -1229,7 +1546,7 @@ Final pre-commit validation results:
 - The existing diagnostic semantics test (`WatchioFocusVisualActive`) and prior primary-card Control-role/inset work remain uncommitted, but they are not sufficient proof of visible output.
 - Physical results: Live TV FAIL; Movies NOT RE-VERIFIED; Series NOT RE-VERIFIED; TV Guide reference PASS from existing evidence. Required four-capture acceptance is incomplete.
 - Task status: BLOCKED / NOT FULLY VERIFIED. No fix claim. Full validation gates were not rerun because no accepted root-cause fix was retained.
-- Latest replacement install used only authorized S22 `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp`; app data/session preserved. BRAVIA untouched.
+- Latest replacement install used only the authorised Samsung S22 test device; app data/session preserved. BRAVIA untouched.
 - Rescue manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - No commit, push, release, tag, MAIN change, uninstall, or data clear.
 
@@ -1260,7 +1577,7 @@ Final pre-commit validation results:
 
 ### Physical S22 acceptance
 
-- Device: `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp` (`SM-S901B`). Replacement install only; provider/session and app data preserved.
+- Device: authorised Samsung S22 test device (`SM-S901B`). Replacement install only; provider/session and app data preserved.
 - Real D-pad focus and `DPAD_CENTER`:
   - Live TV visual focus PASS; activation opened Live TV once PASS.
   - Movies visual focus PASS; activation opened Movies once PASS.
@@ -1336,7 +1653,7 @@ Final pre-commit validation results:
 - `lintDebug`: PASS with zero errors. `assembleDebug`: PASS. `git diff --check`: PASS.
 - Authorized S22 replacement install and smoke test: PASS. Existing app data and provider session remained available. Inbox, Archived Inbox, tab switching, details, scrolling, and Back passed without a crash.
 - User manual visual acceptance: PASS.
-- API-22/AFTT compatibility work remains PARKED in the separate `C:\Users\mrsko\.codex\watchio-api22-compat` worktree and must not be merged accidentally.
+- API-22/AFTT compatibility work remains PARKED in a separate compatibility worktree and must not be merged accidentally.
 - Public release remains v0.1.6. No v0.1.7 release is authorized.
 - Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
 - Push target: `origin/dev` only. MAIN, BRAVIA, AFTT, release state, tags, signing, and version metadata remain untouched.
@@ -1356,7 +1673,7 @@ Final pre-commit validation results:
 - Live API smoke test not run: no API-Football key was securely available in the development environment. S22 testing not run because this phase has no user-visible behavior. BRAVIA and AFTT untouched.
 - Feature commit: `aefbff133760f56fdbf0fdfe5072778f45298904` (`feat(sports): add API-Football v2 source`). Push target: `origin/dev` only.
 - Room remains v7. Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Existing 427 untracked evidence files remain preserved.
-- API-22/AFTT compatibility work remains PARKED in `C:\Users\mrsko\.codex\watchio-api22-compat`.
+- API-22/AFTT compatibility work remains PARKED in a separate compatibility worktree.
 - Next planned Sports task: `SPORTS V2 PHASE 3 — BROADCAST DATA PROOF`, evaluating SoccersAPI and TheSportsDB through `BroadcastSource` before ProviderChannelMatcher V2.
 
 ## 2026-10-04 - Sports V2 Phase 3 broadcast data proof
@@ -1435,7 +1752,7 @@ Final pre-commit validation results:
 - Fixture action layout stacks on narrow content widths and stays right-aligned/compact on wider phone, tablet, and TV widths. Reminder state uses icon plus text, not color alone.
 - Added/updated Compose coverage for centered short filters, scrollable long filters, first/last reachability, D-pad traversal, touch scrolling, explicit playback, no card playback, VERIFIED/STRONG/POSSIBLE behavior, and disabled unavailable state. Updated reminder tests to the 15-minute rule.
 - Full JVM suite: PASS, 1,699/1,699 with zero failures, errors, or skips. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, focused Sports compilation, and `git diff --check`: PASS.
-- S22 device validation was unavailable in this pass: authorized serial `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp` was not connected; only offline `emulator-5554` appeared. No replacement install, instrumentation, or physical UI validation was claimed. Existing provider/session data was untouched.
+- S22 device validation was unavailable in this pass: the authorised Samsung S22 test device was not connected; only offline `emulator-5554` appeared. No replacement install, instrumentation, or physical UI validation was claimed. Existing provider/session data was untouched.
 - Protected rescue manifest remains unchanged at SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. MAIN, Room v7, API-22 worktree, BRAVIA, AFTT, releases, tags, versions, signing, updater manifests, and update channels remain untouched. Existing untracked evidence remains preserved.
 - Feature commit `7041dfdd396a9a4924ce931baa7a4dfd4aed084d` (`fix(sports): polish themed actions and playback UX`) pushed successfully to `origin/dev`. Physical S22 acceptance remains the only outstanding validation because the authorized device was offline.
 
@@ -1576,3 +1893,238 @@ Final pre-commit validation results:
 - Stable updater now advertises channel `stable`, version `0.1.7`, code `20`, and the exact accepted APK SHA. Live updater JSON and downloaded APK checksum were verified. Stable manifest SHA changed deliberately from `00C0B89C8D11AD098B53E9251688456B216116CC82BE545FED012089E8C17CBB` to `498BCDD5872F93FEFBB71C39913C9E656BB48B3D3408AA035BC6BA0C30700AB4`.
 - Production announcement ID `watchio-v0-1-7-major-update-2026-10-11` was published through the configured Watchio_Website feed only after stable updater verification. Live feed returned HTTP 200, valid JSON, one exact entry, and newest ordering. Website commit: `aaef249c84c439e2fa7c877b8f527cece870719f`.
 - DEV and MAIN were synchronized by fast-forward. Protected DEV rescue manifest remained SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. All 483 untracked evidence files were preserved. No device, user data, signing identity, release asset, tag history, or provider session was modified during completion.
+
+## 2026-10-11 - Sports Settings V3 and broadcast matching (uncommitted)
+
+- Starting branch/HEAD: `codex/dev-rescue-bridge` at `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`; `origin/dev`, `origin/main`, and stable v0.1.7 were unchanged.
+- Audit confirmed four real adapters only: football-data.org and API-Football for fixtures/status/team/league data; SoccersAPI and TheSportsDB for official broadcast coverage. All require user-supplied credentials for production use. No paid/default key was added. Sportmonks and Watchio API remain unsupported because no functional adapter/backend exists.
+- Added Sports Settings V3 persisted configuration for provider enable/disable, priority, capability preference, refresh interval, connection testing, redacted diagnostics, and provider-scoped manual broadcaster/channel mappings. Credentials remain exclusively in existing encrypted `SecretStore`; stored secret values are never redisplayed or written to diagnostics.
+- Existing football-data.org form/validator remains. API-Football, SoccersAPI, and TheSportsDB now have secure BYO credential controls. Connection tests use the real adapters and classify connected/no-data, invalid, rate-limited, and unavailable outcomes.
+- Fixture source selection now follows enabled priority and preserves safe fallback. Broadcast source order follows settings; disabling sources is respected. Cache refresh can be capped to 15/30/60 minutes without changing Room v7.
+- ProviderChannelMatcherV2 now supports more country prefixes, strict single-typo conservative alias matching, quality suffixes, and saved manual mappings. Manual mappings are isolated to the active IPTV provider and ignored when their channel ID disappears. EPG conflict rejection remains authoritative. User-visible confidence is `VERIFIED`, `POSSIBLE`, or no match; suggestions show broadcaster/region/quality and evidence reasons.
+- Fixture channel dialog now shows fixture identity, readable evidence, EPG title, confidence, and quality while retaining explicit existing Live TV/Media3 playback callbacks.
+- Focused JVM Sports Settings/matcher/repository tests passed. Full JVM suite passed `1775/1775` with zero failures/errors/skips. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` passed. Sports Settings Compose coverage was updated and compiled; connected instrumentation and physical acceptance were not run because no device access was authorized.
+- Limitations: standings have no implemented adapter; TheSportsDB production licensing/account suitability remains the user's responsibility; SoccersAPI/TheSportsDB connection proof needs valid user credentials and an available fixture; live-score/status capability choices are stored but those fields remain coupled to the selected fixture adapter response; no new backend or undocumented endpoint was invented.
+- Protected rescue manifest remains SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Room remains v7. MAIN, stable v0.1.7, API-22 worktree, versions, signing, releases, tags, update channels, BRAVIA, and all user/device data remain untouched. Existing evidence remains untracked. Nothing was staged, committed, or pushed.
+
+## 2026-10-12 - Sports Settings V3 credential configuration improvements (uncommitted)
+
+- All four implemented Sports providers now expose visible purpose, supported-feature, access-plan, configured-state, enable/disable, priority, real connection-test, removal, and official `Get API Key` information. Credential inputs remain masked where secret: football-data.org API key, API-Football key, SoccersAPI token, and TheSportsDB key. SoccersAPI correctly retains its current two-part `user` plus `token` authentication; the account user remains readable while the token is masked.
+- Official registration/access destinations are football-data.org `https://www.football-data.org/client/register`, API-Football `https://dashboard.api-football.com/register`, SoccersAPI `https://admin.soccersapi.com/register`, and TheSportsDB `https://www.thesportsdb.com/api.php`. They open through Android's external browser resolution. If no browser exists, Watchio copies the public URL to the platform clipboard and reports that fallback; no credential is embedded in any URL.
+- TheSportsDB copy explicitly distinguishes limited free API access from user-supplied supporter/premium production credentials and does not configure or imply a paid plan. SoccersAPI copy explicitly warns that broadcast access needs a supported paid plan.
+- SoccersAPI and TheSportsDB connection tests now call their own authenticated adapters directly instead of depending on a football-data.org fixture. Successful status requires a successful real HTTP response. Invalid credentials, quota/rate limit, unavailable/network failure, parse failure, and unsupported SoccersAPI subscription tier are distinct outcomes. No provider secret is exposed in UI state or diagnostics.
+- Focused Sports JVM tests passed, including current SoccersAPI `user`/`token` request shape, unsupported-tier handling, direct TheSportsDB key validation, official-link metadata, and existing Sports Settings behavior. Full Gradle gates passed: `test`, `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, and `assembleUitestAndroidTest`. `git diff --check` is recorded after the final handoff update.
+- Live provider connection results were not claimed because no user Sports API credentials were supplied. Physical S22 acceptance remains pending as requested. No device, BRAVIA, app data, account, or provider session was touched.
+- Protected DEV rescue manifest remains SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Room remains v7. MAIN, stable v0.1.7, versions, signing, releases, tags, and updater channels remain untouched. Existing untracked evidence remains preserved. Nothing was staged, committed, or pushed.
+
+## 2026-10-12 - Sports Settings V4 simplification (uncommitted)
+
+- Replaced the single oversized Sports Data page with a compact Sports Settings landing page containing only Football Data, TV Broadcasts, and Advanced Settings. Internal Back navigation returns through the originating section before leaving Sports Settings.
+- Football Data now lists football-data.org and API-Football. TV Broadcasts now lists SoccersAPI and TheSportsDB with the plain-language explanation that broadcaster services help Watchio find channels showing football matches. Every provider opens a dedicated compact detail screen containing capabilities, access-plan guidance, configured state, separate live-test state, required credential inputs, Get API Key, Save & Test, enable/disable where applicable, Test Connection for saved credentials, and Remove Key.
+- Removed duplicate football-data.org configuration from the visible UI. Fixed malformed em-dash/ellipsis strings and replaced ambiguous configured-only connection copy with `saved, not tested`, `verified`, or a specific failure state.
+- Advanced Settings now owns provider priority, capability routing, manual channel mappings, refresh timing, and diagnostics. Manual mappings use a dedicated lazy list, remain scoped to the active IPTV provider, hide the full channel catalogue until a two-character search, and cap each rendered result page at 50 matches.
+- Existing SecretStore credentials, provider preferences, capability routing, manual mappings, matching logic, Room v7, Media3, accounts, sessions, signing, versions, and updater channels remain unchanged. Save & Test now saves through the existing credential store and immediately invokes the existing real adapter connection test; no fake success path was added.
+- Final JVM suite passed 1,791/1,791 across Debug, Local, Release, and UITEST variants. Added regression coverage proving a stored football-data.org key is reported as configured but not live-verified. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` passed. Focused `SettingsMenuComposeTest` passed 7/7 on authorized Samsung S22 only.
+- Debug APK replacement install on S22 passed and preserved the existing provider/session. Physical UI navigation covered landing, both data-provider lists, all four provider detail screens, every Advanced section, Back navigation, landscape layout, compact action sizing, and lazy manual-mapping entry. No real API credential was entered or removed, so live connection success/failure remains unverified in this pass.
+- Fresh evidence is in `evidence/sports-settings-v4/`, including 12 screen captures and `00-contact-sheet.png`. Earlier baseline remains in `evidence/sports-ui-ux-audit/`. No secrets or stream URLs appear in the new evidence.
+- Protected DEV rescue manifest remains SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. MAIN, public v0.1.7, BRAVIA, Firestick, versions, signing, releases, tags, and app data remain untouched. Nothing was staged, committed, or pushed.
+# Sports broadcaster discovery investigation and fix (2026-10-12)
+
+- Branch/HEAD remained `codex/dev-rescue-bridge` / `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`; work remains uncommitted.
+- Confirmed the reported fixture as Sabah FC vs SK Slavia Praha, UEFA Champions League league phase, 13 October 2026, UEFA match ID `2049579` (18:45 listed by UEFA). The source-specific football-data/API-Football ID was not exposed by the supplied screenshot and was not read from encrypted device credentials.
+- Live privacy-safe TheSportsDB free-key check: `eventsday.php?d=2026-10-13&s=Soccer` returned three events but no Sabah/Slavia event. `lookuptv.php?id=584911` returned HTTP 200 with the documented two free rows. Therefore the named fixture fails at TheSportsDB event coverage before TV lookup; this is not evidence that the saved key is invalid.
+- Root cause: settings `Working` previously tested only `eventsday.php`; both adapters collapsed fixture mismatch and matched-event/no-TV rows into `NoData`; repository/UI collapsed all outcomes into `Broadcast information unavailable`; active-provider channel matching was not evaluated for card status; SoccersAPI empty schedules could stay cached for 30 minutes after credential/settings changes.
+- TheSportsDB connection test now exercises its documented TV lookup endpoint. Empty TV validation data no longer reports connected. HTTP 400/401 is authentication failure; 403 is unsupported tier.
+- Typed outcomes now preserve: no broadcaster data, fixture not matched, unsupported subscription, authentication failure, network failure, service failure, broadcaster found/no active-provider channel, and channel match available.
+- Fixture reconciliation remains strict on team order, competition, and 15-minute kickoff tolerance, with conservative aliases for `Sabah FK/FC`, `SK Slavia Praha`, and `Slavia Prague`.
+- Fixture cards now distinguish `No broadcaster data available` from `Broadcaster found, but no matching channel`, plus specific diagnostic states. No broadcaster or channel is invented.
+- Active IPTV matching still uses only the selected provider, existing aliases/region normalization/manual mappings/EPG evidence, and VERIFIED/STRONG/POSSIBLE rules.
+- Broadcast cache plus SoccersAPI schedule cache are invalidated after broadcaster credential removal/save and relevant Sports settings changes. No unrelated app data is cleared.
+- Added/updated regression coverage for fixture aliases/identity safety, empty TV data, fixture mismatch, free-plan TV endpoint validation, plan/auth/network distinctions, cache invalidation, provider matching, and separate UI messages.
+- Validation: focused broadcaster tests PASS; full JVM suite PASS; `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS.
+- Physical validation: NOT RUN. This task supplied no fresh device authorization. S22/BRAVIA/Firestick untouched.
+- Protected `native-android/update/update.json` SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Limitation: real broadcaster-to-IPTV success for Sabah vs Slavia cannot be claimed because TheSportsDB supplies no matching event/broadcaster data for it, and no authorized-device/provider validation was performed.
+
+## Sports V5 - UK broadcaster discovery and EPG matching (2026-10-12)
+
+- Branch/HEAD: `codex/dev-rescue-bridge` / `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`.
+- Preserved all existing dirty Sports V3/V4 work and untracked evidence. No staging, commit, push, release, or device access.
+- Root cause: official broadcaster sources and provider EPG matching were separate. An empty, unmatched, unsupported-tier, or unavailable broadcaster response ended discovery before the active provider EPG could identify a match-specific channel.
+- Added strict provider-scoped EPG fallback in `EpgFixtureDiscovery.kt`. It requires both team aliases, kickoff overlap/proximity, and at least one team in the programme title. Description-only, one-team, wrong-time, cross-provider, and tied ambiguous matches are rejected.
+- Discovery order is official broadcaster data first, provider EPG second. Manual mappings still require official broadcaster evidence and remain provider scoped.
+- Added explicit `OFFICIAL_BROADCASTER` / `PROVIDER_EPG` candidate evidence and `EPG_MATCH_AVAILABLE` UI state. Cards now distinguish an EPG match from no broadcaster data and from a broadcaster with no provider channel. Candidate playback still uses the existing Live TV callback.
+- One guide window is loaded for each fixture batch. Candidate reuse is keyed by provider and fixture. Sports credential/settings changes invalidate official and discovery caches. Fresh Sports loads re-read current EPG data.
+- Added UK linear aliases for BBC One, BBC Two, ITV1, ITV4, and S4C. Existing Sky Sports, TNT Sports, and Premier Sports aliases remain.
+- API-Football audit: current adapter already uses `https://v3.football.api-sports.io/fixtures`, `x-apisports-key`, date/range parameters, and typed auth/quota/network/parse failures. No credential or device access was used, so no user-account live request was claimed.
+- SoccersAPI audit/fix: replaced deprecated `user` + `token` query authentication with current `Authorization: Bearer <API key>`. Settings now request one masked API key. SecretStore reads the new key and safely falls back to the legacy saved token; a new save removes legacy username/token keys.
+- TheSportsDB remains supplementary. A successful service test does not claim fixture broadcaster coverage. Empty TV data remains `NoBroadcasterData`; free/premium plan limits remain visible.
+- Fixture evidence retained: Sabah FK vs SK Slavia Praha is UEFA Champions League, football-data.org fixture `2049579`, scheduled 2026-10-13. No real broadcaster/channel success is claimed without third-party data and an active-provider EPG match.
+- Added/updated regression coverage for verified/possible EPG discovery, team aliases, GMT/BST/DST instants, missing/incorrect/ambiguous data, provider isolation, bearer auth, legacy credential migration, UI evidence, and playback action availability.
+- Focused JVM tests: 31/31 PASS.
+- Full JVM suite: 1,827/1,827 PASS.
+- `lintDebug`: PASS, zero errors.
+- `assembleDebug`: PASS.
+- `assembleLocal`: PASS.
+- `assembleUitest`: PASS.
+- `assembleUitestAndroidTest`: PASS.
+- `git diff --check`: PASS.
+- Connected/physical validation: NOT RUN. No fresh device authorization was provided. S22, BRAVIA, and Firestick were untouched.
+- Protected `native-android/update/update.json` SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB` (unchanged).
+- Remaining limitation: real match-specific broadcaster and IPTV-channel success needs physical testing with current third-party plan access, populated active-provider EPG, and playable provider content.
+
+## Sports V6 - persistent broadcaster and match caching (2026-10-12)
+
+- Preserved the complete uncommitted Sports V3/V4/V5 work. No staging, commit, push, release, reset, rebase, data clearing, uninstall, or physical-device access.
+- Confirmed lag causes: broadcaster sources were called sequentially per fixture; broadcaster cache was memory-only; app restart/date revisits lost results; each date load rebuilt provider guide data before matching; match results were memory-only; UI received broadcaster results only after the whole date batch finished.
+- `BroadcastRepository` now performs the two configured broadcaster-source requests concurrently off the main thread and deduplicates concurrent source+fixture requests with keyed mutexes.
+- Added `PersistentSportsBroadcastCache`, stored in app-private SharedPreferences as bounded JSON. It persists official broadcaster data, evidence, timestamps, expiry, and explicit negative results. It never stores credentials, provider URLs, stream URLs, or playback headers.
+- Added `PersistentSportsMatchCache`, scoped by active provider and fixture. It persists matched channel identifiers, evidence source, confidence, reasons, state, EPG fingerprint, retrieval time, and expiry. Channel IDs are restored only against the current active-provider guide.
+- EPG fingerprint covers current provider channel/EPG IDs plus programme IDs/times. Changed EPG data invalidates persisted match results automatically. Provider changes cannot reuse another provider's matches.
+- Both persistent caches are capped at 1,000 entries and remove expired rows during use. No Room schema or migration changed; Room remains v7.
+- Cache lifetimes: completed/cancelled 24h; normal future data 6h; within 2h 15m; live 3m; negative broadcaster results 30m. Failed refreshes retain valid stale positive broadcaster data within the existing 24h fallback window.
+- Date loads publish each fixture's result progressively. Rapid date changes cancel obsolete ViewModel work while completed persistent cache writes remain reusable.
+- Added selected-date `REFRESH`. It preserves displayed data while refreshing, bypasses relevant broadcaster/match cache reads, deduplicates concurrent source requests, and does not clear other dates/providers.
+- Added redacted diagnostics: cache hits/misses, API call count, duplicate requests prevented, last broadcaster lookup duration, and last EPG index duration. No secrets or URLs are logged.
+- Deterministic concurrency measurement: two synthetic 100ms broadcaster sources complete in 100ms virtual time after parallelization; the previous sequential structure required 200ms. Warm date revisits issue zero broadcaster API calls while cache is fresh.
+- Added JVM tests for concurrent deduplication, negative-cache reuse/forced refresh, concurrent source timing, TTL policy, provider isolation, bounded cleanup, EPG matching, and existing error fallback.
+- Added isolated UITEST instrumentation coverage proving broadcaster and provider-match caches survive new cache instances and remain provider scoped. This test was compiled but not connected-run because no fresh device authorization was provided.
+- Focused JVM/cache tests: PASS.
+- Full JVM suite: 1,847/1,847 PASS.
+- `lintDebug`: PASS, zero errors.
+- `assembleDebug`: PASS.
+- `assembleLocal`: PASS.
+- `assembleUitest`: PASS.
+- `assembleUitestAndroidTest`: PASS.
+- `git diff --check`: PASS.
+- Protected manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Physical S22 responsiveness and real-network before/after timing remain pending fresh authorization.
+
+## Sports V6.2 - loading pipeline and compact layout (2026-10-13, uncommitted)
+
+- Confirmed the remaining ANR mechanism: `SportsViewModel` launches repository work on Main; after suspended data calls returned, EPG fingerprinting, provider-channel normalization, `conservativeAliasMatch`, and EPG discovery resumed on Main. Matching normalized and regex-scanned the full active-provider catalogue again for each broadcaster and fixture.
+- `SportsRepository.schedule`, broadcaster matching, EPG indexing, cache restoration, and candidate discovery now run on an injected `Dispatchers.Default` dispatcher. Fixture loops check coroutine cancellation, so rapid date changes stop obsolete work. Existing persistent Sports V6 fixture/broadcast/match caches and force-refresh policy remain unchanged.
+- `ProviderChannelMatcherV2` now builds one provider-scoped index per loaded guide. Channel names are normalized once, channel/programme data is reused, and broadcaster aliases select a small token-indexed candidate set before exact/fuzzy verification. Regex instances are reused; phrase checks and numeric comparisons no longer allocate per-candidate regex scans.
+- `EpgFixtureDiscovery` now builds one normalized programme index per guide and reuses it across fixtures. Provider isolation, kickoff windows, team evidence, ambiguity rejection, VERIFIED/POSSIBLE rules, and active-provider playback candidates remain unchanged.
+- Progressive broadcaster results remain visible. ViewModel publishes the first fixture immediately, then batches updates in groups of four, reducing full-screen state emissions without waiting for the complete date.
+- Sports date controls are one centered `44dp` row: compact previous, selected date, and next controls. Competition filters are one `40dp` horizontal row, use the theme pink accent for selection, truncate at `190dp`, remain horizontally scrollable, and scroll the selected chip into view. D-pad focus and Enter/OK remain semantic click actions.
+- Code-based layout delta before the fixture list is `24dp` saved in normal state and about `47dp` while refreshing. Date/filter stack changed from about `108dp` to `92dp`; top/header spacing saves another `8dp`. Physical row-count confirmation remains pending.
+- Privacy-safe JVM measurements: 10,001-channel provider index build `97.3931ms`; 100 indexed matches `22.4304ms` total with one candidate. 2,000-programme EPG index build `53.3297ms`; 25 indexed discoveries `647.5816ms` total. These desktop JVM measurements prove pruning/reuse, not S22 latency.
+- Focused Sports JVM tests passed. Full `test`, `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, and `assembleUitestAndroidTest` passed. Compose tests for compact height, selection, scrolling, D-pad, and refresh semantics compile; connected execution was not run because this task did not authorize physical-device access.
+- Protected manifest remains SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Room remains v7. MAIN, public v0.1.7, Media3, signing, providers, accounts, app data, and caches remain untouched. Nothing was staged, committed, pushed, or released.
+- Do not claim the S22 lag is physically fixed until a fresh authorized replacement install confirms responsive loading, rapid date navigation, cached revisits, and visible match-row gain.
+
+## Sports V6.3 - UK broadcasters and EPL team channels (2026-10-13, uncommitted)
+
+- Root cause: the provider index retained channel category IDs but not category names, and provider matching ran only after official broadcaster data succeeded. EPL categories and team channels were therefore invisible to Sports discovery.
+- Provider indexes now resolve active-provider category IDs to names once. EPL detection accepts only the approved normalized category names and never depends on a fixed category ID.
+- Premier League fixtures now match both participating teams against exact, conservative team aliases inside the indexed EPL category. Dynamic exact team names support promoted/new clubs without relying on a fixed league-member list; curated aliases cover common abbreviations.
+- Ambiguous `United`/`City` names and women, youth, academy, reserve, highlights, and club-TV variants are rejected. Non-Premier-League fixtures and non-EPL categories cannot create team-channel candidates.
+- Team channels remain `POSSIBLE` and display `TEAM CHANNEL - UNVERIFIED` unless provider EPG evidence confirms both teams and kickoff. Team names alone never produce `VERIFIED` status.
+- Official UK broadcaster matching remains separate and uses the existing Sky Sports, TNT Sports, BBC, ITV, and Premier Sports alias catalogue. No broadcaster coverage is invented.
+- Candidate UI now groups `UK broadcasters` and `EPL team channels` in one compact, lazy dialog. Existing channel objects and playback callbacks remain unchanged, preserving Media3, headers, authentication, server switching, and provider isolation.
+- V6.3 changes the Sports match-cache fingerprint to include matcher version, category names, channel names, and category IDs. This invalidates stale empty V6.2 matches without clearing unrelated data.
+- Performance: a 10,001-channel index built in `171.6172ms`; 100 broadcaster matches took `36.4547ms`; 100 EPL team matches took `22.0772ms` (`0.2208ms` each) on the desktop JVM. Team matching reuses the indexed EPL subset instead of scanning 10,000 channels per fixture.
+- Focused Sports/broadcast JVM tests passed. Full JVM suite passed `1,879/1,879`: Debug `468`, Local `468`, Release `468`, UITEST `475`.
+- `lintDebug` passed with zero issues. `assembleDebug`, `assembleLocal`, `assembleUitest`, and `assembleUitestAndroidTest` passed. Compose coverage for broadcaster/team grouping compiled; no connected tests ran because physical-device access was forbidden.
+- Physical playback, provider-specific EPL category coverage, and real EPG verification remain pending authorized device testing. No S22, BRAVIA, Firestick, emulator, app data, credentials, or provider session was accessed.
+- Protected manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Room remains v7. MAIN, public v0.1.7, backend, website, Media3, signing, versions, releases, tags, and update channels remain untouched. Nothing was staged, committed, pushed, or released.
+
+## Sports V6.4 - real provider discovery and intelligent matching (2026-10-13, uncommitted)
+
+- Used the existing local S22 Room snapshot read-only; no device or provider network was accessed. Inspected only category/channel display metadata: 178 live categories and 11,055 live channels. The sanitised local report is `evidence/sports-v64-provider-discovery/SPORTS_PROVIDER_DISCOVERY.md`.
+- Discovery found 32 broad sports-like categories, 10 strict football-context categories, and 126 channels inside those strict football contexts. Real patterns include `UK | EPL HUB`, 20 `<team> - EPL Premier League` entries, UK broadcaster quality variants, two-team fixture names with optional date/time, and generic numbered event banks.
+- Root cause of the V6.3 miss: EPL category detection used an exact allowlist, while team matching required the entire normalized channel name to equal a team alias. The real `UK | EPL HUB` category and competition suffix could never pass.
+- Category recognition now uses bounded football tokens/phrases with contextual country prefixes while rejecting replay, highlights, women, youth, academy, and reserve contexts. Team matching accepts only known EPL/competition suffix tokens; unrelated trailing content and club-TV variants remain rejected.
+- Added indexed match-specific channel discovery. It requires both fixture teams, an explicit `v`/`vs`/`versus`/spaced-hyphen separator, and a football-context category. Generic numbered slots and one-team names are not assigned to fixtures. Match-specific and team channels remain unverified unless EPG confirms both teams and kickoff.
+- Candidate UI now keeps `UK broadcasters`, `EPL team channels`, and `Match-specific channels` separate and renders only non-empty groups. Existing active-provider channel identity and Media3 playback callbacks remain unchanged.
+- Sports playback origin now travels as a fullscreen route argument (`sports`, `tv-guide`, or `live`) instead of transient shared state. Back therefore targets the preserved originating route without changing Live TV, Movies, or Series behavior. Physical confirmation remains pending fresh device authorization.
+- V6.4 bumps only the internal Sports match fingerprint seed from 63 to 64, invalidating stale empty matcher cache entries without clearing unrelated user data or changing Room v7.
+- Performance: 10,001-channel index build `127.5294ms`; 100 official broadcaster matches `23.1941ms`; 100 EPL team matches `23.4696ms` on desktop JVM. Matching reuses provider-scoped subsets and does not rescan the full catalogue per fixture.
+- Focused Sports tests passed; Compose/instrumentation sources compiled. Full JVM suite passed `1,899/1,899`: Debug `473`, Local `473`, Release `473`, UITEST `480`. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` passed. A transient Windows generated-JAR lock was cleared by stopping the task-scoped Gradle daemon; the clean serial rerun passed.
+- Physical validation was not run because V6.4 supplied no fresh device authorization. S22, BRAVIA, Firestick, accounts, sessions, credentials, and app data were untouched.
+
+## Sports V6.5 - provider catalogue pipeline and player navigation repair (2026-10-14, uncommitted)
+
+- V6.4 S22 acceptance proved two production failures: Newcastle/Aston Villa EPL team channels were absent despite existing in the active provider catalogue, and one fullscreen Back action could pop past Sports or Live TV to Home/launcher.
+- Catalogue evidence confirmed `UK | EPL HUB` plus both real team channels exist in the preserved provider database. Source inspection also confirmed TV Guide normally retains channels without EPG rows, so EPG-row filtering alone was not the physical cause. The confirmed weak boundary was Sports indexing a derived TV Guide projection with no production-boundary proof that the complete provider catalogue reached matching. V6.5 adds `TvGuideRepository.liveCatalogueForProvider`, which reads the complete active-provider live catalogue independently of EPG availability. Sports merges optional guide/EPG metadata onto that complete catalogue before indexing.
+- Channels without an EPG ID, current programme, or any EPG rows now remain eligible for EPL and fixture-name discovery. EPG remains verification-only. Original `LiveTvChannel` identity, provider ID, category ID, playback metadata, and Media3 path remain intact.
+- Match-cache fingerprint seed is now `65` and includes the direct provider catalogue/category snapshot. This invalidates incomplete V6.4 match entries only; provider databases, fixtures, broadcast caches, sessions, settings, favourites, and unrelated data are untouched.
+- Added Room-backed instrumentation regression coverage using `UK | EPL HUB`, `Newcastle United - EPL Premier League`, and `Aston Villa - EPL Premier League` with no EPG rows. Both channels reach `ProviderChannelMatcherV2` and remain `POSSIBLE`/unverified.
+- Player navigation root cause was duplicate fullscreen Back ownership: `WatchioFullscreenPlayerScreen` handled the same action through both `BackHandler` and raw Back/Escape preview-key logic. Raw duplicate handling was removed; one `BackHandler` now owns controls/dialog dismissal and route closure. Existing origin-aware navigation remains responsible for Sports, Live TV, TV Guide, Movies, and Series return routes.
+- Focused Sports tests and debug compilation passed. Full JVM `test` passed. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, Compose test compilation, and `git diff --check` passed.
+- Physical acceptance remains pending. No APK was installed and no physical device was accessed for V6.5. Protected manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Nothing was staged, committed, pushed, or released.
+- Protected manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. MAIN, public v0.1.7, backend, website, signing, versions, releases, tags, and updater channels remain untouched. Nothing was staged, committed, pushed, or released.
+
+## Sports V6.5.2 - rapid Back ownership and instrumentation repair (2026-10-15, uncommitted)
+
+- Reviewed `evidence/sports-v651-s22-acceptance/14-rapid-ready.xml`, `15-rapid-back.xml`, and `15-rapid-back.png`. The player controls were already hidden. Back 1 closed fullscreen; Back 2 arrived about 80 ms later on restored Sports and popped Sports to Home. The player-local close guard was correct but had already left composition.
+- Added parent-scoped `LivePlaybackReturnBackGuard`. Fullscreen close arms an origin-specific, single-use 250 ms protection window. Restored Sports, Live TV, or TV Guide consumes one rapid trailing Back. The guard then clears. A normal Back after expiry remains functional.
+- Preserved `LivePlaybackCloseGuard`, visible/hidden player-control behavior, origin fallback restoration, Media3, Movies, Series, background handling, Sports fixture context, and all EPL matching logic.
+- Fixed the real refresh D-pad activation gap for Enter, numpad Enter, and D-pad center. Activation occurs once on key-up. Touch and disabled states remain unchanged.
+- Diagnosed the other five Sports test failures as stale semantics/viewport timing: disabled child text, changed fixture-identity title, lazy reminder row, focus-driven competition scrolling, and lazy candidate groups. Assertions now target the real action nodes or scroll into view. No test was removed, ignored, or weakened.
+- Added guard tests for an 80 ms rapid Back, single consumption, expiry, and origin isolation. Added navigation-harness coverage for rapid return protection and normal Back after expiry.
+- Focused guard tests: 6/6 PASS. Full JVM suite: 1,923/1,923 PASS (Debug 479, Local 479, Release 479, UITEST 486).
+- `lintDebug`: PASS, zero errors; 63 warnings. `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, Compose instrumentation compilation, and `git diff --check`: PASS.
+- Connected instrumentation and physical acceptance: PENDING. Task explicitly prohibited S22, BRAVIA, Firestick, emulator, and all physical-device access.
+- Evidence report: `evidence/sports-v652-navigation-fix/SPORTS_V652_NAVIGATION_FIX.md`.
+- Protected manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Room remains v7. Nothing was staged, committed, pushed, or released.
+# 2026-10-15 — Sports V6.5.2 lint cleanup and S22 acceptance
+
+- Lint cleanup reduced `lintDebug` from 63 warnings to 29 with zero errors. Fixed KTX, Compose modifier/naming, recomposition, overdraw, resource-density, backup-rule, version-catalog, and package-query warnings. No suppressions/baselines/check disabling. Remaining warnings: 27 dependency/toolchain advisories, cleartext IPTV compatibility, and intentional landscape behavior.
+- Local validation: focused Sports/navigation PASS; full JVM 1,923/1,923 PASS; `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, instrumentation compilation, and `git diff --check` PASS.
+- Exact S22 replacement install PASS for `com.iamskorpz.watchioiptv.debug` `0.1.7-debug` code 20. APK SHA-256 `CDE52994BD71D844B82FBEC3D517F8D8A848F2A02B31D6DE442E7A4E0D45329E`. Existing first-install timestamp/provider/session preserved; no uninstall/data clear.
+- EPL regression: Newcastle vs Aston Villa, 17 Oct 2026 17:30 found. Newcastle and Aston Villa EPL team channels both present as POSSIBLE / TEAM CHANNEL - UNVERIFIED. Sky Sports Main Event FHD present separately as POSSIBLE. Normal two-step player Back PASS with Sports/date/filter context preserved.
+- Physical rapid hidden-controls Back: **FAIL 0/5**. Timed two-Back requests 111-201 ms apart left Watchio and exposed Samsung launcher every attempt. Do not accept or commit V6.5.2 navigation guard as verified.
+- Isolated S22 instrumentation: LivePlaybackNavigationComposeTest 10/10 PASS; SportsScreenComposeTest 30/35 PASS; combined 40/45. Five failures recorded in `evidence/sports-v652-s22-acceptance/SPORTS_V652_S22_ACCEPTANCE.md`.
+- Remaining playback origins/background/expiry checks are PENDING because testing stopped after repeatable critical failure. No current-session Watchio crash/ANR observed.
+- Protected rescue manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- No staging, commit, push, release, MAIN change, or unauthorized device access. BRAVIA untouched.
+
+## Sports V6.5.4 - Back navigation root-cause pass (2026-10-17, uncommitted)
+
+- Verified the authorised Samsung S22 test device, model `SM-S901B`. Replacement debug installs preserved `firstInstallTime=2026-09-14 23:02:57`; no uninstall or data clear.
+- Temporary debug-only tracing proved two distinct timing defects. During the Sports-to-player handoff, Back changed `live -> sports`, then the trailing event reached Sports about 220 ms later while the guard was never armed. From fullscreen with controls hidden, close began at elapsed time `24024787`; the trailing event reached Sports at `24025047` (260 ms later), after the 250 ms guard that had started before destination restoration.
+- Narrow fix keeps Sports ownership while a requested Sports channel is still initializing and delays/re-arms the unchanged 250 ms single-use guard when the origin destination is actually restored. No timeout increase and no additional overlapping Back catcher. Added a JVM guard regression test. Temporary logging was removed.
+- Full JVM suite: 1,935/1,935 PASS. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
+- Connected S22 instrumentation: 40/45 PASS. Same five pre-existing Sports Compose failures remain: unavailable action enabled assertion, refresh D-pad callback, duplicate fixture-title matcher, off-viewport C7 filter, and off-viewport team-channel assertion.
+- Physical evidence before the final lifecycle-timed fix reproduced the failure and established root cause. Attempts after the fix could not be counted reliably because stream/player readiness varied and setup Back sometimes ran on Sports instead of fullscreen. Required 5 hidden + 5 visible + 5 normal trials therefore remain NOT VERIFIED. No false PASS recorded.
+- Protected manifest SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. No staging, commit, push, release, credential change, or other-device access. Final decision: PARTIAL pending controlled physical acceptance.
+
+## Sports V6.5.4 - final S22 physical acceptance (2026-10-17, FAIL)
+
+- Verified only the authorised Samsung S22 test device, model `SM-S901B`. Existing installed debug package remained `0.1.7-debug` / code 20; no reinstall was needed.
+- Navigated Home -> Sports -> 24 October -> Aston Villa FC vs Manchester City FC -> `Aston Villa - EPL Premier League`. Media3 initialized and real moving Sky Sports Premier League video was visually confirmed. Provider playback readiness therefore passed; unavailable-stream behavior was not involved.
+- Hidden-controls rapid double-Back failed on the first valid trial: start was stable fullscreen moving video with no controls overlay; two Back inputs were requested 150 ms apart; actual final destination was Watchio Home. Watchio did not exit to Samsung launcher. Evidence screenshots remain preserved outside the repository.
+- Per explicit stop-on-first-valid-failure rule, hidden trials ended at 0/1, visible-controls remained 0/5 NOT TESTED, normal single-Back remained 0/5 NOT TESTED, and broader Sports/Live TV regressions were not continued. No crash or ANR attributable to Watchio was found.
+- App data remained preserved: `firstInstallTime=2026-09-14 23:02:57`; version/signing/package unchanged. No provider, playlist, credential, or setting was modified.
+- Protected manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`; `git diff --check` passed; zero staged files. No code change, commit, push, release, deployment, uninstall, data clear, or other-device access occurred in this acceptance pass.
+- Final physical decision: **FAIL**. V6.5.4 does not meet the required 15/15 acceptance criterion.
+
+## Sports V6.5.5 - permanent rapid double-Back fix and S22 acceptance (2026-10-17, later committed locally)
+
+- Temporary debug-only tracing on the authorised S22 proved the remaining root cause. Back 1 closed fullscreen and restored Sports; Back 2 arrived during the Navigation transition while `sports` was `STARTED` but `live/fullscreen` was still present in `NavController.visibleEntries`. The Sports handler therefore treated the trailing event as an intentional Sports Back and popped to Home. This was transition ownership, not duplicate dispatch, provider playback failure, or a missing timer arm.
+- The narrow fix adds `isLivePlaybackReturnTransition`: restored Sports consumes Back while the outgoing fullscreen destination remains visible. Once fullscreen leaves visible entries, deliberate Sports Back works normally. No timeout was increased, no delay or global Back lock was added, and no overlapping catcher was introduced. Existing origin-aware restoration, player cleanup, Media3, and Sports state remain intact.
+- Added JVM regressions proving Sports consumes Back during the visible fullscreen return transition and permits normal Back after fullscreen leaves visible entries. Temporary trace code and logging were removed before final validation.
+- Full JVM suite: 1,943/1,943 PASS. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, focused navigation tests, and `git diff --check`: PASS.
+- Connected S22 instrumentation: 40/45 PASS. The same five known Sports Compose failures remain; no new navigation failure was introduced.
+- Physical S22 acceptance used real moving video from Sports -> 24 Oct -> Aston Villa FC vs Manchester City FC -> `Aston Villa - EPL Premier League`. Hidden-controls rapid double-Back: 5/5 PASS. Visible-controls rapid double-Back: 5/5 PASS. Normal single-Back: 5/5 PASS. Every trial returned to Sports, never Home or launcher. Effective rapid-event spacing was approximately 120-340 ms across captured trials.
+- Regression checks: Sports date/fixture/channel context preserved; EPL team channels accessible; Live TV opens and returns to Home normally; no Watchio crash, ANR, or unexpected Activity exit observed. Existing provider/session/app data remained preserved; no uninstall or data clear.
+- Final debug APK: `native-android/app/build/outputs/apk/debug/app-debug.apk`, 32,113,704 bytes, SHA-256 `4B218A6B574985A742930FE01BB2B56A4CC97171A9B1A1538801407C7A42862C`.
+- Protected manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Branch/HEAD remain `codex/dev-rescue-bridge` / `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`. Nothing was staged, committed, pushed, released, or deployed; no other device was accessed.
+- Final decision: **PASS** for V6.5.5 physical Back-navigation acceptance. The five pre-existing Sports Compose instrumentation failures remain tracked separately.
+
+## Sports V6.5.5 - Compose UI corrections (2026-10-17, later committed locally)
+
+- Preserved the validated V6.5.5 Back-navigation implementation byte-for-byte. Its tracked diff SHA-256 remains `FBD40761FBF8891EDD31EE04F0C47975463636739E71B81B81204F8843BC8D2D`; the 250 ms guard and all Back ownership remain unchanged.
+- The apparent untracked-file discrepancy was counting only: normal porcelain collapsed untracked directories into 499 entries, while `--untracked-files=all` confirmed all 752 individual files remain present.
+- Fixed disabled control accessibility at the shared `WatchioCard` boundary. A disabled card exposes Compose `disabled()` semantics only when it represents an interactive control; existing opacity and absence of click handling remain unchanged.
+- Competition chips now bring themselves fully into the horizontal viewport when D-pad focus reaches a partially/off-screen item. Selection changes only on OK/click; short-list centering, touch scrolling, order, and boundaries remain unchanged.
+- Added stable candidate-dialog title, candidate-row, and confidence-label tags. Tests now disambiguate the legitimate duplicate fixture/programme title and verify each lazy broadcaster/team/fixture group immediately at its own viewport position.
+- Refresh D-pad coverage now explicitly requests keyboard input mode, waits for settled focus, asserts focus ownership, sends `DirectionCenter`, and verifies exactly one callback. Production refresh key handling did not require modification.
+- All five formerly failing tests passed individually. Full `SportsScreenComposeTest`: 35/35 PASS. Combined `LivePlaybackNavigationComposeTest` plus Sports batch: 45/45 PASS, zero skipped.
+- Full JVM suite: 1,943/1,943 PASS. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
+- Authorised Samsung S22 test device verified as `SM-S901B`. Updated debug APK installed with `adb install -r`; `firstInstallTime=2026-09-14 23:02:57` remained unchanged. New APK SHA-256: `7546DDD6DD2F010B0D8CF8FC398651D750996EA4B8C37938ED1363D9165F5C9A`.
+- Focused physical regression: Sports fixtures loaded through 24 October; competition D-pad traversal remained responsive; focused refresh activated through remote OK and remained on Sports; EPL team-channel group and chooser remained accessible; Live TV opened; no crash or ANR occurred. No unavailable live fixture was present for a real disabled-action physical trial; disabled behavior is covered by the passing connected test.
+- The full 15-trial Back suite was not repeated on this new APK. The frozen navigation code is unchanged, the 10 navigation instrumentation tests passed inside the 45-test batch, and no unexpected Home navigation appeared during focused checks. Do not describe the new APK as independently completing 15/15 physical Back acceptance.
+- Protected manifest remains SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Room v7, Media3, providers, credentials, sessions, playlists, MAIN, signing, versions, and updater channels remain untouched. Nothing was staged, committed, pushed, released, or deployed.
