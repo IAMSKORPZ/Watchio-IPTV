@@ -4,16 +4,27 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 data class CachedBroadcasts(
     val broadcasts: List<SportsBroadcast>,
     val fetchedAt: Instant,
     val expiresAt: Instant,
+    val negative: Boolean = false,
 )
 
 interface SportsBroadcastCache {
     fun get(source: SportsDataSource, fixtureIdentity: SportsSourceIdentity): CachedBroadcasts?
     fun put(source: SportsDataSource, fixtureIdentity: SportsSourceIdentity, value: CachedBroadcasts)
+    fun clear() = Unit
+    fun cleanup(now: Instant, maximumEntries: Int = 1_000) = Unit
 }
 
 class InMemorySportsBroadcastCache : SportsBroadcastCache {
@@ -22,6 +33,7 @@ class InMemorySportsBroadcastCache : SportsBroadcastCache {
     override fun put(source: SportsDataSource, fixtureIdentity: SportsSourceIdentity, value: CachedBroadcasts) {
         values[key(source, fixtureIdentity)] = value
     }
+    override fun clear() = values.clear()
     private fun key(source: SportsDataSource, fixtureIdentity: SportsSourceIdentity) = "${source.value}:${fixtureIdentity.stableKey}"
 }
 
@@ -30,11 +42,12 @@ object SportsBroadcastCachePolicy {
 
     fun ttl(fixture: SportsFixture, now: Instant): Duration = when {
         fixture.state == SportsFixtureState.Finished || fixture.state == SportsFixtureState.Cancelled -> Duration.ofHours(24)
-        fixture.state == SportsFixtureState.Live || fixture.state == SportsFixtureState.Halftime -> Duration.ofHours(1)
-        !fixture.kickoff.isAfter(now.plus(Duration.ofHours(6))) -> Duration.ofMinutes(30)
-        !fixture.kickoff.isAfter(now.plus(Duration.ofHours(24))) -> Duration.ofHours(1)
-        else -> Duration.ofHours(8)
+        fixture.state == SportsFixtureState.Live || fixture.state == SportsFixtureState.Halftime -> Duration.ofMinutes(3)
+        !fixture.kickoff.isAfter(now.plus(Duration.ofHours(2))) -> Duration.ofMinutes(15)
+        else -> Duration.ofHours(6)
     }
+
+    val negativeTtl: Duration = Duration.ofMinutes(30)
 
     fun isFresh(value: CachedBroadcasts, now: Instant) = now.isBefore(value.expiresAt)
     fun mayFallback(value: CachedBroadcasts, now: Instant) = now.isBefore(value.expiresAt.plus(staleWindow))
@@ -45,38 +58,69 @@ class BroadcastRepository(
     private val secondary: BroadcastSource,
     private val cache: SportsBroadcastCache = InMemorySportsBroadcastCache(),
     private val clock: Clock = Clock.systemUTC(),
+    private val sourceOrder: () -> List<SportsDataSource> = { listOf(primary.source, secondary.source) },
+    private val refreshInterval: () -> Duration = { Duration.ofMinutes(30) },
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    suspend fun broadcasts(fixture: SportsFixture): SportsSourceResult<List<SportsBroadcast>> {
-        val primaryResult = load(primary, fixture)
-        val secondaryResult = load(secondary, fixture)
-        val successful = listOf(primaryResult, secondaryResult).filterIsInstance<SportsSourceResult.Success<List<SportsBroadcast>>>()
+    private val requestLocks = ConcurrentHashMap<String, Mutex>()
+    fun invalidateCache() = cache.clear()
+
+    suspend fun broadcasts(fixture: SportsFixture, forceRefresh: Boolean = false): SportsSourceResult<List<SportsBroadcast>> = withContext(ioDispatcher) {
+        val sources = sourceOrder().mapNotNull { selected -> listOf(primary, secondary).firstOrNull { it.source == selected } }.distinctBy { it.source }
+        if (sources.isEmpty()) return@withContext SportsSourceResult.Failure(SportsSourceError.Unsupported)
+        cache.cleanup(clock.instant())
+        val results = coroutineScope { sources.map { async { load(it, fixture, forceRefresh) } }.awaitAll() }
+        val successful = results.filterIsInstance<SportsSourceResult.Success<List<SportsBroadcast>>>()
         if (successful.isNotEmpty()) {
             val fetchedAt = successful.maxOf { it.fetchedAt }
-            return SportsSourceResult.Success(deduplicateBroadcasts(successful.flatMap { it.data }), fetchedAt)
+            return@withContext SportsSourceResult.Success(deduplicateBroadcasts(successful.flatMap { it.data }), fetchedAt)
         }
-        if (primaryResult is SportsSourceResult.NoData && secondaryResult is SportsSourceResult.NoData) return SportsSourceResult.NoData
-        val failures = listOf(primaryResult, secondaryResult).filterIsInstance<SportsSourceResult.Failure>()
-        return failures.firstOrNull { it.error is SportsSourceError.RateLimited }
+        if (results.all { it is SportsSourceResult.NoData }) return@withContext SportsSourceResult.NoData
+        val failures = results.filterIsInstance<SportsSourceResult.Failure>()
+        return@withContext failures.firstOrNull { it.error == SportsSourceError.NoBroadcasterData }
+            ?: failures.firstOrNull { it.error is SportsSourceError.RateLimited }
+            ?: failures.firstOrNull { it.error == SportsSourceError.Unauthorized }
+            ?: failures.firstOrNull { it.error == SportsSourceError.UnsupportedTier }
             ?: failures.firstOrNull()
             ?: SportsSourceResult.NoData
     }
 
-    private suspend fun load(source: BroadcastSource, fixture: SportsFixture): SportsSourceResult<List<SportsBroadcast>> {
+    private suspend fun load(source: BroadcastSource, fixture: SportsFixture, forceRefresh: Boolean): SportsSourceResult<List<SportsBroadcast>> {
+        val requestKey = "${source.source.value}:${fixture.identity.stableKey}"
+        val newLock = Mutex()
+        val lock = requestLocks.putIfAbsent(requestKey, newLock) ?: newLock
+        if (lock !== newLock) SportsCacheDiagnostics.duplicatePrevented()
+        return lock.withLock {
         val now = clock.instant()
         val cached = cache.get(source.source, fixture.identity)
-        if (cached != null && SportsBroadcastCachePolicy.isFresh(cached, now)) {
-            return SportsSourceResult.Success(cached.broadcasts, cached.fetchedAt)
+        if (!forceRefresh && cached != null && SportsBroadcastCachePolicy.isFresh(cached, now)) {
+            SportsCacheDiagnostics.cacheHit()
+            return@withLock if (cached.negative) SportsSourceResult.Failure(SportsSourceError.NoBroadcasterData)
+            else SportsSourceResult.Success(cached.broadcasts, cached.fetchedAt)
         }
-        return when (val remote = source.broadcasts(fixture)) {
+        SportsCacheDiagnostics.cacheMiss()
+        SportsCacheDiagnostics.apiCall()
+        val startedAt = System.nanoTime()
+        when (val remote = source.broadcasts(fixture)) {
             is SportsSourceResult.Success -> {
-                cache.put(source.source, fixture.identity, CachedBroadcasts(remote.data, remote.fetchedAt, remote.fetchedAt.plus(SportsBroadcastCachePolicy.ttl(fixture, remote.fetchedAt))))
+                val policyTtl = SportsBroadcastCachePolicy.ttl(fixture, remote.fetchedAt)
+                val configuredTtl = refreshInterval().coerceAtLeast(Duration.ofMinutes(5))
+                val ttl = if (configuredTtl < policyTtl) configuredTtl else policyTtl
+                cache.put(source.source, fixture.identity, CachedBroadcasts(remote.data, remote.fetchedAt, remote.fetchedAt.plus(ttl)))
                 remote
             }
-            is SportsSourceResult.Failure -> if (cached != null && SportsBroadcastCachePolicy.mayFallback(cached, now)) {
+            is SportsSourceResult.Failure -> if (remote.error == SportsSourceError.NoBroadcasterData) {
+                cache.put(source.source, fixture.identity, CachedBroadcasts(emptyList(), now, now.plus(SportsBroadcastCachePolicy.negativeTtl), negative = true))
+                remote
+            } else if (cached != null && !cached.negative && SportsBroadcastCachePolicy.mayFallback(cached, now)) {
                 SportsSourceResult.Success(cached.broadcasts, cached.fetchedAt)
             } else remote
-            SportsSourceResult.NoData -> SportsSourceResult.NoData
-        }
+            SportsSourceResult.NoData -> {
+                cache.put(source.source, fixture.identity, CachedBroadcasts(emptyList(), now, now.plus(SportsBroadcastCachePolicy.negativeTtl), negative = true))
+                SportsSourceResult.NoData
+            }
+        }.also { SportsCacheDiagnostics.broadcasterLookup((System.nanoTime() - startedAt) / 1_000_000L) }
+        }.also { requestLocks.remove(requestKey) }
     }
 }
 

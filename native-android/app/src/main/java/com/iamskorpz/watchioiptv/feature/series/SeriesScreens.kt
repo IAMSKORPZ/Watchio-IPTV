@@ -544,9 +544,9 @@ private fun SeriesOptionsDialog(item: SeriesCardUiModel, onDetails: () -> Unit, 
 @Composable
 private fun SeriesCard(
     item: SeriesCardUiModel,
+    modifier: Modifier = Modifier,
     onSeries: (SeriesCardUiModel) -> Unit,
     onSeriesOptions: (SeriesCardUiModel) -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current

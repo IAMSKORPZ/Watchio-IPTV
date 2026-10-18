@@ -26,6 +26,16 @@ import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlResolver
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideRepository
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideTimeline
+import com.iamskorpz.watchioiptv.feature.sports.v2.BroadcasterAliasCatalogue
+import com.iamskorpz.watchioiptv.feature.sports.v2.MatchChannelConfidence
+import com.iamskorpz.watchioiptv.feature.sports.v2.ProviderChannelMatcherV2
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsCompetition
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsDataSource
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsFixture
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsFixtureState
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsSourceIdentity
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsTeam
+import java.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -171,6 +181,39 @@ class TvGuideRepositoryInstrumentedTest {
         assertEquals(listOf("Cached Sport"), reopened.programmes["sport-1"]?.map { it.title })
         assertTrue(reopened.programmes["no-epg"].isNullOrEmpty())
         assertEquals(1, reopened.epgProgrammeCount)
+    }
+
+    @Test
+    fun providerCatalogueFeedsEplTeamMatcherWithoutEpgRows() = runBlocking {
+        val providerId = ProviderId("p1")
+        seedProvider(providerId.value)
+        database.categoryDao().upsertAll(listOf(category("p1", "112", "UK | EPL HUB", 1)))
+        database.m3uItemDao().upsertAll(
+            listOf(
+                item("p1", "newcastle", "Newcastle United - EPL Premier League", 1, null, "112"),
+                item("p1", "villa", "Aston Villa - EPL Premier League", 2, null, "112"),
+            ),
+        )
+        val catalogue = tvGuideRepository(providerId).liveCatalogueForProvider(providerId)
+        val categoryNames = catalogue.categories.associate { it.id to it.name }
+        val matcher = ProviderChannelMatcherV2(BroadcasterAliasCatalogue.parse("""{"schemaVersion":1,"broadcasters":[{"canonical":"Sky Sports Main Event","serviceType":"LINEAR_TV","aliases":[]}]}"""))
+        val index = matcher.buildIndex(catalogue.channels, emptyMap(), categoryNames)
+        val competition = SportsCompetition(SportsSourceIdentity(SportsDataSource.FootballData, "PL"), name = "Premier League", code = "PL")
+        val fixture = SportsFixture(
+            identity = SportsSourceIdentity(SportsDataSource.FootballData, "fixture"),
+            competition = competition,
+            homeTeam = SportsTeam(SportsSourceIdentity(SportsDataSource.FootballData, "home"), displayName = "Newcastle United FC"),
+            awayTeam = SportsTeam(SportsSourceIdentity(SportsDataSource.FootballData, "away"), displayName = "Aston Villa FC"),
+            kickoff = Instant.parse("2026-10-17T16:30:00Z"),
+            state = SportsFixtureState.Scheduled,
+            fetchedAt = Instant.parse("2026-10-13T12:00:00Z"),
+        )
+
+        val matches = matcher.matchTeamChannels(fixture, index)
+
+        assertEquals(setOf("newcastle", "villa"), matches.map { it.channel.id }.toSet())
+        assertTrue(matches.all { it.confidence == MatchChannelConfidence.POSSIBLE })
+        assertTrue(matches.all { it.epgEvidence.programmeTitle == null })
     }
 
     private fun tvGuideRepository(providerId: ProviderId): TvGuideRepository {

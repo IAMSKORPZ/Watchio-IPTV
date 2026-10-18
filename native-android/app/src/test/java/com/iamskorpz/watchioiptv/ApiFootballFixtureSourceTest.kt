@@ -139,6 +139,8 @@ class ApiFootballFixtureSourceTest {
         assertEquals(SportsSourceResult.Failure(SportsSourceError.Unauthorized), source().fixtures(LocalDate.now(), LocalDate.now()))
         server.enqueue(jsonResponse("{\"errors\":{\"requests\":\"Request limit reached\"},\"results\":0,\"response\":[]}").setHeader("Retry-After", "30"))
         assertEquals(SportsSourceResult.Failure(SportsSourceError.RateLimited(now.plusSeconds(30))), source().fixtures(LocalDate.now(), LocalDate.now()))
+        server.enqueue(jsonResponse("{\"errors\":{\"plan\":\"This endpoint is not available for your subscription\"},\"results\":0,\"response\":[]}"))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.UnsupportedTier), source().fixtures(LocalDate.now(), LocalDate.now()))
     }
 
     @Test fun mapsHttpAuthenticationRateLimitServerAndTimeout() = runTest {

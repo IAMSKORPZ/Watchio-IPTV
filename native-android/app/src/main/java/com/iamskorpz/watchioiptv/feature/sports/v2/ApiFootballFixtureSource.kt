@@ -294,6 +294,7 @@ private fun JsonElement.toSourceError(retryAt: Instant?): SportsSourceError {
     return when {
         "rate limit" in value || "request limit" in value || "quota" in value -> SportsSourceError.RateLimited(retryAt)
         "api key" in value || "authentication" in value || "unauthorized" in value -> SportsSourceError.Unauthorized
+        "subscription" in value || "plan" in value || "access to this endpoint" in value -> SportsSourceError.UnsupportedTier
         else -> SportsSourceError.Unavailable
     }
 }

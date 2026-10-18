@@ -50,18 +50,18 @@ class TheSportsDbBroadcastSourceTest {
         assertNull(result.data.single().countryOrRegion)
 
         server.enqueue(json("{\"events\":null}"))
-        assertEquals(SportsSourceResult.NoData, source().broadcasts(fixture()))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.FixtureNotMatched), source().broadcasts(fixture()))
         server.enqueue(json(events(event())))
         server.enqueue(json("{\"tvevent\":null}"))
-        assertEquals(SportsSourceResult.NoData, source().broadcasts(fixture()))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.NoBroadcasterData), source().broadcasts(fixture()))
     }
 
     @Test fun wrongOrAmbiguousEventNeverTriggersTvLookup() = runTest {
         server.enqueue(json(events(event(league = "Championship"))))
-        assertEquals(SportsSourceResult.NoData, source().broadcasts(fixture()))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.FixtureNotMatched), source().broadcasts(fixture()))
         assertEquals(1, server.requestCount)
         server.enqueue(json(events(event(id = "1"), event(id = "2"))))
-        assertEquals(SportsSourceResult.NoData, source().broadcasts(fixture()))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.FixtureNotMatched), source().broadcasts(fixture()))
         assertEquals(2, server.requestCount)
     }
 
@@ -71,6 +71,8 @@ class TheSportsDbBroadcastSourceTest {
         assertEquals(SportsSourceResult.Failure(SportsSourceError.ParseFailure), source().broadcasts(fixture()))
         server.enqueue(MockResponse().setResponseCode(401))
         assertEquals(SportsSourceResult.Failure(SportsSourceError.Unauthorized), source().broadcasts(fixture()))
+        server.enqueue(MockResponse().setResponseCode(403))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.UnsupportedTier), source().broadcasts(fixture()))
         server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "30"))
         assertEquals(SportsSourceResult.Failure(SportsSourceError.RateLimited(now.plusSeconds(30))), source().broadcasts(fixture()))
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
@@ -82,6 +84,17 @@ class TheSportsDbBroadcastSourceTest {
         assertEquals(Instant.parse("2026-10-04T14:00:00Z"), parseTheSportsDbInstant("2026-10-04T14:00:00", null, null))
         assertEquals(Instant.parse("2026-10-04T14:00:00Z"), parseTheSportsDbInstant("2026-10-04 14:00:00", null, null))
         assertEquals(Instant.parse("2026-10-04T14:00:00Z"), parseTheSportsDbInstant(null, "2026-10-04", "14:00:00"))
+    }
+
+    @Test fun connectionTestValidatesSuppliedKeyWithoutRequiringMatchingFixture() = runTest {
+        server.enqueue(json(tvEnvelope(tv("10", "BBC One", "United Kingdom"))))
+        assertTrue(source().testConnection() is SportsSourceResult.Success)
+        val request = server.takeRequest()
+        assertTrue(request.path!!.contains("/api/v1/json/synthetic-key/lookuptv.php"))
+        assertEquals("584911", request.requestUrl!!.queryParameter("id"))
+        server.enqueue(json("{\"tvevent\":null}"))
+        assertEquals(SportsSourceResult.NoData, source().testConnection())
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.Unauthorized), source(key = null).testConnection())
     }
 
     private fun source(key: String? = "synthetic-key", timeoutMs: Long = 2_000): TheSportsDbBroadcastSource {

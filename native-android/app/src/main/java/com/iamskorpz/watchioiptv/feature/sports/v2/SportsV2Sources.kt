@@ -11,6 +11,9 @@ sealed interface SportsSourceError {
     data object Unavailable : SportsSourceError
     data object NetworkFailure : SportsSourceError
     data object ParseFailure : SportsSourceError
+    data object UnsupportedTier : SportsSourceError
+    data object FixtureNotMatched : SportsSourceError
+    data object NoBroadcasterData : SportsSourceError
     data object Unsupported : SportsSourceError
 }
 
@@ -36,5 +39,8 @@ interface BroadcastSource {
     val capabilities: Set<SportsSourceCapability>
 
     suspend fun broadcasts(fixture: SportsFixture): SportsSourceResult<List<SportsBroadcast>> =
+        SportsSourceResult.Failure(SportsSourceError.Unsupported)
+
+    suspend fun testConnection(): SportsSourceResult<Unit> =
         SportsSourceResult.Failure(SportsSourceError.Unsupported)
 }

@@ -37,11 +37,11 @@ class WatchioDesignSystemComposeTest {
         composeRule.setContent {
             WatchioTheme {
                 Column {
-                    WatchioScreenHeader("Design", "Tokens")
+                    WatchioScreenHeader("Design", subtitle = "Tokens")
                     WatchioButton("Primary Action", onClick = {}, variant = WatchioButtonVariant.Primary)
                     WatchioButton("Compact", onClick = {}, variant = WatchioButtonVariant.CompactAction)
                     WatchioChip("Selected Chip", selected = true, onClick = {})
-                    WatchioListRow("Row Title", "Row subtitle", onClick = {})
+                    WatchioListRow("Row Title", subtitle = "Row subtitle", onClick = {})
                     WatchioPosterCard("Poster Title", imageUrl = null, onClick = {}, modifier = Modifier.testTag("poster-card"))
                 }
             }

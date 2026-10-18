@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv.feature.sports
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -26,15 +28,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,21 +49,29 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import com.iamskorpz.watchioiptv.ui.components.WatchioButton
 import com.iamskorpz.watchioiptv.ui.components.WatchioButtonVariant
 import com.iamskorpz.watchioiptv.ui.components.WatchioCard
 import com.iamskorpz.watchioiptv.ui.components.WatchioLoading
-import com.iamskorpz.watchioiptv.ui.components.WatchioChip
 import com.iamskorpz.watchioiptv.ui.components.WatchioPageHeader
+import com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole
 import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioColors
 import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import java.time.Instant
@@ -70,11 +85,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.Dialog
 import com.iamskorpz.watchioiptv.feature.sports.v2.MatchChannelConfidence
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsChannelEvidenceSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcast
+import kotlinx.coroutines.launch
 
 @Composable
 fun SportsScreen(
@@ -93,6 +111,7 @@ fun SportsScreen(
     onToggleReminder: (SportsFixture) -> Unit = {},
     onDismissAlert: () -> Unit = {},
     onWatchAlert: () -> Unit = {},
+    onRefresh: () -> Unit = {},
 ) {
     val colors = LocalWatchioColors.current
     var selectedCompetition by remember(state.selectedDate) { mutableStateOf<String?>(null) }
@@ -112,15 +131,21 @@ fun SportsScreen(
         else -> onBack
     })
     Box(Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).testTag("sports-background")) {
-    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 14.dp).testTag("sports-screen")) {
-        WatchioPageHeader(title = "SPORTS", onBack = onBack, testTagPrefix = "sports")
-        Spacer(Modifier.height(8.dp))
+    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 10.dp).testTag("sports-screen")) {
+        WatchioPageHeader(
+            title = "SPORTS",
+            onBack = onBack,
+            testTagPrefix = "sports",
+            actions = {
+                SportsRefreshAction(
+                    refreshing = state.refreshing,
+                    onRefresh = onRefresh,
+                )
+            },
+        )
+        Spacer(Modifier.height(4.dp))
         SportsDateNavigator(state.selectedDate, onPreviousDay, { calendarOpen = true }, onNextDay)
-        if (state.refreshing) {
-            Spacer(Modifier.height(4.dp))
-            Text("Refreshing sports data…", color = colors.textSecondary, modifier = Modifier.testTag("sports-refreshing"))
-        }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(4.dp))
         Box(Modifier.fillMaxWidth().weight(1f).testTag("sports-content")) {
             when (val load = state.loadState) {
                 SportsLoadState.Loading -> WatchioLoading("Loading fixtures…", Modifier.align(Alignment.Center).testTag("sports-loading"))
@@ -151,18 +176,43 @@ fun SportsScreen(
                         Text("Try another date using the controls above.", color = colors.textSecondary)
                     }
                 } else Column(Modifier.fillMaxSize()) {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                        modifier = Modifier.fillMaxWidth().testTag("sports-competition-filters"),
-                    ) {
-                        item { WatchioChip("ALL", selectedCompetition == null, { selectedCompetition = null }, Modifier.testTag("sports-filter-all")) }
-                        items(load.schedule.competitions, key = { it.id }) { competition ->
-                            WatchioChip(competition.name, selectedCompetition == competition.id, { selectedCompetition = competition.id }, Modifier.testTag("sports-filter-${competition.id}"))
+                    val competitionListState = rememberLazyListState()
+                    val competitionScrollScope = rememberCoroutineScope()
+                    val competitionIds = remember(load.schedule.competitions) { load.schedule.competitions.map { it.id } }
+                    val bringCompetitionIntoView: (Int) -> Unit = { index ->
+                        val layoutInfo = competitionListState.layoutInfo
+                        val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+                        val viewportStart = layoutInfo.viewportStartOffset
+                        val viewportEnd = layoutInfo.viewportEndOffset
+                        when {
+                            itemInfo == null -> competitionScrollScope.launch {
+                                competitionListState.animateScrollToItem(index)
+                            }
+                            itemInfo.offset < viewportStart -> competitionScrollScope.launch {
+                                competitionListState.animateScrollBy((itemInfo.offset - viewportStart).toFloat())
+                            }
+                            itemInfo.offset + itemInfo.size > viewportEnd -> competitionScrollScope.launch {
+                                competitionListState.animateScrollBy((itemInfo.offset + itemInfo.size - viewportEnd).toFloat())
+                            }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize().testTag("sports-fixtures")) {
+                    LaunchedEffect(selectedCompetition, competitionIds) {
+                        val selectedIndex = selectedCompetition?.let(competitionIds::indexOf)?.takeIf { it >= 0 }?.plus(1) ?: 0
+                        competitionListState.animateScrollToItem(selectedIndex)
+                    }
+                    LazyRow(
+                        state = competitionListState,
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                        modifier = Modifier.fillMaxWidth().testTag("sports-competition-filters"),
+                    ) {
+                        item { SportsCompetitionChip("ALL", selectedCompetition == null, { selectedCompetition = null }, { bringCompetitionIntoView(0) }, Modifier.testTag("sports-filter-all")) }
+                        itemsIndexed(load.schedule.competitions, key = { _, competition -> competition.id }) { index, competition ->
+                            SportsCompetitionChip(competition.name, selectedCompetition == competition.id, { selectedCompetition = competition.id }, { bringCompetitionIntoView(index + 1) }, Modifier.testTag("sports-filter-${competition.id}"))
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxSize().testTag("sports-fixtures")) {
                     load.schedule.competitions.filter { selectedCompetition == null || it.id == selectedCompetition }.forEach { competition ->
                         item(key = "competition-${competition.id}") {
                             Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp)) {
@@ -175,7 +225,9 @@ fun SportsScreen(
                             FixtureCard(
                                 fixture,
                                 load.broadcasts[fixture.id].orEmpty(),
-                                fixture.id in load.broadcastUnavailable,
+                                load.broadcastStates[fixture.id]
+                                    ?: if (fixture.id in load.broadcastUnavailable) SportsBroadcastState.NO_BROADCASTER_DATA else null,
+                                load.channelCandidates[fixture.id].orEmpty(),
                                 fixture.reminderKey() in state.reminderKeys,
                                 onWatch,
                                 requestReminder,
@@ -224,18 +276,8 @@ private fun SportsDateNavigator(
     onOpenCalendar: () -> Unit,
     onNextDay: () -> Unit,
 ) {
-    val colors = LocalWatchioColors.current
-    BoxWithConstraints(Modifier.fillMaxWidth().testTag("sports-date-navigator")) {
-        val compact = maxWidth < 600.dp
-        if (compact) {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                DateControls(onPreviousDay, onOpenCalendar, onNextDay, date)
-            }
-        } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                DateControls(onPreviousDay, onOpenCalendar, onNextDay, date)
-            }
-        }
+    Box(Modifier.fillMaxWidth().testTag("sports-date-navigator"), contentAlignment = Alignment.Center) {
+        DateControls(onPreviousDay, onOpenCalendar, onNextDay, date)
     }
 }
 
@@ -246,7 +288,6 @@ private fun DateControls(
     onNextDay: () -> Unit,
     date: LocalDate? = null,
 ) {
-    val colors = LocalWatchioColors.current
     val previousFocus = remember { FocusRequester() }
     val todayFocus = remember { FocusRequester() }
     val nextFocus = remember { FocusRequester() }
@@ -257,18 +298,95 @@ private fun DateControls(
             initialFocusRequested = todayFocus.requestFocus()
         }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        WatchioButton("‹", onPreviousDay, Modifier.width(52.dp).focusRequester(previousFocus).focusProperties { right = todayFocus }.testTag("sports-previous").semantics { contentDescription = "Previous day" }, WatchioButtonVariant.Secondary)
-        val label = if (date == LocalDate.now()) "TODAY • ${date.format(DateTimeFormatter.ofPattern("d MMM"))}" else date?.format(DateTimeFormatter.ofPattern("EEE • d MMM")) ?: "CHOOSE DATE"
-        WatchioButton(label, onOpenCalendar, Modifier.width(190.dp).focusRequester(todayFocus).focusProperties { left = previousFocus; right = nextFocus }.testTag("sports-today").semantics { contentDescription = "Choose sports date" }, WatchioButtonVariant.Secondary)
-        WatchioButton("›", onNextDay, Modifier.width(52.dp).focusRequester(nextFocus).focusProperties { left = todayFocus }.testTag("sports-next").semantics { contentDescription = "Next day" }, WatchioButtonVariant.Secondary)
+    Row(
+        modifier = Modifier.height(44.dp).testTag("sports-date-controls"),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CompactDateControl(
+            text = "‹",
+            contentDescription = "Previous day",
+            onClick = onPreviousDay,
+            modifier = Modifier.width(44.dp).focusRequester(previousFocus).focusProperties { right = todayFocus }.testTag("sports-previous"),
+        )
+        CompactDateControl(
+            text = date?.format(DateTimeFormatter.ofPattern("EEE d MMM")) ?: "Choose date",
+            contentDescription = "Choose sports date",
+            onClick = onOpenCalendar,
+            modifier = Modifier.widthIn(min = 154.dp, max = 190.dp).focusRequester(todayFocus).focusProperties { left = previousFocus; right = nextFocus }.testTag("sports-today"),
+        )
+        CompactDateControl(
+            text = "›",
+            contentDescription = "Next day",
+            onClick = onNextDay,
+            modifier = Modifier.width(44.dp).focusRequester(nextFocus).focusProperties { left = todayFocus }.testTag("sports-next"),
+        )
+    }
+}
+
+@Composable
+private fun CompactDateControl(
+    text: String,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
+    val colors = LocalWatchioColors.current
+    WatchioCard(
+        modifier = modifier.height(44.dp),
+        surfaceRole = WatchioSurfaceRole.Control,
+        minWidth = 0.dp,
+        minHeight = 44.dp,
+        contentDescription = contentDescription,
+        onClick = onClick,
+    ) {
+        Box(Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+            Text(text, color = colors.textPrimary, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun SportsCompetitionChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onFocused: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalWatchioColors.current
+    WatchioCard(
+        modifier = modifier
+            .height(40.dp)
+            .widthIn(max = 190.dp)
+            .onFocusChanged { if (it.isFocused) onFocused() }
+            .semantics { this.selected = selected },
+        surfaceRole = WatchioSurfaceRole.Control,
+        accent = colors.liveTvAccent,
+        selected = selected,
+        minWidth = 0.dp,
+        minHeight = 40.dp,
+        contentDescription = text,
+        selectedBackgroundColor = colors.liveTvAccent.copy(alpha = 0.22f),
+        selectedOutlineColor = colors.liveTvAccent,
+        onClick = onClick,
+    ) {
+        Text(
+            text = text,
+            color = if (selected) colors.liveTvAccentBright else colors.textPrimary,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
 @Composable private fun FixtureCard(
     fixture: SportsFixture,
     broadcasts: List<SportsBroadcast>,
-    broadcastUnavailable: Boolean,
+    broadcastState: SportsBroadcastState?,
+    candidates: List<SportsChannelCandidate>,
     reminderOn: Boolean,
     onWatch: (SportsFixture) -> Unit,
     onToggleReminder: (SportsFixture) -> Unit,
@@ -290,8 +408,16 @@ private fun DateControls(
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     when {
-                        ukBroadcasts.isNotEmpty() -> ukBroadcasts.joinToString(" • ") { it.displayName }
-                        broadcastUnavailable -> "Broadcast information unavailable"
+                        broadcastState == SportsBroadcastState.CHANNEL_MATCH_AVAILABLE ->
+                            (ukBroadcasts.ifEmpty { broadcasts.take(3) }).joinToString(" • ") { it.displayName }
+                        broadcastState == SportsBroadcastState.EPG_MATCH_AVAILABLE -> candidates.firstOrNull()?.let { "EPG match: ${it.channel.name} - ${if (it.v2Confidence == MatchChannelConfidence.VERIFIED) "Verified" else "Possible"}" } ?: "EPG match available"
+                        broadcastState == SportsBroadcastState.BROADCASTER_FOUND_NO_CHANNEL -> "Broadcaster found, but no matching channel"
+                        broadcastState == SportsBroadcastState.NO_BROADCASTER_DATA -> "No broadcaster data available"
+                        broadcastState == SportsBroadcastState.FIXTURE_NOT_MATCHED -> "Fixture not found in broadcaster service"
+                        broadcastState == SportsBroadcastState.UNSUPPORTED_SUBSCRIPTION -> "Broadcaster access unavailable on this API plan"
+                        broadcastState == SportsBroadcastState.AUTHENTICATION_FAILED -> "Broadcaster service credentials need attention"
+                        broadcastState == SportsBroadcastState.NETWORK_FAILURE -> "Broadcaster lookup failed: network unavailable"
+                        broadcastState == SportsBroadcastState.SERVICE_UNAVAILABLE -> "Broadcaster service unavailable"
                         else -> "Checking broadcast information…"
                     },
                     color = colors.textSecondary,
@@ -302,17 +428,67 @@ private fun DateControls(
                     val compact = maxWidth < 390.dp
                     if (compact) {
                         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FixtureActions(fixture, ukBroadcasts.isNotEmpty(), broadcastUnavailable, reminderOn, onWatch, onToggleReminder, Modifier.fillMaxWidth())
+                            FixtureActions(fixture, broadcastState == SportsBroadcastState.CHANNEL_MATCH_AVAILABLE || broadcastState == SportsBroadcastState.EPG_MATCH_AVAILABLE, broadcastState != null, reminderOn, onWatch, onToggleReminder, Modifier.fillMaxWidth())
                         }
                     } else {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FixtureActions(fixture, ukBroadcasts.isNotEmpty(), broadcastUnavailable, reminderOn, onWatch, onToggleReminder, Modifier.width(160.dp))
+                                FixtureActions(fixture, broadcastState == SportsBroadcastState.CHANNEL_MATCH_AVAILABLE || broadcastState == SportsBroadcastState.EPG_MATCH_AVAILABLE, broadcastState != null, reminderOn, onWatch, onToggleReminder, Modifier.width(160.dp))
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SportsRefreshAction(
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+) {
+    val colors = LocalWatchioColors.current
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "sports-refresh-transition")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(
+                durationMillis = 900,
+                easing = androidx.compose.animation.core.LinearEasing,
+            ),
+        ),
+        label = "sports-refresh-rotation",
+    )
+    WatchioCard(
+        modifier = Modifier
+            .size(44.dp)
+            .onPreviewKeyEvent { event ->
+                when (event.key) {
+                    Key.Enter, Key.NumPadEnter, Key.DirectionCenter -> {
+                        if (event.type == KeyEventType.KeyUp && !refreshing) onRefresh()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .semantics { if (refreshing) disabled() }
+            .testTag("sports-refresh"),
+        surfaceRole = com.iamskorpz.watchioiptv.ui.components.WatchioSurfaceRole.Control,
+        enabled = !refreshing,
+        minWidth = 44.dp,
+        minHeight = 44.dp,
+        contentDescription = "Refresh fixtures and broadcasts",
+        onClick = { if (!refreshing) onRefresh() },
+    ) { focused ->
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = null,
+                tint = if (focused) colors.focusedContent else colors.textPrimary,
+                modifier = Modifier.size(21.dp).rotate(if (refreshing) rotation else 0f),
+            )
         }
     }
 }
@@ -442,7 +618,7 @@ private fun MatchAlertDialog(reminder: MatchReminder, candidates: List<SportsCha
     val colors = LocalWatchioColors.current
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Available channels", color = colors.textPrimary) },
+        title = { Text(state.selectedFixture?.let { "${it.homeTeam} v ${it.awayTeam}" } ?: "Available channels", color = colors.textPrimary, modifier = Modifier.testTag("sports-candidate-title")) },
         text = {
             when {
                 state.candidatesLoading -> CircularProgressIndicator()
@@ -450,7 +626,21 @@ private fun MatchAlertDialog(reminder: MatchReminder, candidates: List<SportsCha
                 state.candidates.isEmpty() -> Text("No matching channel found for this provider.", color = colors.textSecondary)
                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.testTag("sports-candidates")) {
                     item { Text("Watch on", color = colors.textPrimary, fontWeight = FontWeight.Bold) }
-                    items(state.candidates, key = { "candidate-${it.channel.providerId.value}-${it.channel.id}" }) { CandidateRow(it, onPlay) }
+                    val broadcasters = state.candidates.filter { it.evidenceSource == SportsChannelEvidenceSource.OFFICIAL_BROADCASTER || it.evidenceSource == SportsChannelEvidenceSource.PROVIDER_EPG }
+                    val teamChannels = state.candidates.filter { it.evidenceSource == SportsChannelEvidenceSource.TEAM_CHANNEL }
+                    val fixtureChannels = state.candidates.filter { it.evidenceSource == SportsChannelEvidenceSource.MATCH_SPECIFIC_CHANNEL }
+                    if (broadcasters.isNotEmpty()) {
+                        item { Text("UK broadcasters", color = colors.liveTvAccent, fontWeight = FontWeight.Bold) }
+                        items(broadcasters, key = { "broadcaster-${it.channel.providerId.value}-${it.channel.id}" }) { CandidateRow(it, onPlay) }
+                    }
+                    if (teamChannels.isNotEmpty()) {
+                        item { Text("EPL team channels", color = colors.liveTvAccent, fontWeight = FontWeight.Bold) }
+                        items(teamChannels, key = { "team-${it.channel.providerId.value}-${it.channel.id}" }) { CandidateRow(it, onPlay) }
+                    }
+                    if (fixtureChannels.isNotEmpty()) {
+                        item { Text("Match-specific channels", color = colors.liveTvAccent, fontWeight = FontWeight.Bold) }
+                        items(fixtureChannels, key = { "fixture-${it.channel.providerId.value}-${it.channel.id}" }) { CandidateRow(it, onPlay) }
+                    }
                 }
             }
         },
@@ -460,11 +650,32 @@ private fun MatchAlertDialog(reminder: MatchReminder, candidates: List<SportsCha
 
 @Composable private fun CandidateRow(candidate: SportsChannelCandidate, onPlay: (LiveTvChannel) -> Unit) {
     val colors = LocalWatchioColors.current
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(
+        Modifier.fillMaxWidth().testTag("sports-candidate-${candidate.evidenceSource.name.lowercase()}"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
         Column(Modifier.weight(1f)) {
             Text(candidate.channel.name, color = colors.textPrimary, fontWeight = FontWeight.Bold)
-            Text("${candidate.v2Confidence?.name ?: candidate.confidence.name} • ${candidate.broadcasterName.orEmpty()}", color = colors.textSecondary)
+            val confidence = when {
+                candidate.v2Confidence == MatchChannelConfidence.VERIFIED -> "VERIFIED"
+                candidate.evidenceSource == SportsChannelEvidenceSource.TEAM_CHANNEL -> "TEAM CHANNEL - UNVERIFIED"
+                candidate.evidenceSource == SportsChannelEvidenceSource.MATCH_SPECIFIC_CHANNEL -> "MATCH CHANNEL - UNVERIFIED"
+                else -> "POSSIBLE"
+            }
+            Text(when (candidate.evidenceSource) {
+                SportsChannelEvidenceSource.PROVIDER_EPG -> "Provider EPG"
+                SportsChannelEvidenceSource.TEAM_CHANNEL -> "EPL team channel"
+                SportsChannelEvidenceSource.MATCH_SPECIFIC_CHANNEL -> "Match-specific channel"
+                SportsChannelEvidenceSource.OFFICIAL_BROADCASTER -> "Official broadcaster data"
+            }, color = colors.textSecondary)
+            Text(
+                listOfNotNull(confidence, candidate.broadcasterName, candidate.broadcasterCountry, candidate.quality).joinToString(" • "),
+                color = colors.textSecondary,
+                modifier = Modifier.testTag("sports-candidate-confidence-${candidate.evidenceSource.name.lowercase()}"),
+            )
             candidate.matchedProgrammeTitle?.let { Text(it, color = colors.textSecondary, maxLines = 1) }
+            candidate.reasons.take(2).forEach { Text(it, color = colors.textSecondary, maxLines = 1) }
         }
         WatchioButton(if (candidate.v2Confidence == MatchChannelConfidence.POSSIBLE) "CHOOSE" else "▶ WATCH LIVE", { onPlay(candidate.channel) }, modifier = Modifier.width(132.dp), variant = WatchioButtonVariant.CompactAction)
     }

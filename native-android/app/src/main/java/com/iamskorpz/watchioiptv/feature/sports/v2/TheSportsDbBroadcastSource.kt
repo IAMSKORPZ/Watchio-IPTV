@@ -62,6 +62,31 @@ class TheSportsDbBroadcastSource(
     override val source = SportsDataSource.TheSportsDb
     override val capabilities = setOf(SportsSourceCapability.Broadcasts)
 
+    override suspend fun testConnection(): SportsSourceResult<Unit> {
+        val key = credentialStore.get()
+            ?: return SportsSourceResult.Failure(SportsSourceError.Unauthorized)
+        val fetchedAt = clock.instant()
+        return try {
+            // The fixture feed being reachable does not prove that this key can use the
+            // broadcaster endpoint. Use TheSportsDB's documented lookup-TV sample.
+            val response = api.broadcasts(key, CONNECTION_TEST_EVENT_ID)
+            response.toTheSportsDbError(fetchedAt)?.let { return it }
+            when {
+                response.body() == null -> SportsSourceResult.Failure(SportsSourceError.ParseFailure)
+                response.body()?.tvevent.orEmpty().isEmpty() -> SportsSourceResult.NoData
+                else -> SportsSourceResult.Success(Unit, fetchedAt)
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: IOException) {
+            SportsSourceResult.Failure(SportsSourceError.NetworkFailure)
+        } catch (_: kotlinx.serialization.SerializationException) {
+            SportsSourceResult.Failure(SportsSourceError.ParseFailure)
+        } catch (_: Throwable) {
+            SportsSourceResult.Failure(SportsSourceError.ParseFailure)
+        }
+    }
+
     override suspend fun broadcasts(fixture: SportsFixture): SportsSourceResult<List<SportsBroadcast>> {
         val key = credentialStore.get()
             ?: return SportsSourceResult.Failure(SportsSourceError.Unauthorized)
@@ -73,14 +98,14 @@ class TheSportsDbBroadcastSource(
             val candidates = events.mapNotNull(TheSportsDbEventDto::toCandidate)
             when (val reconciliation = BroadcastFixtureReconciler.reconcile(fixture, candidates)) {
                 FixtureReconciliationResult.Ambiguous,
-                FixtureReconciliationResult.NoMatch -> SportsSourceResult.NoData
+                FixtureReconciliationResult.NoMatch -> SportsSourceResult.Failure(SportsSourceError.FixtureNotMatched)
                 is FixtureReconciliationResult.Match -> {
                     val response = api.broadcasts(key, reconciliation.candidate.sourceFixtureId)
                     response.toTheSportsDbError(fetchedAt)?.let { return it }
                     val broadcasts = response.body()?.tvevent.orEmpty().mapNotNull {
                         it.toDomain(reconciliation.confidence, fetchedAt)
                     }
-                    if (broadcasts.isEmpty()) SportsSourceResult.NoData else SportsSourceResult.Success(broadcasts, fetchedAt)
+                    if (broadcasts.isEmpty()) SportsSourceResult.Failure(SportsSourceError.NoBroadcasterData) else SportsSourceResult.Success(broadcasts, fetchedAt)
                 }
             }
         } catch (error: CancellationException) {
@@ -94,6 +119,8 @@ class TheSportsDbBroadcastSource(
         }
     }
 }
+
+private const val CONNECTION_TEST_EVENT_ID = "584911"
 
 private fun TheSportsDbEventDto.toCandidate(): BroadcastFixtureCandidate? {
     val split = event?.split(Regex("\\s+vs\\.?\\s+", RegexOption.IGNORE_CASE), limit = 2).orEmpty()
@@ -133,7 +160,8 @@ internal fun parseTheSportsDbInstant(timestamp: String?, date: String?, time: St
 }
 
 private fun Response<*>.toTheSportsDbError(now: Instant): SportsSourceResult.Failure? = when (code()) {
-    401, 403 -> SportsSourceResult.Failure(SportsSourceError.Unauthorized)
+    400, 401 -> SportsSourceResult.Failure(SportsSourceError.Unauthorized)
+    403 -> SportsSourceResult.Failure(SportsSourceError.UnsupportedTier)
     429 -> SportsSourceResult.Failure(SportsSourceError.RateLimited(parseRetryAt(headers()["Retry-After"], now)))
     in 500..599 -> SportsSourceResult.Failure(SportsSourceError.Unavailable)
     else -> if (isSuccessful) null else SportsSourceResult.Failure(SportsSourceError.NetworkFailure)

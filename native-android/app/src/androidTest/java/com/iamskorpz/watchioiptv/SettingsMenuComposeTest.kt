@@ -62,17 +62,35 @@ class SettingsMenuComposeTest {
 
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun footballDataSettingsOpensWithSecureEntryActions() {
+    fun sportsSettingsUsesSimpleLandingAndDedicatedProviderPages() {
         openSettingsOrSkip()
         if (composeRule.onAllNodesWithTag("settings-root").fetchSemanticsNodes().isEmpty()) return
         scrollSettingsCard("settings-football-data")
         composeRule.onNodeWithTag("settings-football-data").performClick()
+        composeRule.waitUntilAtLeastOneExists(hasText("SPORTS SETTINGS"), 5_000)
+        composeRule.onNodeWithTag("sports-settings-landing").assertIsDisplayed()
+        composeRule.onNodeWithText("Football Data").assertIsDisplayed()
+        composeRule.onNodeWithText("TV Broadcasts").assertIsDisplayed()
+        composeRule.onNodeWithText("Advanced Settings").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodes(hasText("API key", substring = true)).fetchSemanticsNodes().isEmpty())
+
+        composeRule.onNodeWithText("Football Data").performClick()
         composeRule.waitUntilAtLeastOneExists(hasText("FOOTBALL DATA"), 5_000)
-        composeRule.onNodeWithTag("football-data-settings").assertIsDisplayed()
-        composeRule.onNodeWithTag("football-data-register").assertIsDisplayed()
-        composeRule.onNodeWithTag("football-data-api-key").assertIsDisplayed()
-        composeRule.onNodeWithTag("football-data-save").assertHasNoClickAction()
-        composeRule.onNodeWithTag("football-data-attribution").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("football-data.org").performClick()
+        composeRule.waitUntilAtLeastOneExists(hasText("FOOTBALL-DATA.ORG"), 5_000)
+        composeRule.onNodeWithTag("sports-football-data-key").assertIsDisplayed()
+        composeRule.onNodeWithTag("sports-save-test-football-data").assertHasNoClickAction()
+        pressBack()
+        composeRule.waitUntilAtLeastOneExists(hasText("FOOTBALL DATA"), 5_000)
+        pressBack()
+        composeRule.waitUntilAtLeastOneExists(hasText("SPORTS SETTINGS"), 5_000)
+
+        composeRule.onNodeWithText("Advanced Settings").performClick()
+        composeRule.waitUntilAtLeastOneExists(hasText("ADVANCED SETTINGS"), 5_000)
+        composeRule.onNodeWithText("Manual Channel Mappings").assertIsDisplayed()
+        composeRule.onNodeWithText("Refresh & Diagnostics").assertIsDisplayed()
+        pressBack()
+        composeRule.waitUntilAtLeastOneExists(hasText("SPORTS SETTINGS"), 5_000)
         pressBack()
         composeRule.waitUntilAtLeastOneExists(hasText("SETTINGS"), 5_000)
     }

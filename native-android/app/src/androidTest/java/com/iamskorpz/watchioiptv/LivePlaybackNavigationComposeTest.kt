@@ -20,10 +20,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.iamskorpz.watchioiptv.ui.LivePlaybackOrigin
 import com.iamskorpz.watchioiptv.ui.closeLiveFullscreen
+import com.iamskorpz.watchioiptv.ui.LivePlaybackCloseGuard
+import com.iamskorpz.watchioiptv.ui.LivePlaybackOrigin
+import com.iamskorpz.watchioiptv.ui.LivePlaybackReturnBackGuard
+import com.iamskorpz.watchioiptv.ui.livePlaybackOrigin
 import com.iamskorpz.watchioiptv.ui.navigateHomeAsRoot
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -81,6 +86,60 @@ class LivePlaybackNavigationComposeTest {
     }
 
     @Test
+    fun repeatedSportsCloseIsConsumedOnceAndCannotPopPastSports() {
+        setNavigationContent(startDestination = "sports")
+
+        composeRule.onNodeWithTag("sports-watch").performClick()
+        composeRule.onNodeWithTag("sports-play").performClick()
+        composeRule.onNodeWithTag("player-double-back").performClick()
+
+        composeRule.onNodeWithTag("sports-screen-date-2026-09-06").assertIsDisplayed()
+    }
+
+    @Test
+    fun rapidBackAfterSportsPlayerCloseCannotPopRestoredSports() {
+        setNavigationContent(startDestination = "sports")
+
+        composeRule.onNodeWithTag("sports-watch").performClick()
+        composeRule.onNodeWithTag("sports-play").performClick()
+        composeRule.onNodeWithTag("player-back").performClick()
+        pressBack()
+
+        composeRule.onNodeWithTag("sports-screen-date-2026-09-06").assertIsDisplayed()
+    }
+
+    @Test
+    fun sportsBackWorksAfterReturnProtectionExpires() {
+        setNavigationContent(startDestination = "sports")
+
+        composeRule.onNodeWithTag("sports-watch").performClick()
+        composeRule.onNodeWithTag("sports-play").performClick()
+        composeRule.onNodeWithTag("player-back").performClick()
+        Thread.sleep(300L)
+        pressBack()
+
+        composeRule.onNodeWithTag("sports-screen-date-backed").assertIsDisplayed()
+    }
+
+    @Test
+    fun restoredSportsPlayerWithoutOriginEntryFallsBackInsideWatchio() {
+        setNavigationContent(startDestination = "live/fullscreen?origin=sports")
+
+        composeRule.onNodeWithTag("player-back").performClick()
+
+        composeRule.onNodeWithTag("sports-screen-date-2026-09-06").assertIsDisplayed()
+    }
+
+    @Test
+    fun restoredTvGuidePlayerWithoutOriginEntryFallsBackToGuide() {
+        setNavigationContent(startDestination = "live/fullscreen?origin=tv-guide")
+
+        composeRule.onNodeWithTag("player-back").performClick()
+
+        composeRule.onNodeWithTag("tv-guide-screen").assertIsDisplayed()
+    }
+
+    @Test
     fun completedProviderFlowMakesHomeTheBackStackRoot() {
         composeRule.setContent { HomeRootHarness() }
 
@@ -125,10 +184,15 @@ class LivePlaybackNavigationComposeTest {
     @Composable
     private fun NavigationHarness(startDestination: String) {
         val navController = rememberNavController()
-        var origin by remember { mutableStateOf(LivePlaybackOrigin.Live) }
+        val returnBackGuard = remember { LivePlaybackReturnBackGuard() }
         var sportsDate by remember { mutableStateOf("2026-09-06") }
         NavHost(navController = navController, startDestination = startDestination) {
             composable("sports") {
+                BackHandler {
+                    if (!returnBackGuard.consumeIfProtected(LivePlaybackOrigin.Sports)) {
+                        sportsDate = "backed"
+                    }
+                }
                 Button(
                     onClick = { sportsDate = "2026-09-06" },
                     modifier = Modifier.testTag("sports-screen-date-$sportsDate"),
@@ -141,9 +205,8 @@ class LivePlaybackNavigationComposeTest {
             composable("watch") {
                 Button(
                     onClick = {
-                        origin = LivePlaybackOrigin.Sports
                         navController.navigate("live")
-                        navController.navigate("live/fullscreen")
+                        navController.navigate("live/fullscreen?origin=sports")
                     },
                     modifier = Modifier.testTag("sports-play"),
                 ) { Text("PLAY") }
@@ -152,17 +215,29 @@ class LivePlaybackNavigationComposeTest {
                 Column(Modifier.testTag("live-tv-screen")) {
                     Button(
                         onClick = {
-                            origin = LivePlaybackOrigin.Live
-                            navController.navigate("live/fullscreen")
+                            navController.navigate("live/fullscreen?origin=live")
                         },
                         modifier = Modifier.testTag("live-fullscreen"),
                     ) { Text("Live TV") }
                 }
             }
-            composable("live/fullscreen") {
+            composable(
+                route = "tv-guide?categoryId={categoryId}",
+                arguments = listOf(navArgument("categoryId") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            ) {
+                Text("TV Guide", modifier = Modifier.testTag("tv-guide-screen"))
+            }
+            composable(
+                route = "live/fullscreen?origin={origin}",
+                arguments = listOf(navArgument("origin") { type = NavType.StringType; defaultValue = "live" }),
+            ) { backStackEntry ->
+                val origin = livePlaybackOrigin(backStackEntry.arguments?.getString("origin"))
+                val closeGuard = remember(backStackEntry.id) { LivePlaybackCloseGuard() }
                 val close = {
-                    closeLiveFullscreen(navController, origin)
-                    origin = LivePlaybackOrigin.Live
+                    closeGuard.close {
+                        returnBackGuard.arm(origin)
+                        closeLiveFullscreen(navController, origin)
+                    }
                 }
                 BackHandler(onBack = close)
                 Button(onClick = close, modifier = Modifier.testTag("fullscreen-player")) {
@@ -171,6 +246,13 @@ class LivePlaybackNavigationComposeTest {
                 Button(onClick = close, modifier = Modifier.testTag("player-back")) {
                     Text("Back")
                 }
+                Button(
+                    onClick = {
+                        close()
+                        close()
+                    },
+                    modifier = Modifier.testTag("player-double-back"),
+                ) { Text("Double Back") }
             }
         }
     }

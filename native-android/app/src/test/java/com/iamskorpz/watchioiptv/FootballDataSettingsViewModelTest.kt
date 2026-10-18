@@ -53,6 +53,13 @@ class FootballDataSettingsViewModelTest {
         assertEquals(FootballDataConnectionStatus.Invalid, viewModel.state.value.status)
     }
 
+    @Test fun storedKeyIsConfiguredButNotReportedAsLiveVerified() = runTest(dispatcher) {
+        val viewModel = FootballDataSettingsViewModel(FakeStore("working-token"), FakeValidator(FootballDataValidationResult.Valid)) {}
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.configured)
+        assertEquals(FootballDataConnectionStatus.Configured, viewModel.state.value.status)
+    }
+
     @Test fun blankKeyIsRejectedWithoutValidation() = runTest(dispatcher) {
         val validator = FakeValidator(FootballDataValidationResult.Valid)
         val viewModel = FootballDataSettingsViewModel(FakeStore(), validator) {}

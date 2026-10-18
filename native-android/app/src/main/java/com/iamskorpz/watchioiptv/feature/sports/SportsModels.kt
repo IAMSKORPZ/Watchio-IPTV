@@ -5,6 +5,7 @@ import java.time.Instant
 import java.time.LocalDate
 import com.iamskorpz.watchioiptv.feature.sports.v2.MatchChannelConfidence
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcast
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsChannelEvidenceSource
 
 enum class SportsFixtureStatus { Scheduled, Live, Finished, Postponed, Cancelled }
 
@@ -39,6 +40,26 @@ data class SportsChannelCandidate(
     val broadcasterName: String? = null,
     val broadcasterCountry: String? = null,
     val isBackup: Boolean = false,
+    val quality: String? = null,
+    val evidenceSource: SportsChannelEvidenceSource = SportsChannelEvidenceSource.OFFICIAL_BROADCASTER,
+)
+
+enum class SportsBroadcastState {
+    CHANNEL_MATCH_AVAILABLE,
+    EPG_MATCH_AVAILABLE,
+    BROADCASTER_FOUND_NO_CHANNEL,
+    NO_BROADCASTER_DATA,
+    FIXTURE_NOT_MATCHED,
+    UNSUPPORTED_SUBSCRIPTION,
+    AUTHENTICATION_FAILED,
+    NETWORK_FAILURE,
+    SERVICE_UNAVAILABLE,
+}
+
+data class SportsBroadcastDiscovery(
+    val broadcasts: Map<String, List<SportsBroadcast>> = emptyMap(),
+    val states: Map<String, SportsBroadcastState> = emptyMap(),
+    val candidates: Map<String, List<SportsChannelCandidate>> = emptyMap(),
 )
 
 sealed interface SportsLoadState {
@@ -49,6 +70,8 @@ sealed interface SportsLoadState {
         val schedule: SportsDateSchedule,
         val broadcasts: Map<String, List<SportsBroadcast>> = emptyMap(),
         val broadcastUnavailable: Set<String> = emptySet(),
+        val broadcastStates: Map<String, SportsBroadcastState> = emptyMap(),
+        val channelCandidates: Map<String, List<SportsChannelCandidate>> = emptyMap(),
         val fromCache: Boolean = false,
     ) : SportsLoadState
     data class Error(

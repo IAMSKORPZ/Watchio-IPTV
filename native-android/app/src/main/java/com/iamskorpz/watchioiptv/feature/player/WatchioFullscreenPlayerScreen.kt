@@ -173,18 +173,18 @@ enum class PlayerIconKind {
 @Composable
 fun PlayerIcon(
     kind: PlayerIconKind,
+    modifier: Modifier = Modifier,
     color: Color = Color.White,
-    modifier: Modifier = Modifier.size(20.dp),
 ) {
     if (kind == PlayerIconKind.Settings) {
         com.iamskorpz.watchioiptv.ui.icons.WatchioIcon(
             kind = com.iamskorpz.watchioiptv.ui.icons.WatchioIconKind.Settings,
             tint = color,
-            modifier = modifier,
+            modifier = modifier.size(20.dp),
         )
         return
     }
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.size(20.dp)) {
         val w = size.width
         val h = size.height
         val stroke = (w * 0.10f).coerceAtLeast(1.5f)
@@ -626,31 +626,6 @@ fun WatchioFullscreenPlayerScreen(
             .focusRequester(surfaceFocus)
             .focusable()
             .onPreviewKeyEvent { event ->
-                if (event.key == Key.Escape || event.key == Key.Back) {
-                    if (event.type == KeyEventType.KeyDown) {
-                        // Keep key release on fullscreen; navigating on key-down leaks key-up to return screen.
-                        return@onPreviewKeyEvent true
-                    }
-                    if (event.type != KeyEventType.KeyUp) return@onPreviewKeyEvent true
-                    lastInteractionEpochMs = System.currentTimeMillis()
-                    if (System.currentTimeMillis() - screenMountEpochMs < 500L) {
-                        // Ignore back key from long-press transition that launched fullscreen.
-                        return@onPreviewKeyEvent true
-                    }
-                    if (contentContext is PlayerContentContext.Episode && contentContext.nextEpisodeState !is NextEpisodeState.None) {
-                        contentContext.onCancelNext()
-                    } else if (activeDialog != null) {
-                        activeDialog = null
-                    } else if (controlsVisible) {
-                        hideControls()
-                    } else if (channelHudVisible) {
-                        channelHudJob?.cancel()
-                        channelHudVisible = false
-                    } else {
-                        onClose()
-                    }
-                    return@onPreviewKeyEvent true
-                }
                 if (!controlsVisible) {
                     when (event.key) {
                         Key.DirectionUp -> {

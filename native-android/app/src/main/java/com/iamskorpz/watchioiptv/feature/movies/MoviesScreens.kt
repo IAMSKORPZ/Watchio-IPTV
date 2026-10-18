@@ -1,7 +1,7 @@
 package com.iamskorpz.watchioiptv.feature.movies
 
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
@@ -932,11 +932,11 @@ fun MoviePlayerScreen(
 @Composable
 private fun MovieCard(
     movie: WatchioMovieItem,
+    modifier: Modifier = Modifier,
     showProgress: Boolean = false,
     onMovie: (WatchioMovieItem) -> Unit,
     onMovieOptions: (WatchioMovieItem) -> Unit,
     onPosterLoaded: () -> Unit = {},
-    modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
     val radii = LocalWatchioRadii.current
@@ -1061,12 +1061,12 @@ private fun MovieDetailsPoster(url: String?, modifier: Modifier = Modifier) {
 fun HeartIcon(
     filled: Boolean,
     color: Color,
-    modifier: Modifier = Modifier.size(16.dp),
+    modifier: Modifier = Modifier,
 ) {
     WatchioIcon(
         kind = WatchioIconKind.Favourite,
         tint = color,
-        modifier = modifier,
+        modifier = modifier.size(16.dp),
         filled = filled,
     )
 }
@@ -1171,7 +1171,7 @@ private fun MovieDetailRow(label: String, value: String?) {
 
 @Suppress("unused")
 @Composable
-private fun detailRow(label: String, value: String?) {
+private fun DetailRow(label: String, value: String?) {
     value?.takeIf { it.isNotBlank() } ?: return
     Text("$label: $value", color = LocalWatchioColors.current.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
@@ -1316,7 +1316,7 @@ internal fun formatRating(raw: String?): String? {
 // --------------------------------------------------------------------------
 
 fun openYoutubeTrailer(context: android.content.Context, key: String) {
-    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$key")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.youtube.com/watch?v=$key".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 @Suppress("unused")

@@ -3,7 +3,7 @@ package com.iamskorpz.watchioiptv.core.di
 import android.content.Context
 import android.annotation.SuppressLint
 import androidx.datastore.preferences.preferencesDataStore
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.room.Room
 import com.iamskorpz.watchioiptv.BuildConfig
 import com.iamskorpz.watchioiptv.core.database.WatchioDatabase
@@ -68,8 +68,16 @@ import com.iamskorpz.watchioiptv.feature.sports.v2.SoccersApiBroadcastApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.SoccersApiBroadcastSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsV2SourceSelector
 import com.iamskorpz.watchioiptv.feature.sports.v2.ProviderChannelMatcherV2
+import com.iamskorpz.watchioiptv.feature.sports.v2.PersistentSportsBroadcastCache
+import com.iamskorpz.watchioiptv.feature.sports.PersistentSportsMatchCache
 import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastSource
+import com.iamskorpz.watchioiptv.feature.sports.v2.AndroidSportsSettingsStore
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsCapability
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsDataSource
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsSourceError
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsSourceResult
+import com.iamskorpz.watchioiptv.feature.sports.v2.enabledSources
 
 private val Context.watchioDataStore by preferencesDataStore(name = "watchio_native_settings")
 
@@ -131,7 +139,7 @@ class AppContainer(context: Context) {
         okHttpClient = networkModule.okHttpClient,
         settingsRepository = settingsRepository,
         clock = SystemWatchioClock,
-        openLocalInputStream = { uri -> appContext.contentResolver.openInputStream(Uri.parse(uri)) },
+        openLocalInputStream = { uri -> appContext.contentResolver.openInputStream(uri.toUri()) },
     )
     val epgRepository = EpgRepository(
         database = database,
@@ -176,7 +184,13 @@ class AppContainer(context: Context) {
     fun invalidateSportsCache() {
         (footballScheduleSource as? FootballDataScheduleSource)?.invalidateCache()
     }
+    fun invalidateSportsBroadcastCache() {
+        soccersApiBroadcastSource.invalidateCache()
+        sportsBroadcastRepository.invalidateCache()
+        sportsRepository.invalidateBroadcastDiscoveryCache()
+    }
     val apiFootballCredentialStore = SecureApiFootballCredentialStore(secretStore)
+    val sportsSettingsStore = AndroidSportsSettingsStore(appContext)
     private val apiFootballApi = networkModule.retrofit("https://v3.football.api-sports.io/").create(ApiFootballApi::class.java)
     private val footballDataV2Source = FootballDataV2FixtureSource(footballDataApi, footballDataCredentialStore)
     private val apiFootballV2Source = ApiFootballFixtureSource(apiFootballApi, apiFootballCredentialStore)
@@ -198,7 +212,13 @@ class AppContainer(context: Context) {
         networkModule.retrofit("https://www.thesportsdb.com/").create(TheSportsDbBroadcastApi::class.java),
         theSportsDbCredentialStore,
     )
-    val sportsBroadcastRepository = BroadcastRepository(soccersApiBroadcastSource, theSportsDbBroadcastSource)
+    val sportsBroadcastRepository = BroadcastRepository(
+        primary = soccersApiBroadcastSource,
+        secondary = theSportsDbBroadcastSource,
+        cache = PersistentSportsBroadcastCache(appContext),
+        sourceOrder = { sportsSettingsStore.read().enabledSources(SportsCapability.BROADCASTS) },
+        refreshInterval = { java.time.Duration.ofMinutes(sportsSettingsStore.read().refreshMinutes.toLong()) },
+    )
     private val sportsBroadcasterAliases = BroadcasterAliasCatalogue.parse(
         appContext.assets.open("sports_broadcaster_aliases.json").bufferedReader().use { it.readText() },
     )
@@ -210,7 +230,17 @@ class AppContainer(context: Context) {
         apiFootballCredentialStore = apiFootballCredentialStore,
         broadcastRepository = sportsBroadcastRepository,
         matcherV2 = ProviderChannelMatcherV2(sportsBroadcasterAliases),
+        settingsStore = sportsSettingsStore,
+        matchCache = PersistentSportsMatchCache(appContext),
     )
+
+    suspend fun testSportsSource(source: SportsDataSource): SportsSourceResult<*> = when (source) {
+        SportsDataSource.FootballData -> footballDataV2Source.fixtures(java.time.LocalDate.now(), java.time.LocalDate.now())
+        SportsDataSource.ApiFootball -> apiFootballV2Source.fixtures(java.time.LocalDate.now(), java.time.LocalDate.now())
+        SportsDataSource.SoccersApi -> soccersApiBroadcastSource.testConnection()
+        SportsDataSource.TheSportsDb -> theSportsDbBroadcastSource.testConnection()
+        else -> SportsSourceResult.Failure(SportsSourceError.Unsupported)
+    }
     val sportsReminderRepository = SportsReminderRepository(
         appContext.watchioDataStore,
         WorkManagerSportsReminderScheduler(appContext),

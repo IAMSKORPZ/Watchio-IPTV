@@ -77,6 +77,14 @@ class SportsViewModel private constructor(
         load()
     }
 
+    fun refreshSelectedDate() {
+        val ready = mutableState.value.loadState as? SportsLoadState.Ready
+        if (ready == null) load() else {
+            mutableState.value = mutableState.value.copy(refreshing = true)
+            loadBroadcasts(ready.schedule, forceRefresh = true)
+        }
+    }
+
     fun enter() {
         screenActive = true
         showDueReminder()
@@ -175,15 +183,42 @@ class SportsViewModel private constructor(
         }
     }
 
-    private fun loadBroadcasts(schedule: SportsDateSchedule) {
+    private fun loadBroadcasts(schedule: SportsDateSchedule, forceRefresh: Boolean = false) {
         val repository = repository ?: return
         broadcastJob?.cancel()
         broadcastJob = viewModelScope.launch {
             val fixtures = schedule.competitions.flatMap { it.fixtures }
-            val (broadcasts, unavailable) = repository.broadcasts(fixtures)
+            val pendingBroadcasts = mutableMapOf<String, List<com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcast>>()
+            val pendingStates = mutableMapOf<String, SportsBroadcastState>()
+            val pendingCandidates = mutableMapOf<String, List<SportsChannelCandidate>>()
+            var completedFixtures = 0
+            val discovery = repository.broadcasts(fixtures, forceRefresh) { fixtureId, fixtureState, fixtureCandidates, fixtureBroadcasts ->
+                pendingBroadcasts[fixtureId] = fixtureBroadcasts
+                pendingStates[fixtureId] = fixtureState
+                pendingCandidates[fixtureId] = fixtureCandidates
+                completedFixtures += 1
+                if (completedFixtures == 1 || completedFixtures % 4 == 0 || completedFixtures == fixtures.size) {
+                    val current = mutableState.value.loadState as? SportsLoadState.Ready
+                    if (current?.schedule?.date == schedule.date) {
+                        mutableState.value = mutableState.value.copy(loadState = current.copy(
+                            broadcasts = current.broadcasts + pendingBroadcasts,
+                            broadcastStates = current.broadcastStates + pendingStates,
+                            channelCandidates = current.channelCandidates + pendingCandidates,
+                        ))
+                    }
+                    pendingBroadcasts.clear()
+                    pendingStates.clear()
+                    pendingCandidates.clear()
+                }
+            }
             val ready = mutableState.value.loadState as? SportsLoadState.Ready ?: return@launch
             if (ready.schedule.date == schedule.date) {
-                mutableState.value = mutableState.value.copy(loadState = ready.copy(broadcasts = broadcasts, broadcastUnavailable = unavailable))
+                mutableState.value = mutableState.value.copy(loadState = ready.copy(
+                    broadcasts = discovery.broadcasts,
+                    broadcastUnavailable = discovery.states.filterValues { it != SportsBroadcastState.CHANNEL_MATCH_AVAILABLE && it != SportsBroadcastState.EPG_MATCH_AVAILABLE }.keys,
+                    broadcastStates = discovery.states,
+                    channelCandidates = discovery.candidates,
+                ), refreshing = false)
             }
         }
     }

@@ -10,14 +10,21 @@ class BroadcastCredentialStoresTest {
     @Test fun soccersApiCredentialsUseDedicatedSecretKeysAndDoNotLeakFromObject() = runTest {
         val secrets = FakeSecretStore()
         val store = SecureSoccersApiCredentialStore(secrets)
-        store.save(" user@example.invalid ", " synthetic-token ")
+        store.save(" synthetic-key ")
         val credentials = store.get()!!
-        assertEquals("user@example.invalid", credentials.username)
-        assertEquals("synthetic-token", credentials.token)
-        assertEquals(setOf("sports.soccers_api.username", "sports.soccers_api.api_token"), secrets.values.keys)
-        assertFalse(credentials.toString().contains("synthetic-token"))
+        assertEquals("synthetic-key", credentials.apiKey)
+        assertEquals(setOf("sports.soccers_api.api_key"), secrets.values.keys)
+        assertFalse(credentials.toString().contains("synthetic-key"))
         store.remove()
         assertNull(store.get())
+    }
+
+    @Test fun legacyTokenMigratesWithoutRequiringDeprecatedUsername() = runTest {
+        val secrets = FakeSecretStore().apply { values["sports.soccers_api.api_token"] = "legacy-key" }
+        val store = SecureSoccersApiCredentialStore(secrets)
+        assertEquals("legacy-key", store.get()?.apiKey)
+        store.save("new-key")
+        assertEquals(setOf("sports.soccers_api.api_key"), secrets.values.keys)
     }
 
     @Test fun theSportsDbKeyUsesSecretStoreAndBlankRemovesIt() = runTest {

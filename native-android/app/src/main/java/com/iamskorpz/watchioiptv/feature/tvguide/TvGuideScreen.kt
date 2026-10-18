@@ -26,6 +26,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -190,7 +191,9 @@ fun TvGuideScreen(
         val rowHeight = layoutDim.rowHeightDp.dp
         val heroHeight = layoutDim.heroHeightDp.dp
         val isCompact = layoutDim.isCompact
-        val scrollDp = with(density) { horizontal.value.toDp().value }
+        val scrollDp by remember(horizontal, density) {
+            derivedStateOf { with(density) { horizontal.value.toDp().value } }
+        }
 
         Column(
             modifier = Modifier

@@ -27,6 +27,8 @@ class BroadcastReconciliationTest {
         assertEquals(normalizeTeam("Paris Saint-Germain"), normalizeTeam("PSG"))
         assertEquals(normalizeTeam("Internazionale"), normalizeTeam("Inter Milan"))
         assertEquals(normalizeTeam("Wolverhampton Wanderers"), normalizeTeam("Wolves"))
+        assertEquals(normalizeTeam("Sabah FK"), normalizeTeam("Sabah FC"))
+        assertEquals(normalizeTeam("SK Slavia Praha"), normalizeTeam("Slavia Prague"))
     }
 
     @Test fun reversedTeamsWrongCompetitionAndWrongDateAreRejected() {

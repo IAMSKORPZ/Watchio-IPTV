@@ -2,7 +2,7 @@ package com.iamskorpz.watchioiptv.feature.settings
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
@@ -694,7 +694,7 @@ private fun Context.openUnknownAppSources() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         startActivity(
             Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                .setData(Uri.parse("package:$packageName"))
+                .setData("package:$packageName".toUri())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }

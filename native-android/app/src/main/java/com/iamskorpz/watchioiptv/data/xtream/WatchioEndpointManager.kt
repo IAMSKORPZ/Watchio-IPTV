@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv.data.xtream
 
 import android.content.Context
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -241,10 +242,10 @@ class AndroidWatchioEndpointConfigSource(
 
     override suspend fun cached(): String? = preferences.getString(KEY_CACHE, null)
     override suspend fun bundled(): String = bundledRaw
-    override suspend fun saveCache(raw: String) { preferences.edit().putString(KEY_CACHE, raw).apply() }
+    override suspend fun saveCache(raw: String) { preferences.edit { putString(KEY_CACHE, raw) } }
     override fun lastWorking(): String? = preferences.getString(KEY_LAST_WORKING, null)
-    override fun saveLastWorking(url: String) { preferences.edit().putString(KEY_LAST_WORKING, url).apply() }
-    override fun clearLastWorking() { preferences.edit().remove(KEY_LAST_WORKING).apply() }
+    override fun saveLastWorking(url: String) { preferences.edit { putString(KEY_LAST_WORKING, url) } }
+    override fun clearLastWorking() { preferences.edit { remove(KEY_LAST_WORKING) } }
 
     private companion object {
         const val KEY_CACHE = "last_valid_config"

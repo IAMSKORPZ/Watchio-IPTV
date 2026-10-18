@@ -33,10 +33,26 @@ class TvGuideRepository(
     private val epgRefreshCoordinator: EpgRefreshCoordinator = EpgRefreshCoordinator(database, epgRepository),
     private val matcher: EpgChannelMatcher = EpgChannelMatcher(),
 ) {
+    data class ProviderLiveCatalogue(
+        val categories: List<LiveTvCategory>,
+        val channels: List<WatchioGuideChannel>,
+    )
+
     suspend fun selectedProviderId(): ProviderId? = liveTvRepository.selectedProviderId()
     fun observeSelectedProviderId(): Flow<ProviderId?> = liveTvRepository.observeSelectedProviderId()
 
     suspend fun categories(providerId: ProviderId): List<LiveTvCategory> = liveTvRepository.categories(providerId)
+
+    /** Complete provider live catalogue. EPG availability never controls membership. */
+    suspend fun liveCatalogueForProvider(providerId: ProviderId): ProviderLiveCatalogue = withContext(Dispatchers.IO) {
+        val categories = liveTvRepository.categories(providerId)
+        val allCategory = categories.firstOrNull { it.kind == LiveTvCategoryKind.All }
+            ?: return@withContext ProviderLiveCatalogue(categories, emptyList())
+        val channels = liveTvRepository.channels(providerId, allCategory).mapIndexed { index, channel ->
+            channel.toGuideChannel(index + 1, null)
+        }
+        ProviderLiveCatalogue(categories, channels)
+    }
 
     suspend fun guide(window: WatchioGuideWindow, nowEpochMs: Long, selectedCategoryId: String?): TvGuideData = withContext(Dispatchers.IO) {
         val providerId = selectedProviderId() ?: return@withContext TvGuideData(null, emptyList(), null, emptyList(), emptyMap(), false, 0, 0)

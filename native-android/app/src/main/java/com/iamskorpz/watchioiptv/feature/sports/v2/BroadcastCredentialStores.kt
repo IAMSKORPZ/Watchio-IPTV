@@ -2,40 +2,42 @@ package com.iamskorpz.watchioiptv.feature.sports.v2
 
 import com.iamskorpz.watchioiptv.core.security.SecretStore
 
-class SoccersApiCredentials(val username: String, val token: String)
+class SoccersApiCredentials(val apiKey: String)
 
 interface SoccersApiCredentialStore {
     suspend fun get(): SoccersApiCredentials?
-    suspend fun save(username: String, token: String)
+    suspend fun save(apiKey: String)
     suspend fun remove()
 }
 
 class SecureSoccersApiCredentialStore(private val secretStore: SecretStore) : SoccersApiCredentialStore {
     override suspend fun get(): SoccersApiCredentials? {
-        val username = secretStore.getSecret(USERNAME_KEY)?.trim().orEmpty()
-        val token = secretStore.getSecret(TOKEN_KEY)?.trim().orEmpty()
-        return if (username.isBlank() || token.isBlank()) null else SoccersApiCredentials(username, token)
+        val apiKey = secretStore.getSecret(API_KEY)?.trim()
+            .orEmpty().ifBlank { secretStore.getSecret(LEGACY_TOKEN_KEY)?.trim().orEmpty() }
+        return apiKey.takeIf(String::isNotBlank)?.let(::SoccersApiCredentials)
     }
 
-    override suspend fun save(username: String, token: String) {
-        val cleanUsername = username.trim()
-        val cleanToken = token.trim()
-        if (cleanUsername.isBlank() || cleanToken.isBlank()) {
+    override suspend fun save(apiKey: String) {
+        val clean = apiKey.trim()
+        if (clean.isBlank()) {
             remove()
         } else {
-            secretStore.putSecret(USERNAME_KEY, cleanUsername)
-            secretStore.putSecret(TOKEN_KEY, cleanToken)
+            secretStore.putSecret(API_KEY, clean)
+            secretStore.removeSecret(LEGACY_USERNAME_KEY)
+            secretStore.removeSecret(LEGACY_TOKEN_KEY)
         }
     }
 
     override suspend fun remove() {
-        secretStore.removeSecret(USERNAME_KEY)
-        secretStore.removeSecret(TOKEN_KEY)
+        secretStore.removeSecret(API_KEY)
+        secretStore.removeSecret(LEGACY_USERNAME_KEY)
+        secretStore.removeSecret(LEGACY_TOKEN_KEY)
     }
 
     private companion object {
-        const val USERNAME_KEY = "sports.soccers_api.username"
-        const val TOKEN_KEY = "sports.soccers_api.api_token"
+        const val API_KEY = "sports.soccers_api.api_key"
+        const val LEGACY_USERNAME_KEY = "sports.soccers_api.username"
+        const val LEGACY_TOKEN_KEY = "sports.soccers_api.api_token"
     }
 }
 

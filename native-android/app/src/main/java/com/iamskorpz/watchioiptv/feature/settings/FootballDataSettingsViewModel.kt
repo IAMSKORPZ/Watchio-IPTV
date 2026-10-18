@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class FootballDataConnectionStatus { NotConfigured, Checking, Connected, Invalid, RateLimited, UnableToVerify }
+enum class FootballDataConnectionStatus { NotConfigured, Configured, Checking, Connected, Invalid, RateLimited, UnableToVerify }
 
 data class FootballDataSettingsUiState(
     val input: String = "",
@@ -32,7 +32,7 @@ class FootballDataSettingsViewModel(
             val configured = credentialStore.get() != null
             mutableState.value = mutableState.value.copy(
                 configured = configured,
-                status = if (configured) FootballDataConnectionStatus.Connected else FootballDataConnectionStatus.NotConfigured,
+                status = if (configured) FootballDataConnectionStatus.Configured else FootballDataConnectionStatus.NotConfigured,
             )
         }
     }

@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv.data.library
 
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import com.iamskorpz.watchioiptv.core.model.ProviderId
 import org.json.JSONArray
 
@@ -21,7 +22,7 @@ class SharedPreferencesSearchHistoryStore(private val preferences: SharedPrefere
     }.getOrDefault(emptyList())
 
     override fun put(providerId: ProviderId, queries: List<String>) {
-        preferences.edit().putString(key(providerId), JSONArray(queries).toString()).apply()
+        preferences.edit { putString(key(providerId), JSONArray(queries).toString()) }
     }
 
     private fun key(providerId: ProviderId) = "recent_${providerId.value}"

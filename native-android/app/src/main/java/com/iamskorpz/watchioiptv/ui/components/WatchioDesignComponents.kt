@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -197,6 +198,7 @@ fun WatchioCard(
             )
             .semantics { watchioFocusVisualActive = focused }
             .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
+            .then(if (onClick != null && !enabled) Modifier.semantics { disabled() } else Modifier)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onFocusChanged { focused = it.isFocused }
             .then(clickableModifier),
@@ -380,9 +382,9 @@ fun WatchioPosterCard(
 @Composable
 fun WatchioListRow(
     title: String,
+    modifier: Modifier = Modifier,
     subtitle: String? = null,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
@@ -403,7 +405,7 @@ fun WatchioListRow(
 }
 
 @Composable
-fun WatchioScreenHeader(title: String, subtitle: String? = null, modifier: Modifier = Modifier) {
+fun WatchioScreenHeader(title: String, modifier: Modifier = Modifier, subtitle: String? = null) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
     val type = LocalWatchioTypography.current
@@ -427,7 +429,7 @@ fun WatchioLoading(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun WatchioErrorState(message: String, onRetry: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+fun WatchioErrorState(message: String, modifier: Modifier = Modifier, onRetry: (() -> Unit)? = null) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {

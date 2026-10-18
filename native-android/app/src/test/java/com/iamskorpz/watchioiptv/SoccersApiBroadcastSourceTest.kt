@@ -38,15 +38,15 @@ class SoccersApiBroadcastSourceTest {
         assertEquals("500", result.data.first().evidence.single().sourceFixtureId)
         val first = server.takeRequest()
         val second = server.takeRequest()
-        assertEquals("synthetic-user", first.requestUrl!!.queryParameter("user"))
-        assertEquals("synthetic-token", first.requestUrl!!.queryParameter("token"))
+        assertEquals("Bearer synthetic-key", first.getHeader("Authorization"))
+        assertNull(first.requestUrl!!.queryParameter("user"))
+        assertNull(first.requestUrl!!.queryParameter("token"))
         assertEquals("schedule", first.requestUrl!!.queryParameter("t"))
         assertEquals("tvs", first.requestUrl!!.queryParameter("include"))
         assertEquals("2026-10-04", first.requestUrl!!.queryParameter("d"))
         assertEquals("2", second.requestUrl!!.queryParameter("page"))
-        assertFalse(SensitiveUrlMasker.mask(first.requestUrl.toString()).contains("synthetic-user"))
-        assertFalse(SensitiveUrlMasker.mask(first.requestUrl.toString()).contains("synthetic-token"))
-        assertFalse(result.data.toString().contains("synthetic-token"))
+        assertFalse(first.requestUrl.toString().contains("synthetic-key"))
+        assertFalse(result.data.toString().contains("synthetic-key"))
     }
 
     @Test fun missingCountryEmptyBroadcastsAndAmbiguousMatchesReturnSafely() = runTest {
@@ -55,10 +55,10 @@ class SoccersApiBroadcastSourceTest {
         assertNull(missing.countryOrRegion)
 
         server.enqueue(json(envelope(listOf(match(tvs = "")))))
-        assertEquals(SportsSourceResult.NoData, source().broadcasts(fixture()))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.NoBroadcasterData), source().broadcasts(fixture()))
 
         server.enqueue(json(envelope(listOf(match(id = "1"), match(id = "2")))))
-        assertEquals(SportsSourceResult.NoData, source().broadcasts(fixture()))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.FixtureNotMatched), source().broadcasts(fixture()))
     }
 
     @Test fun missingCredentialsMalformedUnauthorizedUnsupportedRateLimitAndNetworkMapTypedErrors() = runTest {
@@ -68,7 +68,7 @@ class SoccersApiBroadcastSourceTest {
         server.enqueue(MockResponse().setResponseCode(401))
         assertEquals(SportsSourceResult.Failure(SportsSourceError.Unauthorized), source().broadcasts(fixture()))
         server.enqueue(MockResponse().setResponseCode(403))
-        assertEquals(SportsSourceResult.Failure(SportsSourceError.Unsupported), source().broadcasts(fixture()))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.UnsupportedTier), source().broadcasts(fixture()))
         server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "60"))
         assertEquals(SportsSourceResult.Failure(SportsSourceError.RateLimited(now.plusSeconds(60))), source().broadcasts(fixture()))
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
@@ -77,9 +77,18 @@ class SoccersApiBroadcastSourceTest {
 
     @Test fun apiLevelPlanAndQuotaMessagesMapWithoutInventingData() = runTest {
         server.enqueue(json("{\"data\":[],\"meta\":{\"msg\":\"Endpoint not available for your plan.\"}}"))
-        assertEquals(SportsSourceResult.Failure(SportsSourceError.Unsupported), source().broadcasts(fixture()))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.UnsupportedTier), source().broadcasts(fixture()))
         server.enqueue(json("{\"data\":[],\"meta\":{\"msg\":\"Request allowance exhausted\"}}"))
         assertEquals(SportsSourceResult.Failure(SportsSourceError.RateLimited(null)), source().broadcasts(fixture()))
+    }
+
+    @Test fun connectionTestValidatesCurrentBearerAuthAndPlanWithoutFixtureDependency() = runTest {
+        server.enqueue(json(envelope(emptyList())))
+        assertTrue(source().testConnection() is SportsSourceResult.Success)
+        val request = server.takeRequest()
+        assertEquals("Bearer synthetic-key", request.getHeader("Authorization"))
+        server.enqueue(MockResponse().setResponseCode(403))
+        assertEquals(SportsSourceResult.Failure(SportsSourceError.UnsupportedTier), source().testConnection())
     }
 
     @Test fun sameDateFixturesReuseOneBroadcastScheduleRequest() = runTest {
@@ -92,14 +101,14 @@ class SoccersApiBroadcastSourceTest {
         assertEquals(1, server.requestCount)
     }
 
-    private fun source(credentials: SoccersApiCredentials? = SoccersApiCredentials("synthetic-user", "synthetic-token"), timeoutMs: Long = 2_000): SoccersApiBroadcastSource {
+    private fun source(credentials: SoccersApiCredentials? = SoccersApiCredentials("synthetic-key"), timeoutMs: Long = 2_000): SoccersApiBroadcastSource {
         val client = OkHttpClient.Builder().readTimeout(timeoutMs, TimeUnit.MILLISECONDS).build()
         val api = Retrofit.Builder().baseUrl(server.url("/")).client(client)
             .addConverterFactory(JSON.asConverterFactory("application/json".toMediaType())).build()
             .create(SoccersApiBroadcastApi::class.java)
         return SoccersApiBroadcastSource(api, object : SoccersApiCredentialStore {
             override suspend fun get() = credentials
-            override suspend fun save(username: String, token: String) = Unit
+            override suspend fun save(apiKey: String) = Unit
             override suspend fun remove() = Unit
         }, Clock.fixed(now, ZoneOffset.UTC))
     }

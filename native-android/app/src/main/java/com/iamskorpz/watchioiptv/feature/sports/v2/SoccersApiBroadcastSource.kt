@@ -15,12 +15,12 @@ import java.util.concurrent.ConcurrentHashMap
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Query
+import retrofit2.http.Header
 
 interface SoccersApiBroadcastApi {
     @GET("v2.2/broadcast/")
     suspend fun schedule(
-        @Query("user") username: String,
-        @Query("token") token: String,
+        @Header("Authorization") authorization: String,
         @Query("t") operation: String = "schedule",
         @Query("d") date: String,
         @Query("include") include: String = "tvs",
@@ -77,6 +77,33 @@ class SoccersApiBroadcastSource(
         private set
     private val schedules = ConcurrentHashMap<LocalDate, CachedSchedule>()
 
+    fun invalidateCache() = schedules.clear()
+
+    override suspend fun testConnection(): SportsSourceResult<Unit> {
+        val credentials = credentialStore.get()
+            ?: return SportsSourceResult.Failure(SportsSourceError.Unauthorized)
+        val fetchedAt = clock.instant()
+        return try {
+            val response = api.schedule(
+                authorization = "Bearer ${credentials.apiKey}",
+                date = LocalDate.now(clock).toString(),
+            )
+            response.toSoccersError(fetchedAt)?.let { return it }
+            val body = response.body() ?: return SportsSourceResult.Failure(SportsSourceError.ParseFailure)
+            if (body.meta.msg.isNotBlank()) return body.meta.msg.toSoccersError()
+            requestsLeft = body.meta.requestsLeft
+            SportsSourceResult.Success(Unit, fetchedAt)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: IOException) {
+            SportsSourceResult.Failure(SportsSourceError.NetworkFailure)
+        } catch (_: kotlinx.serialization.SerializationException) {
+            SportsSourceResult.Failure(SportsSourceError.ParseFailure)
+        } catch (_: Throwable) {
+            SportsSourceResult.Failure(SportsSourceError.ParseFailure)
+        }
+    }
+
     override suspend fun broadcasts(fixture: SportsFixture): SportsSourceResult<List<SportsBroadcast>> {
         val credentials = credentialStore.get()
             ?: return SportsSourceResult.Failure(SportsSourceError.Unauthorized)
@@ -90,8 +117,7 @@ class SoccersApiBroadcastSource(
                 var pages: Int
                 do {
                     val response = api.schedule(
-                        username = credentials.username,
-                        token = credentials.token,
+                        authorization = "Bearer ${credentials.apiKey}",
                         date = date.toString(),
                         page = page,
                     )
@@ -111,11 +137,11 @@ class SoccersApiBroadcastSource(
             val candidates = matches.mapNotNull(SoccersApiMatchDto::toCandidate)
             when (val reconciliation = BroadcastFixtureReconciler.reconcile(fixture, candidates)) {
                 FixtureReconciliationResult.Ambiguous,
-                FixtureReconciliationResult.NoMatch -> SportsSourceResult.NoData
+                FixtureReconciliationResult.NoMatch -> SportsSourceResult.Failure(SportsSourceError.FixtureNotMatched)
                 is FixtureReconciliationResult.Match -> {
                     val match = matches.single { it.id.text() == reconciliation.candidate.sourceFixtureId }
                     val broadcasts = match.tvs.mapNotNull { it.toDomain(match.id.text(), reconciliation.confidence, fetchedAt) }
-                    if (broadcasts.isEmpty()) SportsSourceResult.NoData else SportsSourceResult.Success(broadcasts, fetchedAt)
+                    if (broadcasts.isEmpty()) SportsSourceResult.Failure(SportsSourceError.NoBroadcasterData) else SportsSourceResult.Success(broadcasts, fetchedAt)
                 }
             }
         } catch (error: CancellationException) {
@@ -159,7 +185,7 @@ private fun SoccersApiTvDto.toDomain(
 
 private fun Response<*>.toSoccersError(now: Instant): SportsSourceResult.Failure? = when (code()) {
     401 -> SportsSourceResult.Failure(SportsSourceError.Unauthorized)
-    403 -> SportsSourceResult.Failure(SportsSourceError.Unsupported)
+    403 -> SportsSourceResult.Failure(SportsSourceError.UnsupportedTier)
     429 -> SportsSourceResult.Failure(SportsSourceError.RateLimited(parseRetryAt(headers()["Retry-After"], now)))
     in 500..599 -> SportsSourceResult.Failure(SportsSourceError.Unavailable)
     else -> if (isSuccessful) null else SportsSourceResult.Failure(SportsSourceError.NetworkFailure)
@@ -170,7 +196,7 @@ private fun String.toSoccersError(): SportsSourceResult.Failure {
     return SportsSourceResult.Failure(when {
         "request" in normalized && ("limit" in normalized || "allowance" in normalized) -> SportsSourceError.RateLimited(null)
         "credential" in normalized || "token" in normalized || "unauthorized" in normalized -> SportsSourceError.Unauthorized
-        "plan" in normalized || "league" in normalized || "endpoint" in normalized -> SportsSourceError.Unsupported
+        "plan" in normalized || "league" in normalized || "endpoint" in normalized -> SportsSourceError.UnsupportedTier
         else -> SportsSourceError.Unavailable
     })
 }

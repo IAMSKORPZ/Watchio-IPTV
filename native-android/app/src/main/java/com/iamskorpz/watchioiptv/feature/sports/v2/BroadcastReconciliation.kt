@@ -54,7 +54,11 @@ object BroadcastFixtureReconciler {
 
 internal fun normalizeTeam(value: String): String {
     val key = normalizeWords(value)
-    return TEAM_ALIASES[key] ?: key.removeSuffix("footballclub").removeSuffix("fc")
+    return TEAM_ALIASES[key] ?: key
+        .removePrefix("sk")
+        .removeSuffix("footballclub")
+        .removeSuffix("fc")
+        .removeSuffix("fk")
 }
 
 internal fun normalizeCompetition(value: String): String {
@@ -91,6 +95,9 @@ private val TEAM_ALIASES = mapOf(
     "internazionalemilano" to "intermilan",
     "wolverhamptonwanderers" to "wolves",
     "tottenhamhotspur" to "tottenham",
+    "slaviaprague" to "slaviapraha",
+    "skslaviapraha" to "slaviapraha",
+    "sabahfk" to "sabah",
 )
 
 private val COMPETITION_ALIASES = mapOf(

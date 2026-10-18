@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv.core.security
 
 import android.content.Context
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,7 @@ class AndroidSecretStore(context: Context) : SecretStore {
     }
 
     override suspend fun putSecret(key: String, value: String) = withContext(Dispatchers.IO) {
-        preferences.edit().putString(key, value).apply()
+        preferences.edit { putString(key, value) }
     }
 
     override suspend fun getSecret(key: String): String? = withContext(Dispatchers.IO) {
@@ -30,6 +31,6 @@ class AndroidSecretStore(context: Context) : SecretStore {
     }
 
     override suspend fun removeSecret(key: String) = withContext(Dispatchers.IO) {
-        preferences.edit().remove(key).apply()
+        preferences.edit { remove(key) }
     }
 }

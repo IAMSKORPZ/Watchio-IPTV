@@ -1,13 +1,18 @@
 package com.iamskorpz.watchioiptv.ui
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.app.Activity
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import android.os.SystemClock
 import com.iamskorpz.watchioiptv.core.diagnostics.QuickLoginBootstrapTrace
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -57,6 +62,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -190,6 +196,11 @@ import com.iamskorpz.watchioiptv.feature.sports.SportsScreen
 import com.iamskorpz.watchioiptv.feature.sports.SportsViewModel
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcastSettingsState
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsBroadcastSettingsViewModel
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsCapability
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsDataSource
+import com.iamskorpz.watchioiptv.feature.sports.v2.sportsProviderDisplayName
+import com.iamskorpz.watchioiptv.feature.sports.v2.sportsProviderInfo
+import com.iamskorpz.watchioiptv.feature.sports.v2.SportsConnectionState
 import com.iamskorpz.watchioiptv.core.util.SystemWatchioClock
 import com.iamskorpz.watchioiptv.domain.model.InputMode
 import com.iamskorpz.watchioiptv.domain.model.AnnouncementAction
@@ -242,20 +253,100 @@ internal enum class LivePlaybackOrigin {
     TvGuide,
 }
 
+internal fun isLivePlaybackReturnTransition(
+    origin: LivePlaybackOrigin,
+    currentRoute: String?,
+    visibleRoutes: List<String?>,
+): Boolean {
+    val restoredRouteMatches = when (origin) {
+        LivePlaybackOrigin.Sports -> currentRoute == "sports"
+        LivePlaybackOrigin.TvGuide -> currentRoute?.startsWith("tv-guide") == true
+        LivePlaybackOrigin.Live -> currentRoute == "live"
+    }
+    return restoredRouteMatches && visibleRoutes.any { it?.startsWith("live/fullscreen") == true }
+}
+
+internal fun livePlaybackOrigin(value: String?): LivePlaybackOrigin = when (value) {
+    "sports" -> LivePlaybackOrigin.Sports
+    "tv-guide" -> LivePlaybackOrigin.TvGuide
+    else -> LivePlaybackOrigin.Live
+}
+
+internal class LivePlaybackCloseGuard {
+    private var handled = false
+
+    fun close(action: () -> Unit) {
+        if (handled) return
+        handled = true
+        action()
+    }
+}
+
+internal class LivePlaybackReturnBackGuard(
+    private val protectionWindowMs: Long = 250L,
+    private val elapsedRealtime: () -> Long = SystemClock::elapsedRealtime,
+) {
+    private var protectedOrigin: LivePlaybackOrigin? = null
+    private var expiresAtMs: Long = 0L
+
+    fun arm(origin: LivePlaybackOrigin) {
+        protectedOrigin = origin
+        expiresAtMs = elapsedRealtime() + protectionWindowMs
+    }
+
+    fun consumeIfProtected(origin: LivePlaybackOrigin): Boolean {
+        val now = elapsedRealtime()
+        val armedOrigin = protectedOrigin
+        if (armedOrigin != origin || now > expiresAtMs) {
+            clear()
+            return false
+        }
+        clear()
+        return true
+    }
+
+    fun consumeIfTransitionProtected(): Boolean {
+        val now = elapsedRealtime()
+        val armedOrigin = protectedOrigin
+        if (armedOrigin == null || now > expiresAtMs) {
+            clear()
+            return false
+        }
+        clear()
+        return true
+    }
+
+    private fun clear() {
+        protectedOrigin = null
+        expiresAtMs = 0L
+    }
+}
+
 internal fun closeLiveFullscreen(
     navController: NavHostController,
     origin: LivePlaybackOrigin,
 ) {
-    if (origin == LivePlaybackOrigin.Sports) {
-        if (!navController.popBackStack("sports", inclusive = false)) {
-            navController.popBackStack()
+    val targetRoute = when (origin) {
+        LivePlaybackOrigin.Sports -> "sports"
+        LivePlaybackOrigin.TvGuide -> "tv-guide?categoryId={categoryId}"
+        LivePlaybackOrigin.Live -> "live"
+    }
+    if (navController.currentDestination?.route == targetRoute) return
+    if (navController.popBackStack(targetRoute, inclusive = false)) return
+
+    // A restored fullscreen destination may no longer have its origin below it.
+    // Replace only that orphaned player destination instead of popping outside Watchio.
+    val currentDestinationId = navController.currentDestination?.id
+    val fallbackRoute = when (origin) {
+        LivePlaybackOrigin.Sports -> "sports"
+        LivePlaybackOrigin.TvGuide -> "tv-guide"
+        LivePlaybackOrigin.Live -> "live"
+    }
+    navController.navigate(fallbackRoute) {
+        currentDestinationId?.let { destinationId ->
+            popUpTo(destinationId) { inclusive = true }
         }
-    } else if (origin == LivePlaybackOrigin.TvGuide) {
-        if (!navController.popBackStack("tv-guide", inclusive = false)) {
-            navController.popBackStack()
-        }
-    } else {
-        navController.popBackStack()
+        launchSingleTop = true
     }
 }
 
@@ -301,7 +392,8 @@ fun WatchioNativeApp(
     var shownAnnouncementId by rememberSaveable { mutableStateOf<String?>(null) }
     var backgroundPlaybackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     var pendingLiveChannel by remember { mutableStateOf<LiveTvChannel?>(null) }
-    var livePlaybackOrigin by rememberSaveable { mutableStateOf(LivePlaybackOrigin.Live) }
+    val livePlaybackReturnBackGuard = remember { LivePlaybackReturnBackGuard() }
+    var pendingReturnProtection by remember { mutableStateOf<LivePlaybackOrigin?>(null) }
     AppBackgroundPlaybackEffect(
         onBackground = { (backgroundPlaybackHandler ?: container.playerManager::pause).invoke() },
     )
@@ -313,6 +405,19 @@ fun WatchioNativeApp(
         ),
         onExit = { (context as? Activity)?.finish() },
     )
+    LivePlaybackTransitionBackHandler(livePlaybackReturnBackGuard)
+    LaunchedEffect(currentBackStackEntry?.destination?.route, pendingReturnProtection) {
+        val origin = pendingReturnProtection ?: return@LaunchedEffect
+        val restored = when (origin) {
+            LivePlaybackOrigin.Sports -> currentBackStackEntry?.destination?.route == "sports"
+            LivePlaybackOrigin.TvGuide -> currentBackStackEntry?.destination?.route?.startsWith("tv-guide") == true
+            LivePlaybackOrigin.Live -> currentBackStackEntry?.destination?.route == "live"
+        }
+        if (restored) {
+            livePlaybackReturnBackGuard.arm(origin)
+            pendingReturnProtection = null
+        }
+    }
     WatchioTheme(themeState = themeState, appearance = activeAppearance) {
         Box(Modifier.fillMaxSize()) {
         WatchioAppBackground(activeAppearance)
@@ -420,7 +525,6 @@ fun WatchioNativeApp(
                     onProviders = { navController.navigate("providers/home") },
                     onSettings = { navController.navigate("settings") },
                     onLiveTv = {
-                        livePlaybackOrigin = LivePlaybackOrigin.Live
                         navController.navigate("live")
                     },
                     onTvGuide = { navController.navigate("epg-categories") },
@@ -458,16 +562,25 @@ fun WatchioNativeApp(
                     onPlay = { channel ->
                         sportsViewModel.closeCandidates()
                         pendingLiveChannel = channel
-                        livePlaybackOrigin = LivePlaybackOrigin.Sports
                         navController.navigate("live")
                     },
                     onConfigureApiKey = { navController.navigate("settings/football-data") },
                     onGetFreeApiKey = { openExternalUrl(context, FOOTBALL_DATA_REGISTRATION_URL) },
-                    onBack = { navController.popBackStack() },
+                    onBack = {
+                        val returningFromPlayback = isLivePlaybackReturnTransition(
+                            origin = LivePlaybackOrigin.Sports,
+                            currentRoute = navController.currentDestination?.route,
+                            visibleRoutes = navController.visibleEntries.value.map { it.destination.route },
+                        )
+                        if (!returningFromPlayback && !livePlaybackReturnBackGuard.consumeIfProtected(LivePlaybackOrigin.Sports)) {
+                            navController.popBackStack()
+                        }
+                    },
                     onSelectDate = sportsViewModel::chooseDate,
                     onToggleReminder = sportsViewModel::toggleReminder,
                     onDismissAlert = sportsViewModel::dismissMatchAlert,
                     onWatchAlert = sportsViewModel::watchMatchAlert,
+                    onRefresh = sportsViewModel::refreshSelectedDate,
                 )
             }
             composable("announcements") {
@@ -487,7 +600,7 @@ fun WatchioNativeApp(
                             is AnnouncementAction.OpenUpdater -> navController.navigate("settings/updates")
                             is AnnouncementAction.OpenScreen -> navController.navigate(action.screen.route) { launchSingleTop = true }
                             is AnnouncementAction.OpenUrl -> runCatching {
-                                val uri = Uri.parse(action.url)
+                                val uri = action.url.toUri()
                                 require(uri.scheme == "https")
                                 context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                             }
@@ -781,7 +894,7 @@ fun WatchioNativeApp(
                         state.second !is com.iamskorpz.watchioiptv.core.player.WatchioPlayerState.Idle
                     ) {
                         pendingLiveChannel = null
-                        navController.navigate("live/fullscreen")
+                        navController.navigate("live/fullscreen?origin=sports")
                     }
                 }
                 PlaybackBackgroundHandler(
@@ -802,16 +915,31 @@ fun WatchioNativeApp(
                     onRetry = liveViewModel::retry,
                     onRefreshEpg = liveViewModel::refreshEpg,
                     onFullscreen = {
-                        livePlaybackOrigin = LivePlaybackOrigin.Live
-                        navController.navigate("live/fullscreen")
+                        navController.navigate("live/fullscreen?origin=live")
                     },
                     onBack = {
-                        liveViewModel.leaveLiveTv()
-                        navController.popBackStack()
+                        val returnOrigin = if (requestedChannel != null) {
+                            LivePlaybackOrigin.Sports
+                        } else {
+                            LivePlaybackOrigin.Live
+                        }
+                        if (!livePlaybackReturnBackGuard.consumeIfProtected(returnOrigin)) {
+                            if (returnOrigin == LivePlaybackOrigin.Sports) {
+                                pendingReturnProtection = returnOrigin
+                                pendingLiveChannel = null
+                            }
+                            liveViewModel.leaveLiveTv()
+                            navController.popBackStack()
+                        }
                     },
                 )
             }
-            composable("live/fullscreen") { backStackEntry ->
+            composable(
+                route = "live/fullscreen?origin={origin}",
+                arguments = listOf(navArgument("origin") { type = NavType.StringType; defaultValue = "live" }),
+            ) { backStackEntry ->
+                val playbackOrigin = livePlaybackOrigin(backStackEntry.arguments?.getString("origin"))
+                val closeGuard = remember(backStackEntry.id) { LivePlaybackCloseGuard() }
                 val liveBackStackEntry = remember(backStackEntry) {
                     runCatching { navController.getBackStackEntry("live") }.getOrNull()
                         ?: runCatching { navController.previousBackStackEntry }.getOrNull()
@@ -853,8 +981,10 @@ fun WatchioNativeApp(
                     onRestart = container.playerManager::restart,
                     onRetry = container.playerManager::retry,
                     onClose = {
-                        closeLiveFullscreen(navController, livePlaybackOrigin)
-                        livePlaybackOrigin = LivePlaybackOrigin.Live
+                        closeGuard.close {
+                            pendingReturnProtection = playbackOrigin
+                            closeLiveFullscreen(navController, playbackOrigin)
+                        }
                     },
                 )
             }
@@ -889,20 +1019,20 @@ fun WatchioNativeApp(
                     onProgramme = guideViewModel::selectProgramme,
                     onWatchLive = { channel, programme ->
                         guideViewModel.playProgramme(channel, programme) {
-                            livePlaybackOrigin = LivePlaybackOrigin.TvGuide
-                            navController.navigate("live/fullscreen")
+                            navController.navigate("live/fullscreen?origin=tv-guide")
                         }
                     },
                     onPlayLive = {
                         guideViewModel.playLive {
-                            livePlaybackOrigin = LivePlaybackOrigin.TvGuide
-                            navController.navigate("live/fullscreen")
+                        navController.navigate("live/fullscreen?origin=tv-guide")
                         }
                     },
                     onCloseDetails = guideViewModel::closeDetails,
                     onBack = {
-                        guideViewModel.leaveGuide()
-                        navController.popBackStack()
+                        if (!livePlaybackReturnBackGuard.consumeIfProtected(LivePlaybackOrigin.TvGuide)) {
+                            guideViewModel.leaveGuide()
+                            navController.popBackStack()
+                        }
                     },
                 )
             }
@@ -1131,27 +1261,48 @@ fun WatchioNativeApp(
                 val broadcastViewModel: SportsBroadcastSettingsViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T = SportsBroadcastSettingsViewModel(container.soccersApiCredentialStore) as T
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T = SportsBroadcastSettingsViewModel(
+                            credentialStore = container.soccersApiCredentialStore,
+                            footballDataStore = container.footballDataCredentialStore,
+                            apiFootballStore = container.apiFootballCredentialStore,
+                            theSportsDbStore = container.theSportsDbCredentialStore,
+                            settingsStore = container.sportsSettingsStore,
+                            channelLoader = container.sportsRepository::activeProviderChannels,
+                            connectionTester = container::testSportsSource,
+                            invalidateBroadcastCache = container::invalidateSportsBroadcastCache,
+                        ) as T
                     },
                 )
                 val broadcastState by broadcastViewModel.state.collectAsStateWithLifecycle()
-                SettingsDetailScreen("Sports Data", onBack = { navController.popBackStack() }) {
-                    FootballDataSettingsContent(
-                        state = state,
-                        broadcastState = broadcastState,
-                        onInputChanged = footballDataViewModel::updateInput,
-                        onSave = footballDataViewModel::validateAndSave,
-                        onRemove = footballDataViewModel::requestRemove,
-                        onCancelRemove = footballDataViewModel::cancelRemove,
-                        onConfirmRemove = footballDataViewModel::confirmRemove,
-                        onGetFreeApiKey = { openExternalUrl(context, FOOTBALL_DATA_REGISTRATION_URL) },
-                        onOpenAttribution = { openExternalUrl(context, FOOTBALL_DATA_HOME_URL) },
-                        onBroadcastUsernameChanged = broadcastViewModel::updateUsername,
-                        onBroadcastTokenChanged = broadcastViewModel::updateToken,
-                        onSaveBroadcast = broadcastViewModel::save,
-                        onRemoveBroadcast = broadcastViewModel::remove,
-                    )
-                }
+                SportsSettingsScreen(
+                    footballState = state,
+                    sportsState = broadcastState,
+                    actions = SportsSettingsActions(
+                        onFootballInputChanged = footballDataViewModel::updateInput,
+                        onSaveFootball = footballDataViewModel::validateAndSave,
+                        onRemoveFootball = footballDataViewModel::requestRemove,
+                        onCancelRemoveFootball = footballDataViewModel::cancelRemove,
+                        onConfirmRemoveFootball = footballDataViewModel::confirmRemove,
+                        onGetProviderKey = { source -> openExternalUrl(context, sportsProviderInfo(source).registrationUrl) },
+                        onSoccersApiKeyChanged = broadcastViewModel::updateSoccersApiKey,
+                        onSaveSoccers = broadcastViewModel::save,
+                        onApiFootballChanged = broadcastViewModel::updateApiFootball,
+                        onSaveApiFootball = broadcastViewModel::saveApiFootball,
+                        onSportsDbChanged = broadcastViewModel::updateTheSportsDb,
+                        onSaveSportsDb = broadcastViewModel::saveTheSportsDb,
+                        onRemoveProvider = broadcastViewModel::remove,
+                        onToggleProvider = broadcastViewModel::setEnabled,
+                        onMoveProvider = broadcastViewModel::movePriority,
+                        onTestProvider = broadcastViewModel::test,
+                        onChooseCapability = broadcastViewModel::chooseCapability,
+                        onRefreshMinutes = broadcastViewModel::setRefreshMinutes,
+                        onMappingBroadcaster = broadcastViewModel::updateMappingBroadcaster,
+                        onChannelQuery = broadcastViewModel::updateChannelQuery,
+                        onAddMapping = broadcastViewModel::addMapping,
+                        onRemoveMapping = broadcastViewModel::removeMapping,
+                    ),
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
         val startupNotification = if (currentBackStackEntry?.destination?.route == "home") resolveStartupNotification(
@@ -2024,6 +2175,36 @@ private fun Modifier.tvVerticalFocus(
         focusRequester.requestFocus()
     }
     true
+}
+
+@Composable
+private fun LivePlaybackTransitionBackHandler(
+    guard: LivePlaybackReturnBackGuard,
+) {
+    val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher ?: return
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(dispatcher, lifecycleOwner, guard) {
+        val callback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val consumed = guard.consumeIfTransitionProtected()
+                if (consumed) return
+
+                // This root callback exists only to cover NavHost destination disposal/attachment.
+                // Outside that gap, delegate to the current destination or Activity fallback.
+                isEnabled = false
+                try {
+                    dispatcher.onBackPressed()
+                } finally {
+                    isEnabled = true
+                }
+            }
+        }
+        dispatcher.addCallback(lifecycleOwner, callback)
+        onDispose {
+            callback.remove()
+        }
+    }
 }
 
 private fun Modifier.trackTvKeyboardRequest(onRequest: () -> Unit): Modifier = onPreviewKeyEvent { event ->
@@ -3110,10 +3291,24 @@ private fun FootballDataSettingsContent(
     onConfirmRemove: () -> Unit,
     onGetFreeApiKey: () -> Unit,
     onOpenAttribution: () -> Unit,
-    onBroadcastUsernameChanged: (String) -> Unit,
-    onBroadcastTokenChanged: (String) -> Unit,
+    onGetProviderKey: (SportsDataSource) -> Unit,
+    onBroadcastApiKeyChanged: (String) -> Unit,
     onSaveBroadcast: () -> Unit,
     onRemoveBroadcast: () -> Unit,
+    onApiFootballChanged: (String) -> Unit,
+    onSaveApiFootball: () -> Unit,
+    onSportsDbChanged: (String) -> Unit,
+    onSaveSportsDb: () -> Unit,
+    onRemoveProvider: (SportsDataSource) -> Unit,
+    onToggleProvider: (SportsDataSource, Boolean) -> Unit,
+    onMoveProvider: (SportsDataSource, Int) -> Unit,
+    onTestProvider: (SportsDataSource) -> Unit,
+    onChooseCapability: (SportsCapability, SportsDataSource) -> Unit,
+    onRefreshMinutes: (Int) -> Unit,
+    onMappingBroadcaster: (String) -> Unit,
+    onChannelQuery: (String) -> Unit,
+    onAddMapping: (com.iamskorpz.watchioiptv.data.live.LiveTvChannel, String?) -> Unit,
+    onRemoveMapping: (com.iamskorpz.watchioiptv.feature.sports.v2.ManualChannelMapping) -> Unit,
 ) {
     val colors = LocalWatchioColors.current
     val spacing = LocalWatchioSpacing.current
@@ -3138,7 +3333,7 @@ private fun FootballDataSettingsContent(
         Text(footballDataStatusText(state.status), color = if (state.status == FootballDataConnectionStatus.Invalid) colors.liveTvAccent else colors.textSecondary, modifier = Modifier.testTag("football-data-status"))
         Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
             WatchioButton(
-                if (checking) "Checkingâ€¦" else "Save",
+                if (checking) "Checking..." else "Save",
                 onSave,
                 enabled = state.input.isNotBlank() && !checking,
                 modifier = Modifier.testTag("football-data-save"),
@@ -3149,19 +3344,58 @@ private fun FootballDataSettingsContent(
             Text("Data provided by football-data.org")
         }
         HorizontalDivider(color = colors.surfaceElevated)
-        Text("Broadcast matching", color = colors.textPrimary, fontWeight = FontWeight.Bold)
-        Text("Optional credentials add official broadcaster information. Stored values are never displayed.", color = colors.textSecondary)
+        Text("Football API Providers", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+        Text("Add your own credentials, choose priority, and test each real Watchio adapter. Secrets are encrypted and never displayed again.", color = colors.textSecondary)
+        broadcastState.providers.forEach { provider ->
+            val info = sportsProviderInfo(provider.source)
+            WatchioCard(modifier = Modifier.fillMaxWidth().testTag("sports-provider-${provider.source.value}")) {
+                Column(Modifier.padding(spacing.md), verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text(provider.name, color = colors.textPrimary, fontWeight = FontWeight.Bold)
+                            Text(info.purpose, color = colors.textSecondary)
+                            Text("Supported: ${info.features}", color = colors.textSecondary)
+                        }
+                        Switch(checked = provider.enabled, onCheckedChange = { onToggleProvider(provider.source, it) }, modifier = Modifier.testTag("sports-provider-enabled-${provider.source.value}"))
+                    }
+                    Text(info.accessNote, color = colors.textSecondary)
+                    Text(
+                        if (provider.configured) "Credentials configured - saved securely" else "Credentials not configured",
+                        color = colors.textSecondary,
+                        modifier = Modifier.testTag("sports-provider-configured-${provider.source.value}"),
+                    )
+                    Text("Priority ${provider.priority + 1} · ${sportsConnectionText(provider.connection)}", color = colors.textSecondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                        WatchioButton("Get API Key", { onGetProviderKey(provider.source) }, modifier = Modifier.testTag("sports-provider-register-${provider.source.value}"), variant = WatchioButtonVariant.Secondary)
+                        WatchioButton("Up", { onMoveProvider(provider.source, -1) }, modifier = Modifier.testTag("sports-provider-up-${provider.source.value}"), variant = WatchioButtonVariant.Secondary)
+                        WatchioButton("Down", { onMoveProvider(provider.source, 1) }, modifier = Modifier.testTag("sports-provider-down-${provider.source.value}"), variant = WatchioButtonVariant.Secondary)
+                        WatchioButton("Test Connection", { onTestProvider(provider.source) }, enabled = provider.configured, modifier = Modifier.testTag("sports-provider-test-${provider.source.value}"))
+                        if (provider.configured && provider.source != SportsDataSource.FootballData) WatchioButton("Remove", { onRemoveProvider(provider.source) }, variant = WatchioButtonVariant.Secondary)
+                    }
+                }
+            }
+        }
         OutlinedTextField(
-            value = broadcastState.usernameInput,
-            onValueChange = onBroadcastUsernameChanged,
-            label = { Text("Broadcast service user") },
+            value = broadcastState.apiFootballInput,
+            onValueChange = onApiFootballChanged,
+            label = { Text("API-Football API key") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth().testTag("sports-api-football-key"),
+        )
+        WatchioButton("Save API-Football", onSaveApiFootball, enabled = broadcastState.apiFootballInput.isNotBlank(), modifier = Modifier.testTag("sports-api-football-save"))
+        Text("SoccersAPI credentials (current API uses both account user and token)", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+        OutlinedTextField(
+            value = broadcastState.soccersApiKeyInput,
+            onValueChange = onBroadcastApiKeyChanged,
+            label = { Text("SoccersAPI account user") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().testTag("sports-broadcast-user"),
         )
         OutlinedTextField(
-            value = broadcastState.tokenInput,
-            onValueChange = onBroadcastTokenChanged,
-            label = { Text("Broadcast service token") },
+            value = broadcastState.soccersApiKeyInput,
+            onValueChange = onBroadcastApiKeyChanged,
+            label = { Text("SoccersAPI API token") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -3181,11 +3415,68 @@ private fun FootballDataSettingsContent(
             WatchioButton(
                 "Save Broadcast Access",
                 onSaveBroadcast,
-                enabled = broadcastState.usernameInput.isNotBlank() && broadcastState.tokenInput.isNotBlank(),
+                enabled = broadcastState.soccersApiKeyInput.isNotBlank(),
                 modifier = Modifier.testTag("sports-broadcast-save"),
             )
             if (broadcastState.configured) WatchioButton("Remove Broadcast Access", onRemoveBroadcast, modifier = Modifier.testTag("sports-broadcast-remove"), variant = WatchioButtonVariant.Secondary)
         }
+        OutlinedTextField(
+            value = broadcastState.theSportsDbInput,
+            onValueChange = onSportsDbChanged,
+            label = { Text("TheSportsDB user API key (free or premium)") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth().testTag("sports-thesportsdb-key"),
+        )
+        WatchioButton("Save TheSportsDB", onSaveSportsDb, enabled = broadcastState.theSportsDbInput.isNotBlank(), modifier = Modifier.testTag("sports-thesportsdb-save"))
+
+        HorizontalDivider(color = colors.surfaceElevated)
+        Text("Data Sources", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+        SportsCapability.entries.forEach { capability ->
+            val choices = broadcastState.providers.filter { capability in it.capabilities && it.enabled }
+            if (choices.isNotEmpty()) {
+                Text(capability.name.lowercase().replace('_', ' ').replaceFirstChar(Char::uppercase), color = colors.textSecondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                    choices.forEach { provider ->
+                        val selected = broadcastState.settings.capabilities.firstOrNull { it.capability == capability.name }?.source == provider.source.value
+                        WatchioButton(
+                            provider.name,
+                            { onChooseCapability(capability, provider.source) },
+                            variant = if (selected) WatchioButtonVariant.Primary else WatchioButtonVariant.Secondary,
+                            modifier = Modifier.testTag("sports-capability-${capability.name}-${provider.source.value}"),
+                        )
+                    }
+                }
+            }
+        }
+
+        HorizontalDivider(color = colors.surfaceElevated)
+        Text("Channel Mappings", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+        Text("Saved mappings apply only to the active IPTV provider and never create channels.", color = colors.textSecondary)
+        OutlinedTextField(value = broadcastState.mappingBroadcaster, onValueChange = onMappingBroadcaster, label = { Text("Official broadcaster") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("sports-mapping-broadcaster"))
+        OutlinedTextField(value = broadcastState.channelQuery, onValueChange = onChannelQuery, label = { Text("Search provider channels") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("sports-mapping-channel-search"))
+        broadcastState.availableChannels.asSequence().filter { broadcastState.channelQuery.isBlank() || it.name.contains(broadcastState.channelQuery, true) }.take(8).forEach { channel ->
+            WatchioButton(channel.name, { onAddMapping(channel, null) }, enabled = broadcastState.mappingBroadcaster.isNotBlank(), modifier = Modifier.fillMaxWidth().testTag("sports-mapping-channel-${channel.id}"), variant = WatchioButtonVariant.Secondary)
+        }
+        broadcastState.settings.manualMappings.filter { it.providerId == broadcastState.activeProviderId }.forEach { mapping ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("${mapping.broadcaster} → ${mapping.channelName}", color = colors.textSecondary, modifier = Modifier.weight(1f))
+                WatchioButton("Remove", { onRemoveMapping(mapping) }, variant = WatchioButtonVariant.Secondary)
+            }
+        }
+
+        HorizontalDivider(color = colors.surfaceElevated)
+        Text("Data & Refresh", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+        Text("Refresh interval: ${broadcastState.settings.refreshMinutes} minutes", color = colors.textSecondary)
+        Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+            listOf(15, 30, 60).forEach { minutes -> WatchioButton("${minutes}m", { onRefreshMinutes(minutes) }, variant = if (broadcastState.settings.refreshMinutes == minutes) WatchioButtonVariant.Primary else WatchioButtonVariant.Secondary) }
+        }
+        Text("Cached fixture and broadcaster data is reused during outages and rate limits. Refreshing Sports updates it safely.", color = colors.textSecondary)
+
+        HorizontalDivider(color = colors.surfaceElevated)
+        Text("Diagnostics", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+        Text(broadcastState.diagnostic ?: "No recent connection or matching problem.", color = colors.textSecondary, modifier = Modifier.testTag("sports-diagnostics"))
+        Text("Diagnostics never include API keys, provider credentials, stream URLs, or account details.", color = colors.textSecondary)
     }
     if (state.removeConfirmationVisible) {
         AlertDialog(
@@ -3200,16 +3491,33 @@ private fun FootballDataSettingsContent(
 
 private fun footballDataStatusText(status: FootballDataConnectionStatus): String = when (status) {
     FootballDataConnectionStatus.NotConfigured -> "Not configured"
-    FootballDataConnectionStatus.Checking -> "Checkingâ€¦"
-    FootballDataConnectionStatus.Connected -> "Connected â€” API key configured"
+    FootballDataConnectionStatus.Configured -> "Credentials saved - connection not tested"
+    FootballDataConnectionStatus.Checking -> "Checking..."
+    FootballDataConnectionStatus.Connected -> "Verified connection"
     FootballDataConnectionStatus.Invalid -> "Invalid key"
     FootballDataConnectionStatus.RateLimited -> "The key appears configured, but football-data.org is temporarily rate limiting requests. Try again shortly."
     FootballDataConnectionStatus.UnableToVerify -> "Unable to verify API key. Check your connection and try again."
 }
 
+private fun sportsConnectionText(status: SportsConnectionState): String = when (status) {
+    SportsConnectionState.NOT_CONFIGURED -> "not configured"
+    SportsConnectionState.READY -> "ready to test"
+    SportsConnectionState.TESTING -> "testing connection"
+    SportsConnectionState.CONNECTED -> "connected"
+    SportsConnectionState.INVALID -> "invalid credentials"
+    SportsConnectionState.RATE_LIMITED -> "quota exhausted or rate limited"
+    SportsConnectionState.UNSUPPORTED_TIER -> "subscription tier does not support this feature"
+    SportsConnectionState.UNAVAILABLE -> "service unavailable or network error"
+}
+
 private fun openExternalUrl(context: Context, url: String) {
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-        .onFailure { Toast.makeText(context, "No browser is available to open this link.", Toast.LENGTH_LONG).show() }
+    val intent = Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val opened = runCatching { context.startActivity(intent) }.isSuccess
+    if (!opened) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("Sports API registration URL", url))
+        Toast.makeText(context, "No browser available. API registration URL copied.", Toast.LENGTH_LONG).show()
+    }
 }
 
 private const val FOOTBALL_DATA_REGISTRATION_URL = "https://www.football-data.org/client/register"
