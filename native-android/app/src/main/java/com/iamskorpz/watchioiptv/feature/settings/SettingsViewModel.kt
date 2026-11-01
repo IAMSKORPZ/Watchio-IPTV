@@ -25,6 +25,7 @@ data class SettingsUiState(
     val selectedTheme: WatchioThemeState = WatchioThemeState(),
     val themes: List<WatchioThemeState> = WatchioThemeState.Available,
     val themeLabel: String = "Watchio Default",
+    val automaticContentRefreshEnabled: Boolean = true,
     val epgAutoRefreshEnabled: Boolean = true,
     val epgRefreshInterval: EpgRefreshInterval = EpgRefreshInterval.Default,
     val playerSettings: PlayerSettings = PlayerSettings(),
@@ -45,6 +46,7 @@ class SettingsViewModel(
         settingsRepository.inputMode,
         settingsRepository.streamFormat,
         settingsRepository.theme,
+        settingsRepository.automaticContentRefreshEnabled,
         settingsRepository.epgAutoRefreshEnabled,
         settingsRepository.epgRefreshInterval,
         settingsRepository.playerSettings,
@@ -60,12 +62,13 @@ class SettingsViewModel(
             streamFormat = streamFormat,
             selectedTheme = theme,
             themeLabel = theme.id.label,
-            epgAutoRefreshEnabled = values[3] as Boolean,
-            epgRefreshInterval = values[4] as EpgRefreshInterval,
-            playerSettings = values[5] as PlayerSettings,
-            lastSuccessfulEpgRefreshEpochMs = values[6] as Long?,
-            epgRefreshing = values[7] as Boolean,
-            epgRefreshMessage = values[8] as String?,
+            automaticContentRefreshEnabled = values[3] as Boolean,
+            epgAutoRefreshEnabled = values[4] as Boolean,
+            epgRefreshInterval = values[5] as EpgRefreshInterval,
+            playerSettings = values[6] as PlayerSettings,
+            lastSuccessfulEpgRefreshEpochMs = values[7] as Long?,
+            epgRefreshing = values[8] as Boolean,
+            epgRefreshMessage = values[9] as String?,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
@@ -83,6 +86,10 @@ class SettingsViewModel(
 
     fun setTheme(theme: WatchioThemeState) {
         viewModelScope.launch { settingsRepository.setTheme(theme) }
+    }
+
+    fun setAutomaticContentRefreshEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAutomaticContentRefreshEnabled(enabled) }
     }
 
     fun setEpgAutoRefreshEnabled(enabled: Boolean) {

@@ -5,7 +5,6 @@ import androidx.core.content.edit
 import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.feature.sports.v2.MatchChannelConfidence
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsChannelEvidenceSource
-import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -39,6 +38,9 @@ interface SportsMatchCache {
     fun get(providerId: ProviderId, fixtureKey: String): CachedSportsMatch?
     fun put(value: CachedSportsMatch)
     fun clear()
+    fun invalidateProvider(providerId: ProviderId) {
+        clear()
+    }
     fun cleanup(nowEpochMs: Long, maximumEntries: Int = 1_000)
 }
 
@@ -47,6 +49,10 @@ class InMemorySportsMatchCache : SportsMatchCache {
     override fun get(providerId: ProviderId, fixtureKey: String) = values["${providerId.value}:$fixtureKey"]
     override fun put(value: CachedSportsMatch) { values["${value.providerId}:${value.fixtureKey}"] = value }
     override fun clear() = values.clear()
+    override fun invalidateProvider(providerId: ProviderId) {
+        val prefix = "${providerId.value}:"
+        values.keys.removeIf { it.startsWith(prefix) }
+    }
     override fun cleanup(nowEpochMs: Long, maximumEntries: Int) {
         values.entries.removeIf { it.value.expiresAtEpochMs < nowEpochMs }
         values.values.sortedBy { it.fetchedAtEpochMs }.take((values.size - maximumEntries).coerceAtLeast(0)).forEach { values.remove("${it.providerId}:${it.fixtureKey}") }
@@ -59,6 +65,15 @@ class PersistentSportsMatchCache(context: Context) : SportsMatchCache {
     @Synchronized override fun get(providerId: ProviderId, fixtureKey: String): CachedSportsMatch? = preferences.getString("${providerId.value}:$fixtureKey", null)?.let { runCatching { json.decodeFromString<MatchEntry>(it).toDomain() }.getOrNull() }
     @Synchronized override fun put(value: CachedSportsMatch) { preferences.edit { putString("${value.providerId}:${value.fixtureKey}", json.encodeToString(MatchEntry.from(value))) } }
     @Synchronized override fun clear() = preferences.edit { clear() }
+    @Synchronized override fun invalidateProvider(providerId: ProviderId) {
+        val prefix = "${providerId.value}:"
+        val matchingKeys = preferences.all.keys.filter { it.startsWith(prefix) }
+        if (matchingKeys.isNotEmpty()) {
+            preferences.edit {
+                matchingKeys.forEach { remove(it) }
+            }
+        }
+    }
     @Synchronized override fun cleanup(nowEpochMs: Long, maximumEntries: Int) {
         val rows = preferences.all.mapNotNull { (key, raw) -> (raw as? String)?.let { runCatching { json.decodeFromString<MatchEntry>(it) }.getOrNull() }?.let { key to it } }
         preferences.edit {

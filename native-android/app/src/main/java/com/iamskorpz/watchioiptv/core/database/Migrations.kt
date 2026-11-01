@@ -187,4 +187,57 @@ object WatchioMigrations {
             db.execSQL("CREATE INDEX IF NOT EXISTS index_sports_fixture_cache_expiresAtEpochMs ON sports_fixture_cache(expiresAtEpochMs)")
         }
     }
+
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS offline_downloads (
+                    downloadId TEXT NOT NULL,
+                    providerId TEXT,
+                    contentId TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    localPosterPath TEXT,
+                    containerExtension TEXT NOT NULL,
+                    mimeType TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    bytesDownloaded INTEGER NOT NULL,
+                    contentLength INTEGER NOT NULL,
+                    percentDownloaded REAL NOT NULL,
+                    failureReason TEXT,
+                    createdAtEpochMs INTEGER NOT NULL,
+                    updatedAtEpochMs INTEGER NOT NULL,
+                    completedAtEpochMs INTEGER,
+                    PRIMARY KEY(downloadId)
+                )
+                """.trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_downloads_providerId ON offline_downloads(providerId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_downloads_providerId_contentId ON offline_downloads(providerId, contentId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_offline_downloads_state ON offline_downloads(state)")
+        }
+    }
+
+    val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN contentType TEXT NOT NULL DEFAULT 'Movie'")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN showId TEXT")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN showTitle TEXT")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN seasonNumber INTEGER")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN episodeNumber INTEGER")
+        }
+    }
+
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN localBackdropPath TEXT")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN localThumbnailPath TEXT")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN synopsis TEXT")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN releaseYear TEXT")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN genre TEXT")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN rating TEXT")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN runtime TEXT")
+            db.execSQL("ALTER TABLE offline_downloads ADD COLUMN episodeTitle TEXT")
+        }
+    }
 }

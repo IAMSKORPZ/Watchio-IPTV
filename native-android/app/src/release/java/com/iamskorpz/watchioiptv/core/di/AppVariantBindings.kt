@@ -5,9 +5,16 @@ import com.iamskorpz.watchioiptv.BuildConfig
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.announcements.GitHubAnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.updates.UpdateRepository
+import com.iamskorpz.watchioiptv.data.downloads.OfflineDownloadSourceResolver
+import com.iamskorpz.watchioiptv.data.downloads.RepositoryOfflineDownloadSourceResolver
+import com.iamskorpz.watchioiptv.data.movies.MoviesRepository
+import com.iamskorpz.watchioiptv.data.series.SeriesRepository
 import okhttp3.OkHttpClient
 
 internal object AppVariantBindings {
+    fun createOfflineDownloadSourceResolver(moviesRepository: MoviesRepository, seriesRepository: SeriesRepository): OfflineDownloadSourceResolver =
+        RepositoryOfflineDownloadSourceResolver(moviesRepository, seriesRepository)
+
     fun createAnnouncementRemoteDataSource(context: Context, client: OkHttpClient): AnnouncementRemoteDataSource =
         GitHubAnnouncementRemoteDataSource(client)
 

@@ -21,6 +21,7 @@ enum class WatchioIconKind {
     Favourite,
     Search,
     ComingSoon,
+    Downloads,
     History,
     Guide,
     Provider,
@@ -58,7 +59,7 @@ fun WatchioIconKind.identityColor(): Color = when (this) {
     WatchioIconKind.Settings -> WatchioIconColors.Settings
     WatchioIconKind.Favourite -> WatchioIconColors.Favourite
     WatchioIconKind.Search -> WatchioIconColors.Search
-    WatchioIconKind.ComingSoon -> WatchioIconColors.ComingSoon
+    WatchioIconKind.ComingSoon, WatchioIconKind.Downloads -> WatchioIconColors.ComingSoon
     WatchioIconKind.History -> WatchioIconColors.History
     WatchioIconKind.Provider, WatchioIconKind.Account, WatchioIconKind.QuickLogin,
     WatchioIconKind.InputMode, WatchioIconKind.Back -> WatchioIconColors.LiveTv
@@ -146,6 +147,12 @@ fun WatchioIcon(kind: WatchioIconKind, tint: Color, modifier: Modifier = Modifie
             WatchioIconKind.ComingSoon -> {
                 val star = Path().apply { repeat(8) { i -> val angle = -Math.PI / 2 + i * Math.PI / 4; val radius = if (i % 2 == 0) unit * .34f else unit * .14f; val x = center.x + kotlin.math.cos(angle).toFloat() * radius; val y = center.y + kotlin.math.sin(angle).toFloat() * radius; if (i == 0) moveTo(x, y) else lineTo(x, y) }; close() }
                 drawPath(star, tint, style = stroke); drawCircle(tint, unit * .04f, Offset(size.width * .79f, size.height * .19f)); drawCircle(tint, unit * .03f, Offset(size.width * .20f, size.height * .76f))
+            }
+            WatchioIconKind.Downloads -> {
+                drawRoundRect(tint, Offset(size.width * .16f, size.height * .58f), Size(size.width * .68f, size.height * .25f), CornerRadius(unit * .06f), style = stroke)
+                line(.50f, .12f, .50f, .58f)
+                line(.32f, .40f, .50f, .58f)
+                line(.68f, .40f, .50f, .58f)
             }
             WatchioIconKind.History -> {
                 drawArc(tint, -65f, 300f, false, Offset(size.width * .15f, size.height * .15f), Size(size.width * .70f, size.height * .70f), style = stroke)

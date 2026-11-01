@@ -15,6 +15,8 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -38,6 +40,9 @@ import java.util.concurrent.atomic.AtomicLong
 class Media3WatchioPlayerManager(
     private val context: Context,
     settingsRepository: SettingsRepository,
+    private val offlineDataSourceFactory: DataSource.Factory? = null,
+    private val onRemotePlaybackAvailable: () -> Unit = {},
+    private val onRemotePlaybackFailure: (Throwable) -> Unit = {},
 ) : WatchioPlayerManager {
     private var player: ExoPlayer? = null
     private var playerView: PlayerView? = null
@@ -95,12 +100,23 @@ class Media3WatchioPlayerManager(
     private fun loadIntoPlayer(media: PlaybackMedia, generation: Long) {
         val exoPlayer = ensurePlayer()
         exoPlayer.setPlaybackSpeed(1.0f)
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setDefaultRequestProperties(media.headers)
+        val dataSourceFactory = when (media.sourceType) {
+            PlaybackSourceType.Remote -> DefaultHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .setDefaultRequestProperties(media.headers)
+            PlaybackSourceType.LocalFile -> DefaultDataSource.Factory(context)
+            PlaybackSourceType.OfflineCache -> requireNotNull(offlineDataSourceFactory) {
+                "Offline playback is unavailable."
+            }
+        }
+        val mediaItem = MediaItem.Builder()
+            .setUri(media.url)
+            .setMimeType(media.mimeType)
+            .apply { media.cacheKey?.let(::setCustomCacheKey) }
+            .build()
         val mediaSource = DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(httpFactory)
-            .createMediaSource(MediaItem.Builder().setUri(media.url).build())
+            .setDataSourceFactory(dataSourceFactory)
+            .createMediaSource(mediaItem)
         exoPlayer.setMediaSource(mediaSource)
         if (media.startPositionMs > 0L) exoPlayer.seekTo(media.startPositionMs)
         currentMetadata = currentMetadata.copy(loadGeneration = generation)
@@ -487,6 +503,7 @@ class Media3WatchioPlayerManager(
                 }
 
                 override fun onRenderedFirstFrame() {
+                    if (lastMedia?.sourceType == PlaybackSourceType.Remote) onRemotePlaybackAvailable()
                     currentMetadata = snapshot().copy(firstFrameRendered = true)
                     mutableState.value = if (exoPlayer.isPlaying) {
                         WatchioPlayerState.Playing(currentMetadata)
@@ -508,6 +525,7 @@ class Media3WatchioPlayerManager(
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
+                    if (lastMedia?.sourceType == PlaybackSourceType.Remote) onRemotePlaybackFailure(error)
                     currentMetadata = snapshot()
                     val message = PlayerReliability.userMessage(error)
                     if (

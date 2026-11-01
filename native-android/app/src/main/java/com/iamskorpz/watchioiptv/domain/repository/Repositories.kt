@@ -140,6 +140,8 @@ interface SettingsRepository {
     suspend fun setAutoRetryStreams(enabled: Boolean) = Unit
     suspend fun setRetryAttempts(attempts: Int) = Unit
     suspend fun setVideoScalingMode(mode: VideoScalingMode) = Unit
+    val automaticContentRefreshEnabled: Flow<Boolean> get() = flowOf(true)
+    suspend fun setAutomaticContentRefreshEnabled(enabled: Boolean) = Unit
     fun observeLastLiveChannelId(providerId: ProviderId): Flow<String?> = flowOf(null)
     suspend fun setLastLiveChannelId(providerId: ProviderId, channelId: String?) = Unit
     fun observeLiveBrowsingState(providerId: ProviderId): Flow<LiveTvBrowsingState> = flowOf(LiveTvBrowsingState())

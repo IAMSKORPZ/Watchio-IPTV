@@ -14,6 +14,7 @@ class M3uParser(
     suspend fun parse(
         inputStream: InputStream,
         onHeaderEpgUrl: suspend (String) -> Unit = {},
+        onM3uHeader: suspend () -> Unit = {},
         onItem: suspend (ParsedM3uItem) -> Unit,
     ): Int {
         var count = 0
@@ -27,6 +28,7 @@ class M3uParser(
                 val line = raw.trim().removePrefix("\uFEFF")
                 when {
                     line.startsWith("#EXTM3U", ignoreCase = true) -> {
+                        onM3uHeader()
                         firstNonBlank(
                             extractAttribute(line, "url-tvg"),
                             extractAttribute(line, "x-tvg-url"),

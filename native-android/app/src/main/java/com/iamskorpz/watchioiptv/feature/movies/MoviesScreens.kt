@@ -18,6 +18,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -626,12 +628,14 @@ private fun MovieOptionsDialog(movie: WatchioMovieItem, onDetails: () -> Unit, o
 // Movie details screen
 // --------------------------------------------------------------------------
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MovieDetailsScreen(
     state: MovieDetailsUiState,
     onPlay: (Boolean) -> Unit,
     onTrailer: (String) -> Unit,
     onFavorite: () -> Unit,
+    onDownload: () -> Unit = {},
     onBack: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
@@ -732,9 +736,9 @@ fun MovieDetailsScreen(
                             )
                         }
                         Spacer(Modifier.height(2.dp))
-                        Row(
+                        FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             MovieDetailsActionButton(
                                 title = "Play",
@@ -787,7 +791,20 @@ fun MovieDetailsScreen(
                                 onClick = onFavorite,
                                 modifier = Modifier.testTag("movie-favorite-button"),
                             )
+                            MovieDetailsActionButton(
+                                title = state.download.label,
+                                accent = colors.focusGlow,
+                                enabled = state.download.enabled,
+                                onClick = onDownload,
+                                modifier = Modifier.testTag("movie-download-button"),
+                            )
                         }
+                        Text(
+                            text = state.download.message,
+                            color = colors.artworkTextSecondary,
+                            fontSize = 12.sp,
+                            modifier = Modifier.testTag("movie-download-status"),
+                        )
                         Spacer(Modifier.height(4.dp))
                         MovieDetailRow("Director", details.director)
                         MovieDetailRow("Release Date", details.releaseDate)
@@ -1078,6 +1095,7 @@ private fun MovieDetailsActionButton(
     modifier: Modifier = Modifier,
     isPrimary: Boolean = false,
     icon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
@@ -1101,12 +1119,13 @@ private fun MovieDetailsActionButton(
                 focused = focused,
             )
             .clickable(
+                enabled = enabled,
                 interactionSource = interactionSource,
                 indication = null,
                 role = Role.Button,
                 onClick = onClick,
             )
-            .focusable(interactionSource = interactionSource),
+            .focusable(enabled = enabled, interactionSource = interactionSource),
         color = if (isPrimary && !focused) accent.copy(alpha = 0.22f) else colors.surfaceCard,
         shape = shape,
     ) {
@@ -1127,7 +1146,7 @@ private fun MovieDetailsActionButton(
                 icon?.invoke()
                 Text(
                     text = title,
-                    color = colors.textPrimary,
+                    color = if (enabled) colors.textPrimary else colors.textMuted,
                     fontWeight = if (isPrimary || focused) FontWeight.Bold else FontWeight.SemiBold,
                     fontSize = 14.5.sp,
                     maxLines = 1,

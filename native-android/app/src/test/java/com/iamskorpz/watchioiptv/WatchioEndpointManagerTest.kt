@@ -1,6 +1,9 @@
 package com.iamskorpz.watchioiptv
 
 import com.iamskorpz.watchioiptv.data.xtream.EndpointAttemptFailure
+import com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication
+import com.iamskorpz.watchioiptv.data.xtream.ProviderConnectivity
+import com.iamskorpz.watchioiptv.data.xtream.ProviderStreaming
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointConfigParser
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointConfigSource
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
@@ -43,12 +46,13 @@ class WatchioEndpointManagerTest {
 
     @Test fun networkFailureUsesBackup() = runBlocking {
         val attempts = mutableListOf<String>()
-        val result = WatchioEndpointManager(source(config("https://one.test", "https://two.test"))).resolve {
+        val result = WatchioEndpointManager(source(config("https://one.test", "https://two.test")), retryDelay = {}).resolve {
             attempts += it.url
-            if (attempts.size == 1) throw EndpointAttemptFailure.Unavailable(IOException())
+            if (it.url == "https://one.test") throw EndpointAttemptFailure.Unavailable(IOException())
             it.url
         }
         assertEquals("https://two.test", result.value)
+        assertEquals(listOf("https://one.test", "https://one.test", "https://two.test"), attempts)
     }
 
     @Test fun serverFailureUsesBackup() = networkFailureUsesBackup()
@@ -56,7 +60,7 @@ class WatchioEndpointManagerTest {
     @Test fun invalidCredentialsDoNotRotate() = runBlocking {
         var attempts = 0
         expectFailure<EndpointAttemptFailure.Account> {
-            WatchioEndpointManager(source(config("https://one.test", "https://two.test"))).resolve {
+            WatchioEndpointManager(source(config("https://one.test", "https://two.test")), retryDelay = {}).resolve {
                 attempts++; throw EndpointAttemptFailure.Account("Username or password is incorrect.")
             }
         }
@@ -68,11 +72,11 @@ class WatchioEndpointManagerTest {
     @Test fun allUnavailableIsBounded() = runBlocking {
         var attempts = 0
         expectFailure<IllegalStateException> {
-            WatchioEndpointManager(source(config("https://one.test", "https://two.test"))).resolve {
+            WatchioEndpointManager(source(config("https://one.test", "https://two.test")), retryDelay = {}).resolve {
                 attempts++; throw EndpointAttemptFailure.Unavailable(IOException())
             }
         }
-        assertEquals(2, attempts)
+        assertEquals(4, attempts)
     }
 
     @Test fun endpointsNormalizeAndDeduplicate() {
@@ -220,6 +224,42 @@ class WatchioEndpointManagerTest {
             manager.resolve("https://one.test") { throw EndpointAttemptFailure.Unavailable(IOException()) }
         }
         assertEquals(false, manager.activeEndpointOnline.value)
+        assertEquals(ProviderConnectivity.TemporarilyUnavailable, manager.health.value.connectivity)
+    }
+
+    @Test fun restoredEndpointIsSelectedButNotFalselyReportedConnected() = runBlocking {
+        val manager = WatchioEndpointManager(source(objectConfig(endpoint("MediaTitans", "https://one.test", 1))))
+        manager.restoreActive("https://one.test")
+        assertNull(manager.activeEndpointOnline.value)
+        assertEquals("MediaTitans", manager.health.value.selectedEndpointId)
+        assertEquals(ProviderConnectivity.NotChecked, manager.health.value.connectivity)
+        assertEquals(ProviderAuthentication.NotChecked, manager.health.value.authentication)
+    }
+
+    @Test fun transientFailureRetriesThenRecoversWithoutChangingAccountState() = runBlocking {
+        val manager = WatchioEndpointManager(
+            source(objectConfig(endpoint("MediaTitans", "https://one.test", 1))),
+            retryDelay = {},
+        )
+        var attempts = 0
+        manager.resolve {
+            attempts += 1
+            if (attempts == 1) throw EndpointAttemptFailure.Unavailable(IOException())
+            "ok"
+        }
+        assertEquals(2, attempts)
+        assertEquals(ProviderConnectivity.Connected, manager.health.value.connectivity)
+        assertEquals(ProviderAuthentication.Verified, manager.health.value.authentication)
+    }
+
+    @Test fun playbackHealthIsIndependentFromAccountAuthentication() = runBlocking {
+        val manager = WatchioEndpointManager(source(objectConfig(endpoint("MediaTitans", "https://one.test", 1))))
+        manager.resolve { "ok" }
+        manager.reportStreamingFailure(IOException())
+        assertEquals(ProviderAuthentication.Verified, manager.health.value.authentication)
+        assertEquals(ProviderStreaming.TemporarilyUnavailable, manager.health.value.streaming)
+        manager.reportStreamingAvailable()
+        assertEquals(ProviderStreaming.Available, manager.health.value.streaming)
     }
 
     @Test fun failedManualSwitchPreservesActiveEndpoint() = runBlocking {

@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -86,13 +87,31 @@ sealed class EndpointAttemptFailure(message: String, cause: Throwable? = null) :
 
 data class EndpointSelection<T>(val endpoint: WatchioEndpoint, val value: T)
 
-class WatchioEndpointManager(private val source: WatchioEndpointConfigSource) {
+enum class ProviderConnectivity { NotChecked, Connected, TemporarilyUnavailable }
+enum class ProviderAuthentication { NotChecked, Verified, Rejected }
+enum class ProviderStreaming { NotChecked, Available, TemporarilyUnavailable }
+enum class ProviderFailureKind { Network, Timeout, Http, Authentication, Playback }
+
+data class ProviderHealthState(
+    val selectedEndpointId: String? = null,
+    val connectivity: ProviderConnectivity = ProviderConnectivity.NotChecked,
+    val authentication: ProviderAuthentication = ProviderAuthentication.NotChecked,
+    val streaming: ProviderStreaming = ProviderStreaming.NotChecked,
+    val lastFailure: ProviderFailureKind? = null,
+)
+
+class WatchioEndpointManager(
+    private val source: WatchioEndpointConfigSource,
+    private val retryDelay: suspend (Long) -> Unit = { delay(it) },
+) {
     private val mutex = Mutex()
     @Volatile private var memoryConfig: WatchioEndpointConfig? = null
     private val _activeEndpoint = MutableStateFlow<WatchioEndpoint?>(null)
     val activeEndpoint: StateFlow<WatchioEndpoint?> = _activeEndpoint.asStateFlow()
     private val _activeEndpointOnline = MutableStateFlow<Boolean?>(null)
     val activeEndpointOnline: StateFlow<Boolean?> = _activeEndpointOnline.asStateFlow()
+    private val _health = MutableStateFlow(ProviderHealthState())
+    val health: StateFlow<ProviderHealthState> = _health.asStateFlow()
     private val _configuredEndpoints = MutableStateFlow<List<WatchioEndpoint>>(emptyList())
     val configuredEndpoints: StateFlow<List<WatchioEndpoint>> = _configuredEndpoints.asStateFlow()
 
@@ -102,18 +121,36 @@ class WatchioEndpointManager(private val source: WatchioEndpointConfigSource) {
         var lastFailure: Throwable? = null
         for (candidate in candidates) {
             try {
-                val result = attempt(candidate)
+                val result = attemptWithRetry(candidate, attempt)
                 source.saveLastWorking(candidate.url)
                 _activeEndpoint.value = candidate
                 _activeEndpointOnline.value = true
+                _health.value = ProviderHealthState(
+                    selectedEndpointId = candidate.id,
+                    connectivity = ProviderConnectivity.Connected,
+                    authentication = ProviderAuthentication.Verified,
+                    streaming = _health.value.streaming.takeIf { _health.value.selectedEndpointId == candidate.id }
+                        ?: ProviderStreaming.NotChecked,
+                )
                 return@withLock EndpointSelection(candidate, result)
             } catch (failure: EndpointAttemptFailure.Account) {
+                _health.value = ProviderHealthState(
+                    selectedEndpointId = candidate.id,
+                    connectivity = ProviderConnectivity.Connected,
+                    authentication = ProviderAuthentication.Rejected,
+                    lastFailure = ProviderFailureKind.Authentication,
+                )
                 throw failure
             } catch (failure: EndpointAttemptFailure.Unavailable) {
-                if (_activeEndpoint.value?.url == candidate.url) _activeEndpointOnline.value = false
                 lastFailure = failure.cause ?: failure
             }
         }
+        _activeEndpointOnline.value = false
+        _health.value = _health.value.copy(
+            selectedEndpointId = _activeEndpoint.value?.id,
+            connectivity = ProviderConnectivity.TemporarilyUnavailable,
+            lastFailure = classifyFailure(lastFailure),
+        )
         throw IllegalStateException("Watchio couldn't connect to the service. Please try again shortly.", lastFailure)
     }
 
@@ -127,6 +164,7 @@ class WatchioEndpointManager(private val source: WatchioEndpointConfigSource) {
         if (_activeEndpoint.value?.url !in memoryConfig!!.endpoints.map { it.url }) {
             _activeEndpoint.value = null
             _activeEndpointOnline.value = null
+            _health.value = ProviderHealthState()
         }
         candidatesUnlocked()
     }
@@ -135,13 +173,15 @@ class WatchioEndpointManager(private val source: WatchioEndpointConfigSource) {
         val normalized = url?.let(WatchioEndpointConfigParser::normalize)
         val restored = candidatesUnlocked().firstOrNull { it.url == normalized }
         _activeEndpoint.value = restored
-        _activeEndpointOnline.value = restored?.let { true }
+        _activeEndpointOnline.value = null
+        _health.value = ProviderHealthState(selectedEndpointId = restored?.id)
         restored
     }
 
     fun clearActive() {
         _activeEndpoint.value = null
         _activeEndpointOnline.value = null
+        _health.value = ProviderHealthState()
     }
 
     suspend fun <T> switch(current: String, attempt: suspend (WatchioEndpoint) -> T): EndpointSelection<T> = mutex.withLock {
@@ -150,10 +190,11 @@ class WatchioEndpointManager(private val source: WatchioEndpointConfigSource) {
         val normalizedCurrent = WatchioEndpointConfigParser.normalize(current)
         val currentIndex = configured.indexOfFirst { it.url == normalizedCurrent }.coerceAtLeast(0)
         val target = configured[(currentIndex + 1).mod(configured.size)]
-        val value = attempt(target)
+        val value = attemptWithRetry(target, attempt)
         source.saveLastWorking(target.url)
         _activeEndpoint.value = target
         _activeEndpointOnline.value = true
+        _health.value = ProviderHealthState(target.id, ProviderConnectivity.Connected, ProviderAuthentication.Verified)
         EndpointSelection(target, value)
     }
 
@@ -161,14 +202,29 @@ class WatchioEndpointManager(private val source: WatchioEndpointConfigSource) {
         val target = candidatesUnlocked().firstOrNull { it.id.equals(endpointId, ignoreCase = true) }
             ?: throw IllegalArgumentException("Server is no longer available.")
         val value = try {
-            attempt(target)
+            attemptWithRetry(target, attempt)
         } catch (failure: EndpointAttemptFailure.Unavailable) {
-            if (_activeEndpoint.value?.url == target.url) _activeEndpointOnline.value = false
+            if (_activeEndpoint.value?.url == target.url) {
+                _activeEndpointOnline.value = false
+                _health.value = _health.value.copy(
+                    connectivity = ProviderConnectivity.TemporarilyUnavailable,
+                    lastFailure = classifyFailure(failure.cause ?: failure),
+                )
+            }
+            throw failure
+        } catch (failure: EndpointAttemptFailure.Account) {
+            _health.value = ProviderHealthState(
+                target.id,
+                ProviderConnectivity.Connected,
+                ProviderAuthentication.Rejected,
+                lastFailure = ProviderFailureKind.Authentication,
+            )
             throw failure
         }
         source.saveLastWorking(target.url)
         _activeEndpoint.value = target
         _activeEndpointOnline.value = true
+        _health.value = ProviderHealthState(target.id, ProviderConnectivity.Connected, ProviderAuthentication.Verified)
         EndpointSelection(target, value)
     }
 
@@ -196,6 +252,49 @@ class WatchioEndpointManager(private val source: WatchioEndpointConfigSource) {
         source.saveLastWorking(endpoint.url)
         _activeEndpoint.value = endpoint
         _activeEndpointOnline.value = true
+        _health.value = ProviderHealthState(
+            selectedEndpointId = endpoint.id,
+            connectivity = ProviderConnectivity.Connected,
+            authentication = ProviderAuthentication.Verified,
+        )
+    }
+
+    fun reportStreamingAvailable() {
+        if (_activeEndpoint.value == null) return
+        _health.value = _health.value.copy(streaming = ProviderStreaming.Available, lastFailure = null)
+    }
+
+    fun reportStreamingFailure(failure: Throwable) {
+        if (_activeEndpoint.value == null) return
+        _health.value = _health.value.copy(
+            streaming = ProviderStreaming.TemporarilyUnavailable,
+            lastFailure = classifyFailure(failure, playback = true),
+        )
+    }
+
+    private suspend fun <T> attemptWithRetry(
+        endpoint: WatchioEndpoint,
+        attempt: suspend (WatchioEndpoint) -> T,
+    ): T {
+        var lastUnavailable: EndpointAttemptFailure.Unavailable? = null
+        repeat(CONNECTION_ATTEMPTS) { index ->
+            try {
+                return attempt(endpoint)
+            } catch (failure: EndpointAttemptFailure.Account) {
+                throw failure
+            } catch (failure: EndpointAttemptFailure.Unavailable) {
+                lastUnavailable = failure
+                if (index < CONNECTION_ATTEMPTS - 1) retryDelay(RETRY_BACKOFF_MS * (index + 1))
+            }
+        }
+        throw checkNotNull(lastUnavailable)
+    }
+
+    private fun classifyFailure(failure: Throwable?, playback: Boolean = false): ProviderFailureKind = when {
+        playback -> ProviderFailureKind.Playback
+        failure is java.net.SocketTimeoutException -> ProviderFailureKind.Timeout
+        failure is retrofit2.HttpException -> ProviderFailureKind.Http
+        else -> ProviderFailureKind.Network
     }
 
     private suspend fun candidatesUnlocked(preferred: String? = null): List<WatchioEndpoint> {
@@ -220,6 +319,11 @@ class WatchioEndpointManager(private val source: WatchioEndpointConfigSource) {
         val lastWorking = source.lastWorking()?.let(WatchioEndpointConfigParser::normalize)
         if (lastWorking != null && config.endpoints.none { it.url == lastWorking }) source.clearLastWorking()
         return config
+    }
+
+    private companion object {
+        const val CONNECTION_ATTEMPTS = 2
+        const val RETRY_BACKOFF_MS = 250L
     }
 }
 

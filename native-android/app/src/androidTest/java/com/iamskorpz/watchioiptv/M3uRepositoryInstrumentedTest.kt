@@ -119,6 +119,20 @@ class M3uRepositoryInstrumentedTest {
         assertEquals(50_000, database.m3uItemDao().countByProviderAndType(providerId, ContentType.Live.persisted))
     }
 
+    @Test
+    fun emptyPlaylistRefreshIsRejectedWhenCachedCatalogExists() = runBlocking {
+        server.enqueue(playlistResponse(samplePlaylist()))
+        val providerId = repository.addUrlProvider(M3uUrlInput("M3U URL", server.url("/playlist.m3u").toString()))
+        assertEquals(1, repository.counts(providerId).liveCount)
+
+        server.enqueue(playlistResponse("#EXTM3U\n"))
+        val emptyRefresh = runCatching { repository.refresh(providerId) }
+        assertTrue(emptyRefresh.isFailure)
+        assertEquals(1, repository.counts(providerId).liveCount)
+        assertEquals(1, repository.counts(providerId).movieCount)
+        assertEquals(1, repository.counts(providerId).seriesCount)
+    }
+
     private fun samplePlaylist(
         urlSuffix: String = "one.ts",
         displayName: String = "Live One",

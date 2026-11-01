@@ -1,5 +1,74 @@
 # Watchio Agent Handoff
 
+## 2026-10-20 - Offline Downloads library redesign and offline metadata (uncommitted)
+
+- Redesigned Downloads as a local media library using the same `WatchioPageHeader`, responsive adaptive poster grid, themed cards, focus styling, and category treatment as Movies and Series. The top-level categories are Movies and TV Shows; active and queued items remain visible with progress overlays.
+- Movie posters open a fully local details view with saved poster/backdrop, title, synopsis, year, genre, rating, runtime, status, Play/Resume, pause/resume/retry/cancel, and confirmed Delete Download actions.
+- TV Shows now appear once per series. Series details show locally stored metadata and seasons; season details show only downloaded or queued episodes in episode order with local thumbnails, descriptions, progress/status, playback, individual deletion, and confirmed whole-season deletion.
+- Expanded offline metadata additively in Room v10. `MIGRATION_9_10` adds nullable local backdrop/thumbnail paths and synopsis/year/genre/rating/runtime/episode-title fields without altering existing media rows. Exported schema `10.json` and added migration coverage. No destructive migration was introduced.
+- Movie and episode enqueue now persists all available non-sensitive metadata. Poster, backdrop, and episode-thumbnail bytes are copied into app-private `offline-media/artwork/`; only local paths are stored in Room. Remote source URLs, provider credentials, authentication headers, and video URLs remain absent from ordinary metadata. Artwork is deleted with its owning download.
+- Added best-effort metadata/artwork backfill for existing downloads when their cached Movie or Series details are next available. Backfill never redownloads video media, and Downloads details never query providers or require internet.
+- Download engine, Media3 queue concurrency, progress polling, source resolution, provider status, streaming, cache-only playback, Live TV, Sports, TV Guide, and Automatic Content Sync behavior remain unchanged.
+- Focused `DownloadsViewModelTest` and UITEST Compose compilation passed. Full JVM rerun passed **2,091/2,091** (Debug 521, Local 521, Release 521, UITEST 528). Initial full run exposed one pre-existing timing-sensitive `CatalogRefreshPhase1Test.concurrentRefreshDeduplicationPreventsDuplicateXtreamRequests` failure (`expected 1, was 2`); isolated rerun and complete clean rerun passed without code changes to that behavior.
+- `lintDebug` passed with zero errors and 32 existing warnings. `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` passed. Room v9-to-v10 migration test and redesigned Compose tests compiled but were not executed because this task did not authorize physical-device access.
+- Physical phone/TV layout, D-pad traversal, real metadata backfill, migration, and offline detail/playback acceptance remain pending. No device was accessed, installed, uninstalled, launched, or data-cleared during this redesign task.
+- Branch/HEAD remain `codex/dev-rescue-bridge` / `ce075929c8b67a71c404bd86ee69437161224532`. Protected updater manifest remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Nothing staged, committed, pushed, merged, released, reset, cleaned, or rebased.
+
+## 2026-10-20 - Offline Downloads V1 TV Shows and seasons (uncommitted)
+
+- Extended existing movie download engine to episode downloads for Xtream and M3U series. Episode sources resolve transiently through `SeriesRepository`; credential-bearing URLs/headers remain absent from Room, notifications, filenames, and persisted Media3 requests.
+- Added per-episode Download, progress/status, pause, resume, retry, and cancel controls without changing episode Play behavior or ordering. Added confirmed `Download Season`; each eligible episode is queued independently and duplicate records are skipped by existing stable provider/content identity.
+- Added season summaries and provider/show/season-scoped pause, resume, cancel-remaining, and confirmed delete-season controls in Downloads. Individual episode Play/Delete controls remain available. Media3 remains capped by existing `MAX_PARALLEL_DOWNLOADS`.
+- Downloads library now separates Movies and TV Shows, retains individual episode rows, and shows show title, season/episode numbers, progress, status, and season aggregate counts.
+- Room upgraded additively from v8 to v9. `MIGRATION_8_9` adds `contentType`, `showId`, `showTitle`, `seasonNumber`, and `episodeNumber`; old movie rows default to `contentType='Movie'`. No provider foreign key or cascade. Exported `9.json`; migration instrumentation added but not executed because physical-device access was prohibited for this phase.
+- Completed episodes use existing cache-only offline playback path; no remote fallback. Catalogue refresh/provider deletion cannot cascade-delete offline records. Live TV download/recording remains absent.
+- Formats unchanged: progressive MP4/M4V/compatible MKV only; HLS, DASH, DRM, and Live TV remain blocked.
+- Validation: full JVM **2,087/2,087 PASS**; `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS. No physical device accessed; TV/phone/Fire TV focus and real episode-transfer acceptance remain pending.
+- Branch/HEAD remain `codex/dev-rescue-bridge` / `ce075929c8b67a71c404bd86ee69437161224532`. Protected updater manifest remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Nothing staged, committed, pushed, merged, released, uninstalled, or data-cleared.
+
+## 2026-10-20 - Offline Downloads V1 Phase 3 Sony-TV validation (uncommitted)
+
+- Continued on `codex/dev-rescue-bridge` at `ce075929c8b67a71c404bd86ee69437161224532`. Samsung S22 was explicitly excluded and untouched; only authorised Sony `BRAVIA 4K VH22` at `192.168.1.49:5555` was accessed.
+- Confirmed the Phase 2 UITEST fixture authorised UI eligibility only; it supplied no downloadable media. Added an exact UITEST-source resolver for the existing authorised fixture. Debug, Local, and Release builds retain the production repository resolver and deny-by-default eligibility policy.
+- Used Blender's public sample `Cycles_3.0_viewport_interactivity.mp4` as controlled non-DRM media: `23,367,080` bytes, SHA-256 `312B0B0853B673EDF729A9D33DF51C91B1881B3E1ED66F1C7B7C225CDB84F027`. Served outside the repository by a temporary localhost HTTP server with byte-range support and throttling; Sony reached it only through temporary ADB reverse. TV network settings were not changed. Server and reverse mapping were removed after testing.
+- Found and fixed a real progress defect: Media3 change callbacks did not continuously persist transfer progress, leaving Room/UI near `8,192` bytes until completion. `OfflineMovieDownloadRepository` now polls active Media3 downloads every `500 ms` and persists only changing active progress. API requests, matching, and playback behavior remain unchanged.
+- Decoupled download source resolution from `MoviesRepository` behind `OfflineDownloadSourceResolver`, enabling the exact UITEST fixture without allowing blanket production downloads. Media3 persisted requests still use opaque `watchio-offline` URIs and empty request data; source URL and headers remain transient.
+- Added sequential Sony end-to-end instrumentation covering actual transfer/progress, pause, process restart, unreachable-source failure, range resume/retry, duplicate prevention, completion, cache-only playback, seek, offline app restart reconciliation, delete/storage reclamation, and partial-download cancellation. Final result: **6/6 PASS**.
+- Offline proof: fixture server was stopped and ADB reverse removed before a fresh instrumentation process created cache-only ExoPlayer playback. Player reached `STATE_READY`, seeked to midpoint, advanced position, and reported no error. No upstream/network fallback exists for offline media.
+- Room v7 to v8 migration: **PASS** on Sony. Downloads Compose/UI actions: **2/2 PASS** after correcting a test-only host defect by replacing hostless `createComposeRule` with explicit `ComponentActivity`. Home Downloads navigation/Back: **1/1 PASS**. Movies repository/player regressions: **9/9 PASS**. Final focused non-transfer connected set: **13/13 PASS**.
+- Full validation: JVM **2,083/2,083 PASS**; `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS.
+- Controlled physical storage exhaustion used repository tests only; physical storage was not filled. Provider removal/catalogue refresh independence are covered architecturally and by automated tests; no real provider account was removed. Production IPTV content and credentials were not used.
+- Remaining limitation: S22/phone acceptance was excluded by user instruction. Movie-details-to-download initiation was validated by UI/unit wiring plus Sony engine tests, not by manually selecting a production catalogue movie. Release consideration is reasonable after phone acceptance if phone support is required.
+- Protected updater manifest remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Nothing staged, committed, pushed, merged, released, uninstalled, or data-cleared. Existing provider data and recovery evidence remain preserved.
+
+## 2026-10-20 - Offline Downloads V1 Phase 2 (uncommitted)
+
+- Continued on `codex/dev-rescue-bridge` at `ce075929c8b67a71c404bd86ee69437161224532`; preserved Phase 1, Automatic Content Sync V1, Sports V6.5.5, recovery assets, existing app data, and untracked evidence.
+- Replaced the Home `Coming Soon` tile in place with `Downloads`, retaining its dimensions, navigation position, touch action, D-pad behavior, and Back restoration.
+- Added a responsive Downloads library with active/completed sections, poster/title/size/status/progress, pause/resume/retry/cancel, confirmed delete, completed-only Play, and clear empty/error states.
+- Added Movie Details download status/action without removing Play, Trailer, or Favourite. Actions wrap on narrow layouts. Duplicate requests are rejected.
+- Production eligibility remains deny-by-default. Only the exact isolated UITEST fixture (`watchio-uitest-download-provider` / `watchio-uitest-authorized-movie`) is authorised for UI validation. Format support remains authorised non-DRM progressive MP4/M4V and compatible MKV; HLS/DASH remain unsupported.
+- Completed offline items use the existing fullscreen Media3 player through cache-only playback. There is no remote fallback and no catalogue/provider dependency. Credential-bearing URLs remain transient and are not persisted or displayed.
+- Fixed a Phase 2 Sony-TV layout defect found during physical validation: the unconstrained Back button consumed the header row width. The Back control is now bounded and the Downloads header receives remaining width.
+- Fixed the recurring `CatalogAutoRefreshPhase2Test` full-suite coroutine cleanup failure by giving DataStore each test's managed `backgroundScope`; production sync behavior is unchanged.
+- Validation: focused download/player JVM tests PASS; full JVM **2,083/2,083 PASS**; `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS.
+- Authorised Sony `BRAVIA 4K VH22` only: in-place debug and isolated UITEST replacement installs PASS with data preserved. Downloads/Home/Room migration tests **4/4 PASS**; Movies repository/player tests **9/9 PASS**; focused connected total **13/13 PASS**. Home Downloads tile, responsive empty library, D-pad/OK Back, and Home restoration were physically observed. Evidence is under `evidence/offline-downloads-phase2-tv-*.png` and remains untracked.
+- Gradle `connectedUitestAndroidTest` could not launch because the Windows UTP device profile writer reported `Invalid file path`; direct AndroidJUnitRunner testing was used. No real media transfer or offline movie playback occurred, so end-to-end download/offline playback remains **NOT VERIFIED** for Phase 3. Samsung S22 was offline and untouched.
+- Protected updater manifest remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Nothing staged, committed, pushed, merged, released, uninstalled, or data-cleared.
+
+## 2026-10-19 - Offline Downloads V1 Phase 1 (uncommitted)
+
+- Baseline: `codex/dev-rescue-bridge` at `ce075929c8b67a71c404bd86ee69437161224532`. Existing Automatic Content Sync V1 work, Sports V6.5.5, recovery assets, and untracked evidence preserved.
+- Added persistent Media3 `DownloadManager`/`DownloadService` backed by `SimpleCache` under `context.noBackupFilesDir/offline-media/`. Queue supports pause, resume, retry, cancel, removal, restart recovery, and Room/Media3 index reconciliation.
+- Added deny-by-default eligibility policy. Only explicitly authorised, non-DRM progressive MP4/M4V and MKV content qualifies. HLS/DASH remain unsupported.
+- Sensitive provider URLs and headers are resolved transiently by `ResolvingDataSource`. Room, `DownloadRequest`, cache keys, filenames, notifications, and logs contain only opaque download IDs and non-secret metadata.
+- Added storage reserve checks (minimum 128 MiB or 5% of total storage), unknown-size allowance, and safe storage-exhaustion state mapping.
+- Upgraded Room v7 to v8 with additive `MIGRATION_7_8`; added independent `offline_downloads` metadata table with no provider foreign key or cascade. Exported schema `8.json`.
+- Extended shared Media3 player source model for unchanged remote playback, local-file playback, and cache-only offline playback. Completed downloads can play without provider/catalogue lookup.
+- Added `OfflineDownloadPolicyTest`, `PlaybackMediaSourceTest`, and `OfflineDownloadsMigrationTest`. Migration test compiles but was not executed because physical-device installation/testing was prohibited.
+- Validation: focused download/player JVM tests PASS; full JVM produced 2,075/2,075 PASS during initial combined run. Later full reruns exposed one pre-existing/flaky `CatalogAutoRefreshPhase2Test.automaticContentRefreshSettingDefaultOnAndDisablesAutoRefreshWhenOffPreservingManualAndEpg` coroutine-cleanup failure in Local and UITEST variants; both isolated reruns PASS. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check` PASS.
+- Protected updater manifest SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. No device access, staging, commit, push, merge, branch change, release, download execution, uninstall, or data clearing.
+
 ## Latest Authoritative State - Sports V6.5.5
 
 This section is current. Older V6.5.2-V6.5.4 defects and investigations below are historical engineering records. They are resolved or superseded where stated by the V6.5.5 validation evidence.
@@ -21,6 +90,46 @@ This section is current. Older V6.5.2-V6.5.4 defects and investigations below ar
 | BRAVIA | **NOT ACCESSED** |
 
 The 15/15 physical S22 navigation acceptance belongs to the validated navigation implementation. The later APK containing Compose-test corrections was not independently subjected to all 15 physical navigation trials. The approved Git implementation tree matches the validated integration snapshot. No new physical testing is claimed by this documentation update.
+
+## 2026-10-19 - Automatic Content Sync V1 — Phase 3 (uncommitted)
+
+- Baseline verified on `codex/dev-rescue-bridge` at `ce075929c8b67a71c404bd86ee69437161224532` (`origin/dev` at `ce075929c8b67a71c404bd86ee69437161224532`, `origin/main` untouched at `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`). All Phase 1 and Phase 2 uncommitted changes, all 738 original untracked evidence files, recovery references/backups, and protected updater manifest `native-android/update/update.json` (`AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`) were preserved.
+- Implemented silent catalogue updates across Live TV, Movies, Series, and TV Guide when background sync discovers new content (`CatalogRefreshCoordinator.updates`):
+  - `LiveTvViewModel`: Added `refreshSilently()`, preserving `selectedCategory`, `selectedChannel`, `browsedChannel`, search query, favorites, and filters without showing loading screens or invoking `playerManager.load()`. Active playback is preserved continuously even if the playing channel is removed from the updated provider snapshot.
+  - `MoviesViewModel`: Observes `ContentType.Movie` events. Added `refreshSilently()`, preserving category selection, search queries, filters, pagination depth, and open details modal (`detailsState.details`) without triggering loading overlays or interrupting movie playback. Replaced hardcoded `Dispatchers.Default` with injectable `defaultDispatcher`, and updated `MoviesRepository` to use injectable `ioDispatcher`.
+  - `SeriesViewModel`: Observes `ContentType.Series` events. Added `refreshSilently()`, preserving category selection, search, pagination depth, open series details modal, and selected season/episode where still valid. Preserves detail-cache without unnecessary full refetches. Replaced hardcoded `Dispatchers.Default` with injectable `defaultDispatcher`, and updated `SeriesRepository` to use injectable `ioDispatcher`.
+  - `TvGuideViewModel`: Observes `ContentType.Live` events. Added `refreshSilently()`, reloading channels and programs while preserving selected category, channel, and preview playback.
+  - `WatchioNativeApp.kt`: Wired `container.catalogRefreshCoordinator` into `LiveTvViewModel`, `MoviesViewModel`, `SeriesViewModel`, and `TvGuideViewModel`.
+  - Sports & TV Guide protection: Preserved all Sports V6.5.5 navigation and playback protections. Invalidation of Sports channel matching cache is handled via `SportsMatchCache` / `SportsRepository` invalidations on committed updates.
+  - Provider switching safety: Handled in `refreshSilently()` — updates are only applied if the event provider ID matches the active provider ID. Stale events from previously selected providers or out-of-order reloads are ignored.
+- Compose list/grid stability: Ensured stable item keys are retained in Live TV, Movies, Series, and TV Guide, preserving D-pad focus, scroll positions, search query inputs, and playback states without focus jumps.
+- Validation: Added targeted test suite `CatalogSilentUiPhase3Test` (7/7 PASS: Live TV channel updates without playback interruption, playing channel preservation if removed from catalogue, Movies category/pagination preservation, Movies details modal preservation, Series category/details preservation, unchanged catalogue no-op emission, and stale provider switching isolation).
+- Full Windows JVM suite **2,051/2,051 PASS** (`511` Debug + `511` Local + `511` Release + `518` UITEST; `0` failures, `0` errors); `lintDebug` **PASS** (`0` errors, `29` existing warnings); `assembleDebug`, `assembleLocal`, `assembleUitest`, and `assembleUitestAndroidTest` **PASS**.
+- Room schema remains v7 with `MIGRATION_6_7` untouched; no physical device accessed; nothing staged, committed, pushed, or merged.
+
+## 2026-10-19 - Automatic Content Sync V1 — Phase 2 (uncommitted)
+
+- Baseline verified on `codex/dev-rescue-bridge` at `ce075929c8b67a71c404bd86ee69437161224532` (`origin/dev` at `ce075929c8b67a71c404bd86ee69437161224532`, `origin/main` untouched at `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`). All Phase 1 uncommitted changes, all 738 original untracked evidence files, recovery references/backups, and protected updater manifest `native-android/update/update.json` (`AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`) were preserved.
+- Implemented `CatalogAutoRefreshScheduler` (`data/refresh/CatalogAutoRefreshScheduler.kt`) using lifecycle-aware Kotlin coroutines and Phase 1 `CatalogRefreshCoordinator`:
+  - Waits `3_000L` ms after Home becomes ready (`onHomeReady`) before checking the active provider while displaying cached content immediately without blocking overlays or full-screen spinners.
+  - Evaluates section staleness from successful refresh timestamps (`observeSectionRefreshEpochMs` / `lastRefreshAtEpochMs`) with defaults: Live TV `2 hours`, Movies `6 hours`, Series `6 hours`.
+  - Runs lightweight staleness checks every `15 minutes` while foregrounded (`FOREGROUND_CHECK_INTERVAL_MS`), suspends periodic checks when backgrounded (`onAppBackgrounded`), checks on app resume (`onAppForegrounded`) with a `15-minute` resume attempt cooldown (`RESUME_ATTEMPT_COOLDOWN_MS`), prevents duplicate startup jobs on activity recreation, and checks newly selected providers on provider switch while ignoring inactive providers.
+  - Consolidates M3U automatic refresh into a single full-provider download and parse pass per refresh cycle.
+  - Defers automatic catalogue refresh whenever playback is active (`isActivePlaybackForRefreshDeferral` and `isPlaybackRouteForAutoRefreshDeferral`: Live TV, embedded Live TV, fullscreen content, movies, series episodes, or Sports streams) and re-evaluates deferred refresh when playback ends without interrupting ExoPlayer or navigation.
+  - Skips automatic requests when offline (`AndroidNetworkConnectivityChecker`), tracks failed attempts separately (`SectionFailureState`) without advancing successful refresh timestamps or clearing cached content, and enforces bounded exponential retry backoff (`60s` to `15m`) plus HTTP 429 `Retry-After` (`ProviderRateLimitException` / `HttpException`, up to `60m`).
+- Added persisted `Automatic Content Refresh` setting (`ON` / `OFF`, default `ON` / `true`) in `SettingsRepository`, `WatchioSettingsRepository` (`automatic_content_refresh_enabled`), `SettingsViewModel`, and `EpgSettingsContent` (`WatchioNativeApp.kt`), disabling automatic catalogue refresh when `OFF` while preserving manual catalogue refresh and existing EPG refresh functionality.
+- Validation: `CatalogAutoRefreshPhase2Test` 9/9 PASS and `CatalogRefreshPhase1Test` 11/11 PASS; full Windows JVM suite **2,023/2,023 PASS** (`504` Debug + `504` Local + `504` Release + `511` UITEST; `0` failures, `0` errors); `lintDebug` **PASS** (`0` errors, `29` existing warnings); `assembleDebug`, `assembleLocal`, `assembleUitest`, and `assembleUitestAndroidTest` **PASS**.
+- Phase 3 silent UI list updates not enabled yet; no playback navigation changes; Room schema remains v7; no physical device accessed; nothing staged, committed, pushed, or merged.
+
+## 2026-10-19 - Automatic Content Sync V1 — Phase 1 (uncommitted)
+
+- Baseline verified on `codex/dev-rescue-bridge` at `ce075929c8b67a71c404bd86ee69437161224532` (`origin/dev` at `ce075929c8b67a71c404bd86ee69437161224532`, `origin/main` untouched at `9fb917427c4fe6420fe96c9a2fbff94fdfeededf`). `git fsck --full --no-reflogs` reported only the eight previously documented dangling objects. All 738 untracked evidence files and recovery refs/backups were preserved; protected updater manifest `native-android/update/update.json` remained `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Implemented `CatalogRefreshCoordinator` (`data/refresh/CatalogRefreshCoordinator.kt`) with per-provider concurrency protection, section/full-provider lock coordination, manual/automatic request coalescing (`RefreshTrigger`), structured `CatalogRefreshResult` (`Success` with `RefreshStatus.Updated`/`RefreshStatus.Unchanged`, `Skipped`, `Failure`), `getOrThrow()` manual compatibility, and `updates: SharedFlow<CatalogUpdateEvent>` for silent catalogue update notifications.
+- Consolidated M3U section and provider refreshes through `CatalogRefreshCoordinator` into a single download and parse pass.
+- Fixed `SeriesDao.replaceSeriesWithDiff` (`core/database/CatalogDaos.kt`) to diff/merge retained parent `SeriesEntity` rows without deleting/reinserting unchanged series or cascading away cached `seasons`/`episodes`, while chunking obsolete `DELETE` and changed `UPSERT` batches by `SQLITE_MAX_BIND_PARAMS = 500`, preserving detail-enriched fields when detail cache is fresh, and invalidating detail freshness (`updatedAtEpochMs = 0L`) when Xtream `last_modified` advances. Room schema remains v7 with `MIGRATION_6_7` untouched.
+- Hardened `XtreamRepository`, `M3uRepository`, `M3uParser`, and `SeriesRepository` against failed, malformed, and suspicious empty catalogue responses when cached content exists, while allowing legitimate empty initial catalogues, keeping refresh timestamps tied to committed refreshes, preserving login UI state during background refreshes, and invalidating `SearchRepository` and `SportsRepository`/`SportsMatchCache` per-provider caches on committed updates.
+- Validation: `CatalogRefreshPhase1Test` 11/11 PASS; full Windows JVM suite **1,987/1,987 PASS** (`495` Debug + `495` Local + `495` Release + `502` UITEST; `0` failures, `0` errors); `lintDebug` **PASS** (`0` errors, `29` existing warnings); `assembleDebug`, `assembleLocal`, `assembleUitest`, and `assembleUitestAndroidTest` **PASS**.
+- No automatic scheduler enabled yet; no playback or navigation UI changes; no physical device accessed; nothing staged, committed, pushed, or merged.
 
 ## 2026-10-17 - Sports V6.5.3 S22 physical validation (FAIL)
 
@@ -2128,3 +2237,90 @@ Final pre-commit validation results:
 - Focused physical regression: Sports fixtures loaded through 24 October; competition D-pad traversal remained responsive; focused refresh activated through remote OK and remained on Sports; EPL team-channel group and chooser remained accessible; Live TV opened; no crash or ANR occurred. No unavailable live fixture was present for a real disabled-action physical trial; disabled behavior is covered by the passing connected test.
 - The full 15-trial Back suite was not repeated on this new APK. The frozen navigation code is unchanged, the 10 navigation instrumentation tests passed inside the 45-test batch, and no unexpected Home navigation appeared during focused checks. Do not describe the new APK as independently completing 15/15 physical Back acceptance.
 - Protected manifest remains SHA-256 `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Room v7, Media3, providers, credentials, sessions, playlists, MAIN, signing, versions, and updater channels remain untouched. Nothing was staged, committed, pushed, released, or deployed.
+# Provider connectivity and single download queue (2026-10-30)
+
+- Implemented one shared managed-provider health model separating selected endpoint, endpoint connectivity, authentication, streaming availability, and privacy-safe failure class.
+- Restoring a selected endpoint now reports `Not checked`; it no longer claims an unverified endpoint is online.
+- Managed endpoint connection attempts now use two bounded attempts with 250 ms backoff before failover. Authentication rejection still fails immediately and never rotates endpoints.
+- HTTP 401/403 remains an account rejection. Other HTTP failures are temporary endpoint failures, preventing false inactive-account states.
+- Home and Provider Management now consume the same health source. Labels distinguish `selected`, `Connected`, `Connection issue`, `Verified`, `Rejected`, `Available`, `Playback issue`, and `Not checked`.
+- Remote Media3 first-frame/error callbacks update streaming health without logging URLs, headers, credentials, or provider data. Offline/local playback does not affect provider health.
+- Media3 download concurrency changed from two to one globally. Existing singleton DownloadManager, FIFO queue, persistent index, pause/resume/retry/cancel/delete, duplicate prevention, movie queue, episode queue, and season queue remain intact.
+- Root-cause note: simultaneous downloads could compete for provider/network capacity, but no physical/provider proof was authorised in this pass. The single queue removes app-created parallel transfers; it does not claim to fix provider-side stream limits.
+- Focused endpoint/download policy tests: 45/45 PASS.
+- Full JVM XML result: 2,107 tests, 0 failures, 0 errors, 0 skipped.
+- `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`: PASS.
+- `git diff --check`: PASS.
+- Protected `native-android/update/update.json` SHA-256: `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Original 768 untracked files preserved. Zero staged files. No commit, push, release, branch change, app-data change, or device access.
+# S22 build/install request blocked (2026-10-30)
+
+- Requested target: Samsung Galaxy S22 `SM-S901B`, package `com.iamskorpz.watchioiptv.debug`.
+- `adb devices -l` showed only `emulator-5554 offline`; no authorised/online S22 was visible.
+- Required stop condition triggered before build. No APK built, inspected, installed, or launched in this pass.
+- No device was accessed. No app data, accounts, downloads, provider settings, or network state changed.
+- Branch/HEAD remained `codex/dev-rescue-bridge` / `ce075929c8b67a71c404bd86ee69437161224532`; zero staged files and all 768 untracked files remained.
+- Protected updater manifest remained `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- No commit, push, merge, release, uninstall, or data clear.
+# S22 provider/download build smoke validation (2026-10-30)
+
+- Verified only authorised Samsung Galaxy S22, model `SM-S901B`; offline emulator was ignored.
+- Built `native-android/app/build/outputs/apk/debug/app-debug.apk` successfully.
+- APK: `com.iamskorpz.watchioiptv.debug`, `0.1.7-debug`, version code `20`, SHA-256 `CE0DAB0479951D6B81F3A7D25F33102B2104DE73F2B3A53F0951C577EAA360B6`.
+- In-place `adb install -r` passed. No uninstall, downgrade flag, or data clear. `firstInstallTime=2026-09-14 23:02:57` remained unchanged.
+- Cold launch passed in 2.277 seconds. Room v10 opened without migration/identity crash. Logcat showed no Watchio fatal exception or ANR.
+- Existing app-private state remained present after install: five database files and 130 offline-media files. No download was started, paused, cancelled, retried, or deleted.
+- Non-destructive UI smoke checks passed for Home, Downloads, Account Information, and Provider Management. No provider setting or account was changed. App left installed and open on Home for manual testing.
+- Branch/HEAD remained `codex/dev-rescue-bridge` / `ce075929c8b67a71c404bd86ee69437161224532`; zero staged files and all 768 untracked files remained.
+- Protected updater manifest remained `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- No commit, push, merge, release, other-device access, uninstall, or data clear.
+
+# Downloads deletion navigation fix (2026-10-30)
+
+- Fixed the deleted-details dead end. Downloads navigation now waits until the repository/Room stream confirms removal before leaving movie, episode, season, or TV-show details.
+- Successful movie deletion returns to Downloads > Movies and restores focus to the nearest remaining poster. The last movie uses the normal redesigned empty-library state.
+- Episode deletion stays in the season when episodes remain; removing the last episode returns to the show when another season remains, otherwise to Downloads > TV Shows.
+- Season deletion returns to show details when another downloaded season remains; deleting the last season or whole show returns to Downloads > TV Shows.
+- Stale movie/show/season detail destinations self-correct only after a settled download snapshot; the full-screen "no longer available" state is no longer the post-delete path.
+- Synchronous deletion dispatch failures keep the current details screen and show a useful error dialog.
+- Added TV-show deletion confirmation, nearest-item focus restoration, and centered icon/title/description empty states while retaining category controls.
+- Added regression coverage for movie deletion, last movie, episode deletion, last episode/season, whole-show deletion, failure handling, stale routes, empty-state copy, and restored poster focus.
+- Focused `DownloadsViewModelTest` and UITEST Android-test compilation: PASS. Full JVM: 2,135 tests, 0 failures, 0 errors, 0 skipped. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
+- No physical-device validation was authorised or performed. Phone/tablet/TV physical deletion acceptance remains pending.
+- Protected `native-android/update/update.json` SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`.
+- Existing dirty work and all untracked evidence were preserved. Nothing was staged, committed, pushed, merged, released, installed, uninstalled, or cleared.
+
+# S22 Downloads deletion-fix build and safe validation (2026-11-01)
+
+- Verified only authorised Samsung Galaxy S22: model `SM-S901B`, hardware serial `R5CT83DSMZW`, wireless ADB serial `adb-R5CT83DSMZW-Pw1ptV._adb-tls-connect._tcp`. Sony and offline emulator were not accessed.
+- Built current dirty-worktree DEV APK successfully from the source containing the Downloads deletion-navigation fix. APK: `native-android/app/build/outputs/apk/debug/app-debug.apk`, package `com.iamskorpz.watchioiptv.debug`, `0.1.7-debug`, version code `20`, 32,952,674 bytes, SHA-256 `228445464B9125388E960CD39E6A031E1A05FB45DF2CE155D231C28BAA1BB5ED`.
+- In-place `adb install -r` passed. No uninstall, downgrade flag, data clear, or destructive recovery. `firstInstallTime=2026-09-14 23:02:57` remained unchanged.
+- Cold launch passed in 1.516 seconds. Home and Downloads opened. Movies/TV Shows categories and improved Movies empty state were visible. Existing downloaded TV-show metadata/details opened; saved artwork was unavailable for that item, so the intended placeholder rendered. Back returned to Downloads, then Home. App was left open on Downloads for manual testing.
+- Existing offline-media file count remained exactly 991 before and after validation. No download was deleted, cancelled, paused, resumed, retried, or started. Provider credentials/settings were untouched.
+- Focused `DownloadsViewModelTest`: 10/10 PASS. `git diff --check`: PASS. Runtime log check: 0 fatal exceptions, 0 ANRs, 0 Room migration/identity errors.
+- Destructive deletion acceptance remains manual/PENDING: movie, episode, last episode/season, whole show, stale details, failure path, and post-delete focus restoration were not physically triggered. Their automated coverage remains PASS.
+- Protected `native-android/update/update.json` SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Branch/HEAD remain `codex/dev-rescue-bridge` / `ce075929c8b67a71c404bd86ee69437161224532`; zero staged files and all 768 untracked files remain. No commit, push, merge, release, branch change, reset, clean, stash, or rebase.
+
+# Critical season-selection crash fix and S22 validation (2026-11-01)
+
+- Captured an actual Watchio fatal exception on the authorised Samsung S22: `java.lang.IllegalStateException: Unable to load series details.` at `SeriesRepository.loadXtreamDetails(SeriesRepository.kt:441)`, caused by `retrofit2.HttpException: HTTP 451 Unavailable For Legal Reasons`. The exception escaped from `SeriesViewModel.refreshDetails()` on `Dispatchers.Main.immediate`.
+- Proven race: the series route sets catalog details, then its `ON_RESUME` observer can invoke `refreshDetails()` while initial loading is still active. Initial loading already caught provider failures; resume refresh did not. The failure was therefore able to terminate Watchio instead of retaining cached details.
+- Narrow fix adds the missing refresh error boundary. Failed refresh now keeps existing catalog/cached/offline details, stops loading, and exposes `Unable to refresh episodes from this provider.` Successful refresh clears the error and preserves selected season, tab, automatic-resume state, and episode-download metadata.
+- Added regression coverage for refresh failure containment and cached-detail preservation. Expanded Downloads coverage for a single-episode season with missing title, description, poster, backdrop, and thumbnail metadata; destination, episode ordering, placeholder-safe metadata, and Back navigation are verified. Existing tests already cover multiple episodes, stale/deleted season routes, last episode/season deletion, and safe library fallback.
+- Focused regression run: 12/12 PASS. Full JVM: Debug 534/534, Local 534/534, Release 534/534, UITEST 541/541; total 2,143 executions, zero failures/errors/skips. `lintDebug`, `assembleDebug`, `assembleLocal`, `assembleUitest`, `assembleUitestAndroidTest`, and `git diff --check`: PASS.
+- Final DEV APK: package `com.iamskorpz.watchioiptv.debug`, `0.1.7-debug`, version code 20, SHA-256 `C94D9B6D6701E88961376AB36D9AC44EFAFBFDFD289E2302B96AA7A5B86A8D4D`.
+- S22 replacement install passed with `adb install -r`. `firstInstallTime=2026-09-14 23:02:57` remained unchanged. Exact D-pad path Downloads -> TV Shows -> Ride or Die (2026) -> Season 1 opened the ordered one-episode list without a crash; Back returned to downloaded-show details. No fatal exception or ANR appeared after the season action.
+- App-private offline-media file count remained exactly 991 before and after install/validation. No download was played, deleted, paused, resumed, cancelled, retried, or started. Provider accounts/settings and downloaded media were preserved. Only the S22 was targeted; Sony and tablet were untouched.
+- Protected updater SHA-256 remains `AB1963BA44FBFDAFDC37EC60C6DADBDCF1D53E59F153CABE9E882026D83A94BB`. Zero staged files. No commit, push, merge, release, uninstall, data clear, destructive migration, branch switch, reset, clean, stash, or rebase.
+
+# Offline Downloads V1 - S22 user acceptance and commit candidate (2026-11-01)
+
+- User confirmed Offline Downloads V1 working on Samsung Galaxy S22. S22 user acceptance: **PASS**. This is phone acceptance only. Tablet, Android TV, Google TV, Sony BRAVIA, Fire TV, and Firestick acceptance of final combined build remain **PENDING**; earlier isolated Sony engine/UI checks do not replace final-platform acceptance.
+- Implemented movie, individual-episode, and complete-season downloads. Media3 permits one active transfer globally; queued work, progress, pause, resume, retry, cancel, restart recovery, Room/Media3 reconciliation, and storage-reserve checks persist across app restarts.
+- Downloads library provides offline Movies and TV Shows poster grids. App-private metadata/artwork supports movie, series, season, and episode details without provider access. Missing artwork/metadata uses safe placeholders. Completed content uses cache-only Media3 playback with no provider/network fallback.
+- Download management includes movie, episode, season, and whole-series deletion with confirmation. Successful deletion returns to closest valid Downloads destination and restores nearby focus; failed deletion remains on details with an error. Stale routes safely fall back to show/category library.
+- Provider stability work separates endpoint selection, connectivity, authentication, and playback health; avoids false inactive-account states, retries bounded temporary endpoint failures, and preserves authentication rejection handling. Automatic Content Sync dependencies preserve provider isolation and invalidate shared catalogue/Sports matching state without deleting offline records.
+- HTTP 451 series-details failure is contained at `SeriesViewModel.refreshDetails()`: cached/offline details remain available and provider failure no longer terminates Watchio during resume/season navigation.
+- Room database is **v10** with additive, non-destructive `MIGRATION_7_8`, `MIGRATION_8_9`, and `MIGRATION_9_10`; schemas 8, 9, and 10 are part of commit candidate. Offline records have no provider cascade and survive catalogue/provider removal.
+- Limits: no Live TV download/recording; no DRM bypass; HLS/DASH downloads unsupported; progressive MP4/M4V and compatible MKV only; resume depends on source range support; provider authorization and available storage still govern transfer success; app-private downloads are removed by uninstall or app-data clear; genuinely absent metadata/artwork remains unavailable.
+- Future work: final tablet/TV/Fire acceptance, long-running queue/storage-pressure testing, broader provider/range compatibility, download notifications/UX polish, and separately authorised HLS/DASH evaluation if licensing and Media3 requirements permit.

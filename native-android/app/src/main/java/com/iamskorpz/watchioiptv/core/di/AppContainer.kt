@@ -1,9 +1,9 @@
 package com.iamskorpz.watchioiptv.core.di
 
-import android.content.Context
 import android.annotation.SuppressLint
-import androidx.datastore.preferences.preferencesDataStore
+import android.content.Context
 import androidx.core.net.toUri
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.iamskorpz.watchioiptv.BuildConfig
 import com.iamskorpz.watchioiptv.core.database.WatchioDatabase
@@ -22,65 +22,70 @@ import com.iamskorpz.watchioiptv.data.RoomHistoryRepository
 import com.iamskorpz.watchioiptv.data.RoomProviderRepository
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementRepository
 import com.iamskorpz.watchioiptv.data.announcements.DataStoreAnnouncementLocalStore
-import com.iamskorpz.watchioiptv.data.announcements.GitHubAnnouncementRemoteDataSource
-import com.iamskorpz.watchioiptv.data.epg.EpgRepository
-import com.iamskorpz.watchioiptv.data.epg.EpgRefreshCoordinator
 import com.iamskorpz.watchioiptv.data.epg.EpgAutoRefreshScheduler
-import com.iamskorpz.watchioiptv.data.live.LiveTvRepository
+import com.iamskorpz.watchioiptv.data.epg.EpgRefreshCoordinator
+import com.iamskorpz.watchioiptv.data.epg.EpgRepository
+import com.iamskorpz.watchioiptv.data.downloads.OfflineMediaStore
+import com.iamskorpz.watchioiptv.data.downloads.OfflineMovieDownloadRepository
+import com.iamskorpz.watchioiptv.data.downloads.MovieDownloadAuthorizationResolver
+import com.iamskorpz.watchioiptv.data.downloads.PlaylistMovieDownloadAuthorizationResolver
+import com.iamskorpz.watchioiptv.data.downloads.UitestMovieDownloadAuthorizationResolver
 import com.iamskorpz.watchioiptv.data.library.MyListRepository
 import com.iamskorpz.watchioiptv.data.library.SearchRepository
-
+import com.iamskorpz.watchioiptv.data.live.LiveTvRepository
 import com.iamskorpz.watchioiptv.data.m3u.M3uRepository
 import com.iamskorpz.watchioiptv.data.movies.MoviesRepository
+import com.iamskorpz.watchioiptv.data.refresh.AndroidNetworkConnectivityChecker
+import com.iamskorpz.watchioiptv.data.refresh.CatalogAutoRefreshScheduler
+import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
 import com.iamskorpz.watchioiptv.data.series.SeriesRepository
-import com.iamskorpz.watchioiptv.data.updates.UpdateRepository
-import com.iamskorpz.watchioiptv.data.xtream.XtreamPlaybackUrlResolver
-import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
-import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
 import com.iamskorpz.watchioiptv.data.xtream.AndroidWatchioEndpointConfigSource
 import com.iamskorpz.watchioiptv.data.xtream.HttpWatchioDnsResolver
 import com.iamskorpz.watchioiptv.data.xtream.WATCHIO_DNS_RESOLVER_URL
+import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
+import com.iamskorpz.watchioiptv.data.xtream.XtreamPlaybackUrlResolver
+import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
 import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlResolver
 import com.iamskorpz.watchioiptv.domain.repository.CatalogRepository
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
 import com.iamskorpz.watchioiptv.domain.repository.HistoryRepository
 import com.iamskorpz.watchioiptv.domain.repository.ProviderRepository
-import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideRepository
 import com.iamskorpz.watchioiptv.feature.sports.FootballDataApi
+import com.iamskorpz.watchioiptv.feature.sports.FootballDataScheduleSource
+import com.iamskorpz.watchioiptv.feature.sports.PersistentSportsMatchCache
 import com.iamskorpz.watchioiptv.feature.sports.RemoteFootballDataCredentialValidator
 import com.iamskorpz.watchioiptv.feature.sports.SecureFootballDataCredentialStore
-import com.iamskorpz.watchioiptv.feature.sports.FootballDataScheduleSource
-import com.iamskorpz.watchioiptv.feature.sports.SportsRepository
 import com.iamskorpz.watchioiptv.feature.sports.SportsReminderRepository
-import com.iamskorpz.watchioiptv.feature.sports.WorkManagerSportsReminderScheduler
+import com.iamskorpz.watchioiptv.feature.sports.SportsRepository
 import com.iamskorpz.watchioiptv.feature.sports.UitestFootballScheduleSource
-import com.iamskorpz.watchioiptv.feature.sports.v2.CachedFixtureRepository
+import com.iamskorpz.watchioiptv.feature.sports.WorkManagerSportsReminderScheduler
+import com.iamskorpz.watchioiptv.feature.sports.v2.AndroidSportsSettingsStore
 import com.iamskorpz.watchioiptv.feature.sports.v2.ApiFootballApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.ApiFootballFixtureSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.BroadcastRepository
 import com.iamskorpz.watchioiptv.feature.sports.v2.BroadcasterAliasCatalogue
+import com.iamskorpz.watchioiptv.feature.sports.v2.CachedFixtureRepository
 import com.iamskorpz.watchioiptv.feature.sports.v2.FootballDataV2FixtureSource
+import com.iamskorpz.watchioiptv.feature.sports.v2.PersistentSportsBroadcastCache
+import com.iamskorpz.watchioiptv.feature.sports.v2.ProviderChannelMatcherV2
 import com.iamskorpz.watchioiptv.feature.sports.v2.RoomSportsFixtureCache
 import com.iamskorpz.watchioiptv.feature.sports.v2.SecureApiFootballCredentialStore
 import com.iamskorpz.watchioiptv.feature.sports.v2.SecureSoccersApiCredentialStore
 import com.iamskorpz.watchioiptv.feature.sports.v2.SecureTheSportsDbCredentialStore
 import com.iamskorpz.watchioiptv.feature.sports.v2.SoccersApiBroadcastApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.SoccersApiBroadcastSource
-import com.iamskorpz.watchioiptv.feature.sports.v2.SportsV2SourceSelector
-import com.iamskorpz.watchioiptv.feature.sports.v2.ProviderChannelMatcherV2
-import com.iamskorpz.watchioiptv.feature.sports.v2.PersistentSportsBroadcastCache
-import com.iamskorpz.watchioiptv.feature.sports.PersistentSportsMatchCache
-import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastApi
-import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastSource
-import com.iamskorpz.watchioiptv.feature.sports.v2.AndroidSportsSettingsStore
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsCapability
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsDataSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsSourceError
 import com.iamskorpz.watchioiptv.feature.sports.v2.SportsSourceResult
+import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastApi
+import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.enabledSources
+import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideRepository
 
 private val Context.watchioDataStore by preferencesDataStore(name = "watchio_native_settings")
 
+@SuppressLint("UnsafeOptInUsageError")
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
@@ -93,6 +98,9 @@ class AppContainer(context: Context) {
         .addMigrations(WatchioMigrations.MIGRATION_4_5)
         .addMigrations(WatchioMigrations.MIGRATION_5_6)
         .addMigrations(WatchioMigrations.MIGRATION_6_7)
+        .addMigrations(WatchioMigrations.MIGRATION_7_8)
+        .addMigrations(WatchioMigrations.MIGRATION_8_9)
+        .addMigrations(WatchioMigrations.MIGRATION_9_10)
         .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2)
         .build()
 
@@ -111,8 +119,15 @@ class AppContainer(context: Context) {
         remote = announcementRemote,
         local = DataStoreAnnouncementLocalStore(appContext.watchioDataStore),
     )
-    @SuppressLint("UnsafeOptInUsageError")
-    val playerManager: WatchioPlayerManager = Media3WatchioPlayerManager(appContext, settingsRepository)
+    val playerManager: WatchioPlayerManager by lazy {
+        Media3WatchioPlayerManager(
+            appContext,
+            settingsRepository,
+            offlineMovieDownloadRepository.mediaStore.playbackDataSourceFactory,
+            onRemotePlaybackAvailable = endpointManager::reportStreamingAvailable,
+            onRemotePlaybackFailure = endpointManager::reportStreamingFailure,
+        )
+    }
     val providerRepository: ProviderRepository = RoomProviderRepository(
         providerDao = database.providerDao(),
         credentialStore = providerCredentialStore,
@@ -141,6 +156,22 @@ class AppContainer(context: Context) {
         clock = SystemWatchioClock,
         openLocalInputStream = { uri -> appContext.contentResolver.openInputStream(uri.toUri()) },
     )
+    val catalogRefreshCoordinator = CatalogRefreshCoordinator(
+        database = database,
+        xtreamRepository = xtreamRepository,
+        m3uRepository = m3uRepository,
+        clock = SystemWatchioClock,
+    )
+    val catalogAutoRefreshScheduler by lazy {
+        CatalogAutoRefreshScheduler(
+            database = database,
+            settingsRepository = settingsRepository,
+            coordinator = catalogRefreshCoordinator,
+            clock = SystemWatchioClock,
+            connectivityChecker = AndroidNetworkConnectivityChecker(appContext),
+            playerStateFlow = playerManager.state,
+        )
+    }
     val epgRepository = EpgRepository(
         database = database,
         okHttpClient = networkModule.okHttpClient,
@@ -267,6 +298,23 @@ class AppContainer(context: Context) {
         tmdbRetrofitFactory = networkModule::retrofit,
         clock = SystemWatchioClock,
     )
+    val offlineMovieDownloadRepository: OfflineMovieDownloadRepository by lazy {
+        OfflineMovieDownloadRepository(
+            context = appContext,
+            dao = database.offlineDownloadDao(),
+            mediaStore = OfflineMediaStore(
+                appContext,
+                database.offlineDownloadDao(),
+                AppVariantBindings.createOfflineDownloadSourceResolver(moviesRepository, seriesRepository),
+            ),
+        )
+    }
+    val movieDownloadAuthorizationResolver: MovieDownloadAuthorizationResolver =
+        if (com.iamskorpz.watchioiptv.BuildConfig.APPLICATION_ID.endsWith(".uitest")) {
+            UitestMovieDownloadAuthorizationResolver
+        } else {
+            PlaylistMovieDownloadAuthorizationResolver
+        }
     val searchRepository = SearchRepository(
         database = database,
         settingsRepository = settingsRepository,
@@ -283,6 +331,14 @@ class AppContainer(context: Context) {
     val updateRepository = AppVariantBindings.createUpdateRepository(appContext, networkModule.okHttpClient)
 
     init {
+        xtreamRepository.onLiveUpdated = {
+            searchRepository.invalidate(it)
+            sportsRepository.invalidateProviderChannelCache(it)
+        }
+        m3uRepository.onLiveUpdated = {
+            searchRepository.invalidate(it)
+            sportsRepository.invalidateProviderChannelCache(it)
+        }
         xtreamRepository.onMoviesUpdated = {
             moviesRepository.invalidateCache(it)
             searchRepository.invalidate(it)
@@ -300,5 +356,4 @@ class AppContainer(context: Context) {
             searchRepository.invalidate(it)
         }
     }
-
 }

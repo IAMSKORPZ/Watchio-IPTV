@@ -112,6 +112,7 @@ data class WatchioSeries(
     val categoryId: CategoryId?,
     val tmdbId: Int?,
     val serverOrder: Int,
+    val lastModifiedEpochMs: Long? = null,
 )
 
 data class WatchioEpisode(

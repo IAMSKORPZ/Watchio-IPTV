@@ -51,6 +51,16 @@ class SportsRepository(
     private val discoveredCandidates = ConcurrentHashMap<String, List<SportsChannelCandidate>>()
 
     fun invalidateBroadcastDiscoveryCache() { discoveredCandidates.clear(); matchCache.clear() }
+
+    fun invalidateProviderChannelCache(providerId: ProviderId? = null) {
+        if (providerId == null) {
+            invalidateBroadcastDiscoveryCache()
+        } else {
+            val prefix = "${providerId.value}:"
+            discoveredCandidates.keys.removeIf { it.startsWith(prefix) }
+            matchCache.invalidateProvider(providerId)
+        }
+    }
     suspend fun schedule(date: LocalDate): Result<SportsDateSchedule> = withContext(matchingDispatcher) {
         val apiConfigured = !apiFootballCredentialStore?.get().isNullOrBlank()
         val configuredOrder = settingsStore?.read()?.enabledSources(SportsCapability.FIXTURES).orEmpty()

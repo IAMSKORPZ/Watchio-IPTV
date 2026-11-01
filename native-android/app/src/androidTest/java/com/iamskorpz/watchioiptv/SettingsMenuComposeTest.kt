@@ -126,6 +126,9 @@ class SettingsMenuComposeTest {
         composeRule.onNodeWithTag("settings-epg-settings").performClick()
         composeRule.waitUntilAtLeastOneExists(hasText("EPG SETTINGS"), 5_000)
         assertSingleSettingsBack()
+        composeRule.onNodeWithText("Automatic Content Refresh").assertIsDisplayed()
+        composeRule.onNodeWithTag("automatic-content-refresh-on").assertIsDisplayed()
+        composeRule.onNodeWithTag("automatic-content-refresh-off").assertIsDisplayed()
         pressBack()
         composeRule.waitUntilAtLeastOneExists(hasText("SETTINGS"), 5_000)
 

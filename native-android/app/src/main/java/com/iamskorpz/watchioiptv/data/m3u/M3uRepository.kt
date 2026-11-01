@@ -1,5 +1,6 @@
 package com.iamskorpz.watchioiptv.data.m3u
 
+import androidx.room.withTransaction
 import com.iamskorpz.watchioiptv.core.database.CategoryEntity
 import com.iamskorpz.watchioiptv.core.database.EpgSourceEntity
 import com.iamskorpz.watchioiptv.core.database.M3uImportItemEntity
@@ -9,21 +10,23 @@ import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.core.security.SensitiveUrlMasker
 import com.iamskorpz.watchioiptv.core.util.TextNormalizer
 import com.iamskorpz.watchioiptv.core.util.WatchioClock
+import com.iamskorpz.watchioiptv.data.epg.EpgSourceType
+import com.iamskorpz.watchioiptv.data.refresh.EmptyCatalogResponseException
 import com.iamskorpz.watchioiptv.domain.model.ContentType
 import com.iamskorpz.watchioiptv.domain.model.ProviderType
-import com.iamskorpz.watchioiptv.data.epg.EpgSourceType
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
-import androidx.room.withTransaction
 import java.io.IOException
 import java.io.InputStream
 import java.security.MessageDigest
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -37,7 +40,9 @@ class M3uRepository(
     private val openLocalInputStream: suspend (String) -> InputStream?,
     private val parser: M3uParser = M3uParser(),
     private val batchSize: Int = 1_000,
+    private val runInTransaction: suspend (suspend () -> Unit) -> Unit = { block -> database.withTransaction { block() } },
 ) {
+    var onLiveUpdated: ((ProviderId) -> Unit)? = null
     var onMoviesUpdated: ((ProviderId) -> Unit)? = null
     var onSeriesUpdated: ((ProviderId) -> Unit)? = null
     private val _state = MutableStateFlow<M3uImportState>(M3uImportState.Idle)
@@ -66,7 +71,7 @@ class M3uRepository(
         providerId
     }
 
-    suspend fun refresh(providerId: String) = withContext(Dispatchers.IO) {
+    suspend fun refresh(providerId: String): M3uImportState.Success = withContext(Dispatchers.IO) {
         val provider = database.providerDao().findById(providerId) ?: throw IllegalArgumentException("Provider not found.")
         when (provider.type) {
             ProviderType.M3uUrl.persisted -> importUrlProvider(provider.id, provider.displayName, provider.serverUrl.orEmpty(), null, createProvider = false)
@@ -75,7 +80,7 @@ class M3uRepository(
         }
     }
 
-    suspend fun refreshSection(providerId: String, contentType: ContentType) = withContext(Dispatchers.IO) {
+    suspend fun refreshSection(providerId: String, contentType: ContentType): M3uImportState.Success = withContext(Dispatchers.IO) {
         require(contentType == ContentType.Live || contentType == ContentType.Movie || contentType == ContentType.Series) {
             "Unsupported M3U refresh section."
         }
@@ -100,18 +105,28 @@ class M3uRepository(
         userAgent: String?,
         createProvider: Boolean,
         replaceTypes: Set<ContentType> = setOf(ContentType.Live, ContentType.Movie, ContentType.Series),
-    ) {
-        _state.value = M3uImportState.Importing(M3uImportStage.OpeningPlaylist)
+    ): M3uImportState.Success {
+        if (createProvider) {
+            _state.value = M3uImportState.Importing(M3uImportStage.OpeningPlaylist)
+        }
         val requestBuilder = Request.Builder().url(playlistUrl)
         userAgent?.trim()?.takeIf { it.isNotBlank() }?.let { requestBuilder.header("User-Agent", it) }
         val response = try {
             okHttpClient.newCall(requestBuilder.build()).execute()
         } catch (e: IOException) {
-            fail(M3uImportStage.OpeningPlaylist, "Unable to download playlist.", e)
+            fail(M3uImportStage.OpeningPlaylist, "Unable to download playlist.", e, updateState = createProvider)
         }
-        response.use {
-            if (!it.isSuccessful) fail(M3uImportStage.OpeningPlaylist, "Unable to download playlist.")
-            val body = it.body ?: fail(M3uImportStage.OpeningPlaylist, "Playlist is empty.")
+        return response.use {
+            if (!it.isSuccessful) {
+                val rateLimitCause = if (it.code == 429) {
+                    val retryAfter = it.header("Retry-After")?.trim()?.toLongOrNull()
+                    com.iamskorpz.watchioiptv.data.refresh.ProviderRateLimitException(retryAfterSeconds = retryAfter)
+                } else {
+                    null
+                }
+                fail(M3uImportStage.OpeningPlaylist, "Unable to download playlist.", cause = rateLimitCause, updateState = createProvider)
+            }
+            val body = it.body ?: fail(M3uImportStage.OpeningPlaylist, "Playlist is empty.", updateState = createProvider)
             body.byteStream().use { stream ->
                 importStream(providerId, displayName, ProviderType.M3uUrl, playlistUrl, stream, createProvider, replaceTypes)
             }
@@ -124,11 +139,13 @@ class M3uRepository(
         uri: String,
         createProvider: Boolean,
         replaceTypes: Set<ContentType> = setOf(ContentType.Live, ContentType.Movie, ContentType.Series),
-    ) {
-        _state.value = M3uImportState.Importing(M3uImportStage.OpeningPlaylist)
+    ): M3uImportState.Success {
+        if (createProvider) {
+            _state.value = M3uImportState.Importing(M3uImportStage.OpeningPlaylist)
+        }
         val stream = openLocalInputStream(uri)
-            ?: fail(M3uImportStage.OpeningPlaylist, "Playlist file is no longer available. Please select it again.")
-        stream.use {
+            ?: fail(M3uImportStage.OpeningPlaylist, "Playlist file is no longer available. Please select it again.", updateState = createProvider)
+        return stream.use {
             importStream(providerId, displayName, ProviderType.M3uFile, uri, it, createProvider, replaceTypes)
         }
     }
@@ -141,21 +158,29 @@ class M3uRepository(
         inputStream: InputStream,
         createProvider: Boolean,
         replaceTypes: Set<ContentType>,
-    ) {
+    ): M3uImportState.Success {
         val sessionId = UUID.randomUUID().toString()
         val categoryTracker = LinkedHashMap<String, CategoryEntity>()
         var live = 0
         var movies = 0
         var series = 0
         var headerEpgUrl: String? = null
+        var sawM3uHeader = false
         val stagedBatch = ArrayList<M3uImportItemEntity>(batchSize)
         val now = clock.nowEpochMs()
 
+        fun updateImportState(newState: M3uImportState) {
+            if (createProvider) {
+                _state.value = newState
+            }
+        }
+
         try {
-            _state.value = M3uImportState.Importing(M3uImportStage.ReadingPlaylist)
+            updateImportState(M3uImportState.Importing(M3uImportStage.ReadingPlaylist))
             val parsedCount = parser.parse(
                 inputStream,
                 onHeaderEpgUrl = { headerEpgUrl = it },
+                onM3uHeader = { sawM3uHeader = true },
             ) { item ->
                 currentCoroutineContext().ensureActive()
                 when (item.contentType) {
@@ -181,14 +206,44 @@ class M3uRepository(
                 if (stagedBatch.size >= batchSize) {
                     database.m3uItemDao().upsertStaged(stagedBatch.toList())
                     stagedBatch.clear()
-                    _state.value = M3uImportState.Importing(M3uImportStage.ReadingPlaylist, live, movies, series)
+                    updateImportState(M3uImportState.Importing(M3uImportStage.ReadingPlaylist, live, movies, series))
                 }
             }
             if (stagedBatch.isNotEmpty()) database.m3uItemDao().upsertStaged(stagedBatch.toList())
-            if (parsedCount == 0) fail(M3uImportStage.ReadingPlaylist, "Playlist does not contain any supported items.")
 
-            _state.value = M3uImportState.Importing(M3uImportStage.Saving, live, movies, series)
-            database.withTransaction {
+            val existingCounts = if (!createProvider) counts(providerId) else M3uCounts(0, 0, 0)
+            val existingTotal = existingCounts.liveCount + existingCounts.movieCount + existingCounts.seriesCount
+
+            if (parsedCount == 0) {
+                if (!createProvider && existingTotal > 0) {
+                    throw EmptyCatalogResponseException("Provider returned an empty M3U playlist while cached content exists.")
+                }
+                if (!sawM3uHeader) {
+                    fail(M3uImportStage.ReadingPlaylist, "Playlist does not contain any supported items.", updateState = createProvider)
+                }
+            } else if (!createProvider && replaceTypes.size == 1) {
+                val section = replaceTypes.single()
+                val existingSectionCount = when (section) {
+                    ContentType.Live -> existingCounts.liveCount
+                    ContentType.Movie -> existingCounts.movieCount
+                    ContentType.Series -> existingCounts.seriesCount
+                    ContentType.Episode -> 0
+                }
+                val newSectionCount = when (section) {
+                    ContentType.Live -> live
+                    ContentType.Movie -> movies
+                    ContentType.Series -> series
+                    ContentType.Episode -> 0
+                }
+                if (newSectionCount == 0 && existingSectionCount > 0) {
+                    throw EmptyCatalogResponseException("Provider returned an empty M3U section while cached content exists.")
+                }
+            }
+
+            updateImportState(M3uImportState.Importing(M3uImportStage.Saving, live, movies, series))
+            val baselineRefreshAt = if (!createProvider) database.providerDao().findById(providerId)?.lastRefreshAtEpochMs else null
+            val changedSections = LinkedHashSet<ContentType>()
+            runInTransaction {
                 if (createProvider) {
                     database.providerDao().upsert(
                         ProviderEntity(
@@ -202,6 +257,9 @@ class M3uRepository(
                             enabled = true,
                         ),
                     )
+                    if (live > 0) changedSections += ContentType.Live
+                    if (movies > 0) changedSections += ContentType.Movie
+                    if (series > 0) changedSections += ContentType.Series
                 } else {
                     val existing = database.providerDao().findById(providerId)
                         ?: throw IllegalArgumentException("Provider not found.")
@@ -209,14 +267,48 @@ class M3uRepository(
                         existing.copy(
                             updatedAtEpochMs = now,
                             lastRefreshAtEpochMs = now,
-                            enabled = true,
+                            enabled = existing.enabled,
                         ),
                     )
+                    for (type in replaceTypes) {
+                        val existingSectionCount = when (type) {
+                            ContentType.Live -> existingCounts.liveCount
+                            ContentType.Movie -> existingCounts.movieCount
+                            ContentType.Series -> existingCounts.seriesCount
+                            ContentType.Episode -> 0
+                        }
+                        val newSectionCount = when (type) {
+                            ContentType.Live -> live
+                            ContentType.Movie -> movies
+                            ContentType.Series -> series
+                            ContentType.Episode -> 0
+                        }
+                        if (existingSectionCount != newSectionCount) {
+                            changedSections += type
+                        } else if (newSectionCount > 0) {
+                            val existingItems = database.m3uItemDao()
+                                .getByProviderAndType(providerId, type.persisted)
+                                .map { it.copy(createdAtEpochMs = 0L, updatedAtEpochMs = 0L) }
+                            val stagedItems = loadStagedByType(sessionId, type.persisted)
+                                .sortedWith(compareBy({ it.playlistOrder }, { it.name }))
+                                .map { it.copy(createdAtEpochMs = 0L, updatedAtEpochMs = 0L) }
+                            if (existingItems != stagedItems) {
+                                changedSections += type
+                            }
+                        }
+                    }
                 }
+                val newCategoriesByType = categoryTracker.values.groupBy { ContentType.fromPersisted(it.contentType) }
                 replaceTypes.forEach { type ->
-                    database.categoryDao().deleteByProviderAndType(providerId, type.persisted)
+                    val catChanged = database.categoryDao().replaceCategoriesWithDiff(
+                        providerId = providerId,
+                        contentType = type.persisted,
+                        categories = newCategoriesByType[type].orEmpty(),
+                    )
+                    if (catChanged) {
+                        changedSections += type
+                    }
                 }
-                database.categoryDao().upsertAll(categoryTracker.values.filter { ContentType.fromPersisted(it.contentType) in replaceTypes })
                 if (replaceTypes.containsAll(listOf(ContentType.Live, ContentType.Movie, ContentType.Series))) {
                     database.m3uItemDao().replaceFromStaging(providerId, sessionId, batchSize)
                 } else {
@@ -224,12 +316,6 @@ class M3uRepository(
                         database.m3uItemDao().replaceTypeFromStaging(providerId, sessionId, type.persisted, batchSize)
                     }
                     database.m3uItemDao().deleteStaged(sessionId)
-                }
-                if (replaceTypes.contains(ContentType.Movie)) {
-                    onMoviesUpdated?.invoke(ProviderId(providerId))
-                }
-                if (replaceTypes.contains(ContentType.Series)) {
-                    onSeriesUpdated?.invoke(ProviderId(providerId))
                 }
                 headerEpgUrl?.trim()?.takeIf { it.isNotBlank() }?.let { epgUrl ->
                     database.epgDao().upsertSource(
@@ -254,18 +340,60 @@ class M3uRepository(
                     )
                 }
             }
-            settingsRepository.setSelectedProviderId(ProviderId(providerId))
-            settingsRepository.setDeviceModeOnboardingCompleted(true)
+            if (replaceTypes.contains(ContentType.Live)) {
+                onLiveUpdated?.invoke(ProviderId(providerId))
+            }
+            if (replaceTypes.contains(ContentType.Movie)) {
+                onMoviesUpdated?.invoke(ProviderId(providerId))
+            }
+            if (replaceTypes.contains(ContentType.Series)) {
+                onSeriesUpdated?.invoke(ProviderId(providerId))
+            }
+            if (createProvider) {
+                settingsRepository.setSelectedProviderId(ProviderId(providerId))
+                settingsRepository.setDeviceModeOnboardingCompleted(true)
+            }
+            if (baselineRefreshAt != null) {
+                for (other in listOf(ContentType.Live, ContentType.Movie, ContentType.Series)) {
+                    if (other !in replaceTypes && settingsRepository.observeSectionRefreshEpochMs(ProviderId(providerId), other).first() == null) {
+                        settingsRepository.setSectionRefreshEpochMs(ProviderId(providerId), other, baselineRefreshAt)
+                    }
+                }
+            }
             replaceTypes.forEach { type -> settingsRepository.setSectionRefreshEpochMs(ProviderId(providerId), type, now) }
-            _state.value = M3uImportState.Success(providerId, live, movies, series)
+            val success = M3uImportState.Success(
+                providerId = providerId,
+                liveCount = live,
+                movieCount = movies,
+                seriesCount = series,
+                changedSections = changedSections,
+            )
+            updateImportState(success)
+            return success
+        } catch (cancellation: CancellationException) {
+            database.m3uItemDao().deleteStaged(sessionId)
+            throw cancellation
         } catch (throwable: Throwable) {
             database.m3uItemDao().deleteStaged(sessionId)
+            if (throwable is EmptyCatalogResponseException) {
+                throw throwable
+            }
             if (throwable is M3uImportException) {
-                _state.value = M3uImportState.Failure(throwable.stage, throwable.safeMessage)
+                updateImportState(M3uImportState.Failure(throwable.stage, throwable.safeMessage))
                 throw IllegalStateException(throwable.safeMessage, throwable)
             }
-            _state.value = M3uImportState.Failure(M3uImportStage.ReadingPlaylist, "Playlist format is invalid.")
+            updateImportState(M3uImportState.Failure(M3uImportStage.ReadingPlaylist, "Playlist format is invalid."))
             throw throwable
+        }
+    }
+
+    private suspend fun loadStagedByType(sessionId: String, contentType: String) = buildList {
+        var offset = 0
+        while (true) {
+            val batch = database.m3uItemDao().getStagedBatchByType(sessionId, contentType, batchSize, offset)
+            if (batch.isEmpty()) break
+            addAll(batch.map { it.toFinalEntity() })
+            offset += batch.size
         }
     }
 
@@ -333,7 +461,10 @@ class M3uRepository(
         return sha256("$providerId|$base").take(32)
     }
 
-    private fun fail(stage: M3uImportStage, message: String, cause: Throwable? = null): Nothing {
+    private fun fail(stage: M3uImportStage, message: String, cause: Throwable? = null, updateState: Boolean = true): Nothing {
+        if (updateState) {
+            _state.value = M3uImportState.Failure(stage, message)
+        }
         throw M3uImportException(stage, message, cause)
     }
 
@@ -346,5 +477,5 @@ class M3uRepository(
         val stage: M3uImportStage,
         val safeMessage: String,
         cause: Throwable?,
-    ) : RuntimeException("${safeMessage} ${SensitiveUrlMasker.mask(cause?.message.orEmpty())}", cause)
+    ) : RuntimeException("$safeMessage ${SensitiveUrlMasker.mask(cause?.message.orEmpty())}", cause)
 }

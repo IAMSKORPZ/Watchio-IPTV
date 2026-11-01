@@ -82,6 +82,8 @@ import com.iamskorpz.watchioiptv.data.series.SeriesCategoryKind
 import com.iamskorpz.watchioiptv.data.series.SeriesDetails
 import com.iamskorpz.watchioiptv.data.series.SeriesRepository
 import com.iamskorpz.watchioiptv.data.series.WatchioEpisodeItem
+import com.iamskorpz.watchioiptv.core.database.OfflineDownloadEntity
+import com.iamskorpz.watchioiptv.data.downloads.OfflineDownloadState
 import com.iamskorpz.watchioiptv.data.series.WatchioSeason
 import com.iamskorpz.watchioiptv.data.series.WatchioSeriesItem
 import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
@@ -649,6 +651,12 @@ fun SeriesDetailsScreen(
     onSeason: (Int) -> Unit,
     onTab: (String) -> Unit,
     onEpisode: (WatchioEpisodeItem) -> Unit,
+    onDownloadEpisode: (WatchioEpisodeItem) -> Unit = {},
+    onDownloadSeason: (Int) -> Unit = {},
+    onPauseDownload: (String) -> Unit = {},
+    onResumeDownload: (String) -> Unit = {},
+    onRetryDownload: (String) -> Unit = {},
+    onCancelDownload: (String) -> Unit = {},
     onBack: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
@@ -666,6 +674,7 @@ fun SeriesDetailsScreen(
     val seasonSelectorFocus = remember { FocusRequester() }
     var resumeDialogRequest by remember { mutableStateOf<ResumePlaybackRequest?>(null) }
     var showSeasonDialog by remember { mutableStateOf(false) }
+    var pendingSeasonDownload by remember { mutableStateOf<Int?>(null) }
     val listState = rememberLazyListState()
     var hasAutoScrolledTarget by remember(details.series.id, state.targetEpisodeId) { mutableStateOf(false) }
 
@@ -873,6 +882,12 @@ fun SeriesDetailsScreen(
                                         onClick = onFavorite,
                                         modifier = Modifier.testTag("series-favorite-button"),
                                     )
+                                    SeriesDetailsActionButton(
+                                        title = "Download Season",
+                                        accent = colors.seriesAccent,
+                                        onClick = { pendingSeasonDownload = state.selectedSeasonNumber ?: 1 },
+                                        modifier = Modifier.testTag("series-download-season"),
+                                    )
                                 }
                                 SeriesDetailRow("Director", details.director)
                                 SeriesDetailRow("Release Date", details.releaseDate)
@@ -963,6 +978,12 @@ fun SeriesDetailsScreen(
                                 isResumable = isResumable,
                                 isCompleted = isCompleted,
                                 isTarget = isTarget,
+                                download = state.episodeDownloads[episode.episodeId],
+                                onDownload = { onDownloadEpisode(episode) },
+                                onPauseDownload = onPauseDownload,
+                                onResumeDownload = onResumeDownload,
+                                onRetryDownload = onRetryDownload,
+                                onCancelDownload = onCancelDownload,
                                 onClick = {
                                     if (isResumable) {
                                         resumeDialogRequest = ResumePlaybackRequest(
@@ -1010,6 +1031,21 @@ fun SeriesDetailsScreen(
         resumeDialogRequest?.let { request ->
             ResumePlaybackDialog(request = request)
         }
+        pendingSeasonDownload?.let { season ->
+            val episodes = details.episodes.filter { it.seasonNumber == season }
+            AlertDialog(
+                onDismissRequest = { pendingSeasonDownload = null },
+                title = { Text("Download Season $season?") },
+                text = { Text("Queue ${episodes.size} episodes. Total size is unknown until downloads start.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pendingSeasonDownload = null
+                        onDownloadSeason(season)
+                    }) { Text("Download") }
+                },
+                dismissButton = { TextButton(onClick = { pendingSeasonDownload = null }) { Text("Cancel") } },
+            )
+        }
     }
 }
 
@@ -1024,6 +1060,12 @@ private fun EpisodeCard(
     isResumable: Boolean,
     isCompleted: Boolean,
     isTarget: Boolean,
+    download: OfflineDownloadEntity?,
+    onDownload: () -> Unit,
+    onPauseDownload: (String) -> Unit,
+    onResumeDownload: (String) -> Unit,
+    onRetryDownload: (String) -> Unit,
+    onCancelDownload: (String) -> Unit,
     onClick: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
@@ -1170,6 +1212,37 @@ private fun EpisodeCard(
                         modifier = Modifier.testTag("series-episode-plot"),
                     )
                 }
+            }
+            val downloadState = download?.state?.let { runCatching { OfflineDownloadState.valueOf(it) }.getOrNull() }
+            SeriesDetailsActionButton(
+                title = when (downloadState) {
+                    OfflineDownloadState.Queued -> "Queued"
+                    OfflineDownloadState.Downloading -> "${download?.percentDownloaded?.toInt()?.coerceIn(0, 100) ?: 0}%"
+                    OfflineDownloadState.Paused -> "Resume"
+                    OfflineDownloadState.Completed -> "Downloaded"
+                    OfflineDownloadState.Failed -> "Retry"
+                    OfflineDownloadState.Removing -> "Removing"
+                    null -> "Download"
+                },
+                accent = colors.seriesAccent,
+                onClick = {
+                    when (downloadState) {
+                        OfflineDownloadState.Downloading, OfflineDownloadState.Queued -> onPauseDownload(download!!.downloadId)
+                        OfflineDownloadState.Paused -> onResumeDownload(download!!.downloadId)
+                        OfflineDownloadState.Failed -> onRetryDownload(download!!.downloadId)
+                        OfflineDownloadState.Completed, OfflineDownloadState.Removing -> Unit
+                        null -> onDownload()
+                    }
+                },
+                modifier = Modifier.testTag("series-episode-download-${episode.episodeId}"),
+            )
+            if (downloadState != null && downloadState != OfflineDownloadState.Completed && downloadState != OfflineDownloadState.Removing) {
+                SeriesDetailsActionButton(
+                    title = "Cancel",
+                    accent = colors.moviesAccent,
+                    onClick = { onCancelDownload(download!!.downloadId) },
+                    modifier = Modifier.testTag("series-episode-cancel-${episode.episodeId}"),
+                )
             }
         }
     }

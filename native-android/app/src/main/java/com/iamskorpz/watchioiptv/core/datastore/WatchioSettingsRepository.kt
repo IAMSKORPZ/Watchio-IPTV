@@ -64,6 +64,10 @@ class WatchioSettingsRepository(
         preferences[DeviceModeOnboardingCompleted] ?: false
     }
 
+    override val automaticContentRefreshEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[AutomaticContentRefreshEnabled] ?: true
+    }
+
     val epgAutoRefreshEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[EpgAutoRefreshEnabled] ?: true
     }
@@ -226,6 +230,10 @@ class WatchioSettingsRepository(
         saveAppearanceLibrary(block(appearanceLibrary.first()).normalized())
     }
 
+    override suspend fun setAutomaticContentRefreshEnabled(enabled: Boolean) {
+        dataStore.edit { preferences -> preferences[AutomaticContentRefreshEnabled] = enabled }
+    }
+
     suspend fun setEpgAutoRefreshEnabled(enabled: Boolean) {
         dataStore.edit { preferences -> preferences[EpgAutoRefreshEnabled] = enabled }
     }
@@ -316,6 +324,7 @@ class WatchioSettingsRepository(
         val InputModeKey = stringPreferencesKey("input_mode")
         val StreamFormatKey = stringPreferencesKey("stream_format")
         val DeviceModeOnboardingCompleted = booleanPreferencesKey("device_mode_onboarding_completed")
+        val AutomaticContentRefreshEnabled = booleanPreferencesKey("automatic_content_refresh_enabled")
         val EpgAutoRefreshEnabled = booleanPreferencesKey("epg_auto_refresh_enabled")
         val EpgRefreshIntervalKey = stringPreferencesKey("epg_refresh_interval")
         val ResumePlaybackEnabled = booleanPreferencesKey("resume_playback_enabled")

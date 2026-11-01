@@ -69,6 +69,9 @@ fun XtreamVodStreamDto.toDomain(providerId: ProviderId, order: Int): WatchioMovi
 fun XtreamSeriesDto.toDomain(providerId: ProviderId, order: Int): WatchioSeries? {
     val id = seriesId?.takeIf { it.isNotBlank() } ?: return null
     val title = name?.takeIf { it.isNotBlank() } ?: return null
+    val parsedLastModifiedEpochMs = lastModified
+        ?.takeIf { it > 0L }
+        ?.let { raw -> if (raw < 10_000_000_000L) raw * 1_000L else raw }
     return WatchioSeries(
         providerId = providerId,
         seriesId = SeriesId(id),
@@ -85,5 +88,6 @@ fun XtreamSeriesDto.toDomain(providerId: ProviderId, order: Int): WatchioSeries?
         categoryId = categoryId?.takeIf { it.isNotBlank() }?.let(::CategoryId),
         tmdbId = null,
         serverOrder = order,
+        lastModifiedEpochMs = parsedLastModifiedEpochMs,
     )
 }

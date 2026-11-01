@@ -54,6 +54,7 @@ sealed interface M3uImportState {
         val liveCount: Int,
         val movieCount: Int,
         val seriesCount: Int,
+        val changedSections: Set<ContentType> = emptySet(),
     ) : M3uImportState
 
     data class Failure(val stage: M3uImportStage, val message: String) : M3uImportState

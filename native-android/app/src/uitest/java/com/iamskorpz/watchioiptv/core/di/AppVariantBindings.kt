@@ -5,6 +5,10 @@ import com.iamskorpz.watchioiptv.BuildConfig
 import com.iamskorpz.watchioiptv.data.announcements.AnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.announcements.StaticAnnouncementRemoteDataSource
 import com.iamskorpz.watchioiptv.data.updates.UpdateRepository
+import com.iamskorpz.watchioiptv.data.downloads.OfflineDownloadSourceResolver
+import com.iamskorpz.watchioiptv.data.movies.MoviesRepository
+import com.iamskorpz.watchioiptv.data.series.SeriesRepository
+import com.iamskorpz.watchioiptv.uitest.UitestOfflineDownloadSourceResolver
 import com.iamskorpz.watchioiptv.uitest.StartupNotificationFixture
 import com.iamskorpz.watchioiptv.uitest.fixtureArtifactDownloadsEnabled
 import kotlinx.serialization.encodeToString
@@ -12,6 +16,9 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 
 internal object AppVariantBindings {
+    fun createOfflineDownloadSourceResolver(moviesRepository: MoviesRepository, seriesRepository: SeriesRepository): OfflineDownloadSourceResolver =
+        UitestOfflineDownloadSourceResolver
+
     fun createAnnouncementRemoteDataSource(context: Context, client: OkHttpClient): AnnouncementRemoteDataSource =
         StaticAnnouncementRemoteDataSource(StartupNotificationFixture(context).announcementFeed())
 

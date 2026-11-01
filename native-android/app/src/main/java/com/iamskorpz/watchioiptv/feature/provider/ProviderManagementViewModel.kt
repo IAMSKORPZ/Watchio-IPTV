@@ -4,13 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.data.m3u.M3uRepository
-import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
+import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
+import com.iamskorpz.watchioiptv.data.refresh.RefreshTrigger
+import com.iamskorpz.watchioiptv.data.refresh.getOrThrow
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
-import com.iamskorpz.watchioiptv.feature.home.managedServerLabel
+import com.iamskorpz.watchioiptv.data.xtream.ProviderHealthState
+import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
 import com.iamskorpz.watchioiptv.domain.model.ProviderType
 import com.iamskorpz.watchioiptv.domain.model.WatchioProvider
 import com.iamskorpz.watchioiptv.domain.repository.ProviderRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
+import com.iamskorpz.watchioiptv.feature.home.managedServerLabel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,6 +29,7 @@ data class ProviderManagementUiState(
     val refreshingProviderId: ProviderId? = null,
     val switchingProviderId: ProviderId? = null,
     val serverChoices: List<ManagedServerChoice> = emptyList(),
+    val providerHealth: ProviderHealthState = ProviderHealthState(),
     val message: String? = null,
 )
 
@@ -50,18 +55,24 @@ class ProviderManagementViewModel(
     private val xtreamRepository: XtreamRepository,
     private val m3uRepository: M3uRepository,
     private val endpointManager: WatchioEndpointManager,
+    private val catalogRefreshCoordinator: CatalogRefreshCoordinator? = null,
 ) : ViewModel() {
     private val status = MutableStateFlow(ProviderManagementUiState())
     private var refreshJob: Job? = null
     private var switchJob: Job? = null
 
+    private val endpointState = combine(
+        endpointManager.configuredEndpoints,
+        endpointManager.activeEndpoint,
+        endpointManager.health,
+    ) { endpoints, activeEndpoint, health -> EndpointState(endpoints, activeEndpoint?.url, health) }
+
     val state: StateFlow<ProviderManagementUiState> = combine(
         providerRepository.observeProviders(),
         settingsRepository.selectedProviderId,
         status,
-        endpointManager.configuredEndpoints,
-        endpointManager.activeEndpoint,
-    ) { providers, selectedProviderId, current, endpoints, activeEndpoint ->
+        endpointState,
+    ) { providers, selectedProviderId, current, endpoints ->
         val rows = providers.map { provider ->
             val counts = counts(provider)
             ProviderRowUiState(
@@ -75,7 +86,8 @@ class ProviderManagementViewModel(
         current.copy(
             providers = rows,
             selectedProviderId = selectedProviderId,
-            serverChoices = endpoints.map { ManagedServerChoice(it.id, managedServerLabel(it.id), it.url == activeEndpoint?.url) },
+            serverChoices = endpoints.endpoints.map { ManagedServerChoice(it.id, managedServerLabel(it.id), it.url == endpoints.activeUrl) },
+            providerHealth = endpoints.health,
             message = current.message,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ProviderManagementUiState())
@@ -92,10 +104,15 @@ class ProviderManagementViewModel(
         refreshJob = viewModelScope.launch {
             status.value = status.value.copy(refreshingProviderId = providerId, message = "Refreshing...")
             val result = runCatching {
-                val provider = providerRepository.getProvider(providerId) ?: error("Provider not found.")
-                when (provider.type) {
-                    ProviderType.Xtream -> xtreamRepository.refreshProvider(providerId)
-                    ProviderType.M3uUrl, ProviderType.M3uFile -> m3uRepository.refresh(providerId.value)
+                val coordinator = catalogRefreshCoordinator
+                if (coordinator != null) {
+                    coordinator.refreshProvider(providerId, RefreshTrigger.Manual).getOrThrow()
+                } else {
+                    val provider = providerRepository.getProvider(providerId) ?: error("Provider not found.")
+                    when (provider.type) {
+                        ProviderType.Xtream -> xtreamRepository.refreshProvider(providerId)
+                        ProviderType.M3uUrl, ProviderType.M3uFile -> m3uRepository.refresh(providerId.value)
+                    }
                 }
             }
             status.value = status.value.copy(
@@ -137,4 +154,9 @@ class ProviderManagementViewModel(
     }
 
     private data class Counts(val live: Int, val movies: Int, val series: Int)
+    private data class EndpointState(
+        val endpoints: List<com.iamskorpz.watchioiptv.data.xtream.WatchioEndpoint>,
+        val activeUrl: String?,
+        val health: ProviderHealthState,
+    )
 }

@@ -218,6 +218,45 @@ class XtreamRepositoryInstrumentedTest {
         assertTrue(secretStore.isEmpty())
     }
 
+    @Test
+    fun refreshPreservesRetainedSeriesSeasonsEpisodesAndRejectsEmptyResponse() = runBlocking {
+        enqueueSuccessfulCatalog(live = 1, movies = 1, series = 2)
+        val added = repository.addProvider(input())
+        val pid = added.providerId.value
+
+        database.seriesDao().upsertSeasons(
+            listOf(com.iamskorpz.watchioiptv.core.database.SeasonEntity(pid, "1", 1, "Season 1", "s1", null, null, null, null, null, 1, 1000L)),
+        )
+        database.episodeDao().upsertAll(
+            listOf(com.iamskorpz.watchioiptv.core.database.EpisodeEntity(pid, "1", "ep-1", 1, 1, "Ep 1", "ep 1", null, null, "mp4", null, 1200, null, null, null, null, null, null, 1000L)),
+        )
+        database.seriesDao().upsertSeasons(
+            listOf(com.iamskorpz.watchioiptv.core.database.SeasonEntity(pid, "2", 1, "Season 1", "s2", null, null, null, null, null, 1, 1000L)),
+        )
+        database.episodeDao().upsertAll(
+            listOf(com.iamskorpz.watchioiptv.core.database.EpisodeEntity(pid, "2", "ep-2", 1, 1, "Ep 2", "ep 2", null, null, "mp4", null, 1200, null, null, null, null, null, null, 1000L)),
+        )
+
+        // Refresh retaining Series 1 and removing Series 2
+        server.enqueue(json("""{"user_info":{"username":"fake-user","auth":1,"status":"Active"},"server_info":{}}"""))
+        server.enqueue(json(categories("series", 1)))
+        server.enqueue(json(series(1)))
+        repository.refreshSeries(added.providerId)
+
+        assertEquals(1, database.seriesDao().countByProvider(pid))
+        assertEquals(1, database.seriesDao().getSeasons(pid, "1").size)
+        assertEquals(1, database.episodeDao().getBySeries(pid, "1").size)
+        assertEquals(0, database.episodeDao().getBySeries(pid, "2").size)
+
+        // Suspicious empty series response is rejected and preserves Series 1 + its episodes
+        server.enqueue(json("""{"user_info":{"username":"fake-user","auth":1,"status":"Active"},"server_info":{}}"""))
+        server.enqueue(json(categories("series", 1)))
+        server.enqueue(json("[]"))
+        assertTrue(runCatching { repository.refreshSeries(added.providerId) }.isFailure)
+        assertEquals(1, database.seriesDao().countByProvider(pid))
+        assertEquals(1, database.episodeDao().getBySeries(pid, "1").size)
+    }
+
     private fun twoPhaseDispatcher(started: CountDownLatch, release: CountDownLatch) = object : Dispatcher() {
         override fun dispatch(request: RecordedRequest): MockResponse {
             if (request.path?.contains("action=get_vod_categories") == true || request.path?.contains("action=get_series_categories") == true) {

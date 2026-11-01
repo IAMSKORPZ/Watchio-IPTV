@@ -23,6 +23,8 @@ import com.iamskorpz.watchioiptv.domain.repository.HistoryItem
 import com.iamskorpz.watchioiptv.domain.repository.HistoryRepository
 import com.iamskorpz.watchioiptv.domain.repository.LiveTvBrowsingState
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
+import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
+import com.iamskorpz.watchioiptv.data.refresh.RefreshStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +69,7 @@ class LiveTvViewModel(
     private val clock: WatchioClock,
     private val initialChannel: LiveTvChannel? = null,
     private val searchRepository: SearchRepository? = null,
+    private val catalogRefreshCoordinator: CatalogRefreshCoordinator? = null,
 ) : ViewModel() {
     private val mutableUi = MutableStateFlow(LiveTvUiState())
     private var playbackJob: Job? = null
@@ -82,6 +85,19 @@ class LiveTvViewModel(
 
     init {
         load()
+        catalogRefreshCoordinator?.let { coordinator ->
+            viewModelScope.launch {
+                coordinator.updates.collect { event ->
+                    val activeProviderId = liveTvRepository.selectedProviderId()
+                    if (event.status == RefreshStatus.Updated &&
+                        event.providerId == activeProviderId &&
+                        ContentType.Live in event.changedSections
+                    ) {
+                        refreshSilently()
+                    }
+                }
+            }
+        }
         viewModelScope.launch {
             liveSearchFlow.debounce(50).distinctUntilChanged().collectLatest { query ->
                 if (query.isBlank()) return@collectLatest
@@ -199,6 +215,53 @@ class LiveTvViewModel(
                     selectChannel(targetChannel)
                 }
             }
+        }
+    }
+
+    fun refreshSilently() {
+        viewModelScope.launch {
+            val providerId = liveTvRepository.selectedProviderId() ?: return@launch
+            val categories = liveTvRepository.categories(providerId)
+            if (categories.isEmpty()) return@launch
+
+            val current = mutableUi.value
+            val currentSelectedCategory = current.selectedCategory
+            val targetCategory = currentSelectedCategory?.let { sel ->
+                categories.firstOrNull { it.id == sel.id || (sel.sourceCategoryId != null && it.sourceCategoryId == sel.sourceCategoryId) }
+            } ?: categories.firstOrNull { it.kind == LiveTvCategoryKind.All } ?: categories.first()
+
+            val updatedChannels = liveTvRepository.channels(providerId, targetCategory)
+
+            // Preserve selectedChannel and browsedChannel identity.
+            // If the playing channel disappeared from the provider catalogue, keep the existing instance
+            // so active playback is preserved until the user manually changes or stops it.
+            val retainedSelectedChannel = current.selectedChannel?.let { sel ->
+                updatedChannels.firstOrNull { it.id == sel.id } ?: sel
+            } ?: updatedChannels.firstOrNull()
+
+            val retainedBrowsedChannel = current.browsedChannel?.let { browsed ->
+                updatedChannels.firstOrNull { it.id == browsed.id } ?: retainedSelectedChannel
+            } ?: retainedSelectedChannel
+
+            val preservedIndex = if (retainedSelectedChannel != null) {
+                val found = updatedChannels.indexOfFirst { it.id == retainedSelectedChannel.id }
+                if (found >= 0) found else current.initialScrollIndex.coerceIn(0, (updatedChannels.size - 1).coerceAtLeast(0))
+            } else 0
+
+            // Do NOT call playerManager.load() or restart playback here!
+            mutableUi.value = current.copy(
+                categories = categories,
+                selectedCategory = targetCategory,
+                channels = updatedChannels,
+                selectedChannel = retainedSelectedChannel,
+                browsedChannel = retainedBrowsedChannel,
+                initialScrollIndex = preservedIndex,
+            )
+
+            loadChannelProgrammes(providerId, updatedChannels)
+            searchRepository?.warm(providerId)
+
+            retainedBrowsedChannel?.let { updateNowNext(it) }
         }
     }
 

@@ -224,6 +224,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.converter)
     implementation(libs.coil.compose)
     implementation(libs.media3.exoplayer)
+    implementation(libs.media3.database)
+    implementation(libs.media3.datasource)
     implementation(libs.media3.ui)
     implementation(libs.media3.session)
     implementation(libs.work.runtime.ktx)

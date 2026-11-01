@@ -4,23 +4,26 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.data.m3u.M3uRepository
-import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
+import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
+import com.iamskorpz.watchioiptv.data.refresh.RefreshTrigger
+import com.iamskorpz.watchioiptv.data.refresh.getOrThrow
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
+import com.iamskorpz.watchioiptv.data.xtream.ProviderConnectivity
+import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
 import com.iamskorpz.watchioiptv.domain.model.ContentType
 import com.iamskorpz.watchioiptv.domain.model.ProviderType
 import com.iamskorpz.watchioiptv.domain.repository.ProviderRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -47,6 +50,7 @@ data class HomeUiState(
     val refreshMessage: String? = null,
     val activeServerLabel: String? = null,
     val activeServerOnline: Boolean = true,
+    val activeServerStatus: String = "Not checked",
 ) {
     val providerSummary: String =
         providerName ?: "No providers configured"
@@ -58,6 +62,7 @@ class HomeViewModel(
     private val xtreamRepository: XtreamRepository,
     private val m3uRepository: M3uRepository,
     private val endpointManager: WatchioEndpointManager,
+    private val catalogRefreshCoordinator: CatalogRefreshCoordinator? = null,
 ) : ViewModel() {
     private val refreshStatus = MutableStateFlow(HomeRefreshStatus())
     private val refreshJobs = mutableMapOf<ContentType, Job>()
@@ -68,8 +73,8 @@ class HomeViewModel(
         settingsRepository.selectedProviderId,
         refreshStatus,
         endpointManager.activeEndpoint,
-        endpointManager.activeEndpointOnline,
-    ) { providers, selectedProviderId, refresh, activeEndpoint, activeEndpointOnline ->
+        endpointManager.health,
+    ) { providers, selectedProviderId, refresh, activeEndpoint, health ->
         val selected = selectedProviderId?.let { id -> providers.firstOrNull { it.id == id && it.enabled && it.type == ProviderType.Xtream } }
             ?: providers.firstOrNull { it.enabled && it.type == ProviderType.Xtream }
         val xtreamCounts = if (selected?.type == ProviderType.Xtream) xtreamRepository.counts(selected.id) else null
@@ -98,7 +103,12 @@ class HomeViewModel(
             activeServerLabel = activeEndpoint?.takeIf {
                 selected?.id?.value?.startsWith(MANAGED_PROVIDER_PREFIX) == true && it.url == selected.serverUrl
             }?.let { managedServerLabel(it.id) },
-            activeServerOnline = activeEndpointOnline != false,
+            activeServerOnline = health.connectivity != ProviderConnectivity.TemporarilyUnavailable,
+            activeServerStatus = when (health.connectivity) {
+                ProviderConnectivity.NotChecked -> "Not checked"
+                ProviderConnectivity.Connected -> "Connected"
+                ProviderConnectivity.TemporarilyUnavailable -> "Connection issue"
+            },
         )
     }.flatMapLatest { home ->
         val providerId = home.providerId ?: return@flatMapLatest flowOf(home)
@@ -150,15 +160,20 @@ class HomeViewModel(
         refreshJobs[contentType] = viewModelScope.launch {
             refreshStatus.value = refreshStatus.value.start(selected, contentType)
             val result = runCatching {
-                val provider = providerRepository.getProvider(selected) ?: error("Provider not found.")
-                when (provider.type) {
-                    ProviderType.Xtream -> when (contentType) {
-                        ContentType.Live -> xtreamRepository.refreshLive(selected)
-                        ContentType.Movie -> xtreamRepository.refreshMovies(selected)
-                        ContentType.Series -> xtreamRepository.refreshSeries(selected)
-                        ContentType.Episode -> error("Episode is not a Home refresh section.")
+                val coordinator = catalogRefreshCoordinator
+                if (coordinator != null) {
+                    coordinator.refreshSection(selected, contentType, RefreshTrigger.Manual).getOrThrow()
+                } else {
+                    val provider = providerRepository.getProvider(selected) ?: error("Provider not found.")
+                    when (provider.type) {
+                        ProviderType.Xtream -> when (contentType) {
+                            ContentType.Live -> xtreamRepository.refreshLive(selected)
+                            ContentType.Movie -> xtreamRepository.refreshMovies(selected)
+                            ContentType.Series -> xtreamRepository.refreshSeries(selected)
+                            ContentType.Episode -> error("Episode is not a Home refresh section.")
+                        }
+                        ProviderType.M3uUrl, ProviderType.M3uFile -> m3uRepository.refreshSection(selected.value, contentType)
                     }
-                    ProviderType.M3uUrl, ProviderType.M3uFile -> m3uRepository.refreshSection(selected.value, contentType)
                 }
             }
             refreshStatus.value = refreshStatus.value.finish(selected, contentType, result.isSuccess)

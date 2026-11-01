@@ -34,7 +34,16 @@ data class PlaybackMedia(
     val headers: Map<String, String> = emptyMap(),
     val startPositionMs: Long = 0L,
     val isLive: Boolean = true,
+    val sourceType: PlaybackSourceType = PlaybackSourceType.Remote,
+    val cacheKey: String? = null,
+    val mimeType: String? = null,
 )
+
+enum class PlaybackSourceType {
+    Remote,
+    LocalFile,
+    OfflineCache,
+}
 
 data class WatchioAudioTrack(
     val id: String,

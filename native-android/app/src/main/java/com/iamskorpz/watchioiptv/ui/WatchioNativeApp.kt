@@ -141,6 +141,7 @@ import com.iamskorpz.watchioiptv.core.device.detectDeviceInput
 import com.iamskorpz.watchioiptv.core.device.label
 import com.iamskorpz.watchioiptv.data.epg.EpgRefreshInterval
 import com.iamskorpz.watchioiptv.data.m3u.M3uImportState
+import com.iamskorpz.watchioiptv.data.refresh.isPlaybackRouteForAutoRefreshDeferral
 import com.iamskorpz.watchioiptv.data.xtream.XtreamImportState
 import com.iamskorpz.watchioiptv.BuildConfig
 import com.iamskorpz.watchioiptv.feature.home.HomeViewModel
@@ -160,6 +161,9 @@ import com.iamskorpz.watchioiptv.feature.movies.MovieDetailsScreen
 import com.iamskorpz.watchioiptv.feature.movies.MoviePlayerScreen
 import com.iamskorpz.watchioiptv.feature.movies.MoviesScreen
 import com.iamskorpz.watchioiptv.feature.movies.MoviesViewModel
+import com.iamskorpz.watchioiptv.feature.downloads.DownloadsScreen
+import com.iamskorpz.watchioiptv.feature.downloads.DownloadsViewModel
+import com.iamskorpz.watchioiptv.feature.downloads.OfflinePlaybackViewModel
 import com.iamskorpz.watchioiptv.feature.movies.openYoutubeTrailer
 import com.iamskorpz.watchioiptv.feature.player.PlayerContentContext
 import com.iamskorpz.watchioiptv.feature.player.WatchioFullscreenPlayerScreen
@@ -394,8 +398,19 @@ fun WatchioNativeApp(
     var pendingLiveChannel by remember { mutableStateOf<LiveTvChannel?>(null) }
     val livePlaybackReturnBackGuard = remember { LivePlaybackReturnBackGuard() }
     var pendingReturnProtection by remember { mutableStateOf<LivePlaybackOrigin?>(null) }
+    val playbackRouteActive = isPlaybackRouteForAutoRefreshDeferral(
+        route = currentBackStackEntry?.destination?.route,
+        hasPendingSportsChannel = pendingLiveChannel != null,
+    )
+    LaunchedEffect(playbackRouteActive) {
+        container.catalogAutoRefreshScheduler.setPlaybackRouteActive(playbackRouteActive)
+    }
     AppBackgroundPlaybackEffect(
-        onBackground = { (backgroundPlaybackHandler ?: container.playerManager::pause).invoke() },
+        onForeground = container.catalogAutoRefreshScheduler::onAppForegrounded,
+        onBackground = {
+            container.catalogAutoRefreshScheduler.onAppBackgrounded()
+            (backgroundPlaybackHandler ?: container.playerManager::pause).invoke()
+        },
     )
     TvRootExitBackHandler(
         enabled = shouldRequireTvDoubleBackExit(
@@ -480,6 +495,7 @@ fun WatchioNativeApp(
                                 container.xtreamRepository,
                                 container.m3uRepository,
                                 container.endpointManager,
+                                container.catalogRefreshCoordinator,
                             ) as T
                         }
                     },
@@ -489,7 +505,12 @@ fun WatchioNativeApp(
                     if (state.providersLoaded && state.providerId != null) QuickLoginBootstrapTrace.finishUiReady()
                 }
                 LaunchedEffect(state.providersLoaded, state.providerId) {
-                    if (state.providersLoaded) state.providerId?.let { container.searchRepository.warm(it) }
+                    if (state.providersLoaded) {
+                        state.providerId?.let {
+                            container.searchRepository.warm(it)
+                            container.catalogAutoRefreshScheduler.onHomeReady(it)
+                        }
+                    }
                 }
                 LaunchedEffect(state.providersLoaded, state.providerType) {
                     if (state.providersLoaded && state.providerType != ProviderType.Xtream) {
@@ -504,6 +525,7 @@ fun WatchioNativeApp(
                     providerSummary = state.providerSummary,
                     activeServerLabel = state.activeServerLabel,
                     activeServerOnline = state.activeServerOnline,
+                    activeServerStatus = state.activeServerStatus,
                     providerCount = state.providerCount,
                     liveCount = state.liveCount,
                     movieCount = state.movieCount,
@@ -530,6 +552,7 @@ fun WatchioNativeApp(
                     onTvGuide = { navController.navigate("epg-categories") },
                     onMovies = { navController.navigate("movies") },
                     onSeries = { navController.navigate("series") },
+                    onDownloads = { navController.navigate("downloads") },
                     onSearch = { navController.navigate("search") },
                     onSports = { navController.navigate("sports") },
                     onAnnouncements = { navController.navigate("announcements") },
@@ -758,6 +781,12 @@ fun WatchioNativeApp(
                         seriesViewModel.playEpisode(episode, true)
                         navController.navigate("series/player/$seriesId")
                     },
+                    onDownloadEpisode = seriesViewModel::downloadEpisode,
+                    onDownloadSeason = seriesViewModel::downloadSeason,
+                    onPauseDownload = seriesViewModel::pauseEpisode,
+                    onResumeDownload = seriesViewModel::resumeEpisode,
+                    onRetryDownload = seriesViewModel::retryEpisode,
+                    onCancelDownload = seriesViewModel::cancelEpisode,
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -823,6 +852,71 @@ fun WatchioNativeApp(
                     onBack = { navController.popBackStack() },
                 )
             }
+            composable("downloads") {
+                val downloadsViewModel: DownloadsViewModel = viewModel(factory = downloadsFactory(container))
+                val state by downloadsViewModel.state.collectAsStateWithLifecycle()
+                DownloadsScreen(
+                    state = state,
+                    onBack = { if (!downloadsViewModel.navigateBack()) navController.popBackStack() },
+                    onCategory = downloadsViewModel::selectCategory,
+                    onMovie = downloadsViewModel::openMovie,
+                    onShow = downloadsViewModel::openShow,
+                    onSeason = downloadsViewModel::openSeason,
+                    onPause = downloadsViewModel::pause,
+                    onResume = downloadsViewModel::resume,
+                    onRetry = downloadsViewModel::retry,
+                    onCancel = downloadsViewModel::cancel,
+                    onDelete = downloadsViewModel::requestDelete,
+                    onPlay = { downloadId -> navController.navigate("downloads/player/$downloadId") },
+                    onDismissDelete = downloadsViewModel::dismissDelete,
+                    onConfirmDelete = downloadsViewModel::confirmDelete,
+                    onPauseSeason = downloadsViewModel::pauseSeason,
+                    onResumeSeason = downloadsViewModel::resumeSeason,
+                    onCancelSeason = downloadsViewModel::cancelSeason,
+                    onDeleteSeason = downloadsViewModel::requestDeleteSeason,
+                    onDismissSeasonDelete = downloadsViewModel::dismissDeleteSeason,
+                    onConfirmSeasonDelete = downloadsViewModel::confirmDeleteSeason,
+                    onDeleteShow = downloadsViewModel::requestDeleteShow,
+                    onDismissShowDelete = downloadsViewModel::dismissDeleteShow,
+                    onConfirmShowDelete = downloadsViewModel::confirmDeleteShow,
+                    onDismissDeletionError = downloadsViewModel::dismissDeletionError,
+                )
+            }
+            composable("downloads/player/{downloadId}") { backStackEntry ->
+                val playbackViewModel: OfflinePlaybackViewModel = viewModel(factory = offlinePlaybackFactory(container))
+                val downloadId = backStackEntry.arguments?.getString("downloadId").orEmpty()
+                val state by playbackViewModel.state.collectAsStateWithLifecycle()
+                val playerState by playbackViewModel.playerState.collectAsStateWithLifecycle()
+                val playerSettings by container.settingsRepository.playerSettings.collectAsStateWithLifecycle(
+                    initialValue = com.iamskorpz.watchioiptv.domain.repository.PlayerSettings(),
+                )
+                LaunchedEffect(downloadId) { playbackViewModel.load(downloadId) }
+                PlaybackBackgroundHandler(
+                    onBackground = playbackViewModel::pauseForBackground,
+                    setHandler = { backgroundPlaybackHandler = it },
+                )
+                if (state.errorMessage != null) {
+                    com.iamskorpz.watchioiptv.ui.components.WatchioErrorState(
+                        message = state.errorMessage.orEmpty(),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    WatchioFullscreenPlayerScreen(
+                        playerState = playerState,
+                        playerSettings = playerSettings,
+                        playerManager = container.playerManager,
+                        contentContext = PlayerContentContext.Movie(title = state.title),
+                        onPlayPause = playbackViewModel::playPause,
+                        onSeek = container.playerManager::seekBy,
+                        onRestart = container.playerManager::restart,
+                        onRetry = container.playerManager::retry,
+                        onClose = {
+                            playbackViewModel.close()
+                            navController.popBackStack()
+                        },
+                    )
+                }
+            }
             composable("movies/{movieId}") { backStackEntry ->
                 val moviesViewModel: MoviesViewModel = viewModel(factory = moviesFactory(container))
                 val movieId = backStackEntry.arguments?.getString("movieId").orEmpty()
@@ -837,6 +931,7 @@ fun WatchioNativeApp(
                     },
                     onTrailer = { key -> openYoutubeTrailer(context, key) },
                     onFavorite = moviesViewModel::toggleFavorite,
+                    onDownload = moviesViewModel::downloadMovie,
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -1249,6 +1344,7 @@ fun WatchioNativeApp(
                 SettingsDetailScreen("EPG Settings", onBack = { navController.popBackStack() }) {
                     EpgSettingsContent(
                         state = state,
+                        onAutomaticContentRefresh = settingsViewModel::setAutomaticContentRefreshEnabled,
                         onEpgAutoRefresh = settingsViewModel::setEpgAutoRefreshEnabled,
                         onEpgRefreshInterval = settingsViewModel::setEpgRefreshInterval,
                         onRefreshEpgNow = settingsViewModel::refreshEpgNow,
@@ -1339,12 +1435,17 @@ fun WatchioNativeApp(
 }
 
 @Composable
-private fun AppBackgroundPlaybackEffect(onBackground: () -> Unit) {
+private fun AppBackgroundPlaybackEffect(
+    onForeground: () -> Unit = {},
+    onBackground: () -> Unit,
+) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, onBackground) {
+    DisposableEffect(lifecycleOwner, onForeground, onBackground) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                onBackground()
+            when (event) {
+                Lifecycle.Event.ON_START -> onForeground()
+                Lifecycle.Event.ON_STOP -> onBackground()
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -1473,6 +1574,7 @@ internal fun HomeScreen(
     providerSummary: String,
     activeServerLabel: String?,
     activeServerOnline: Boolean,
+    activeServerStatus: String = if (activeServerOnline) "Connected" else "Connection issue",
     providerCount: Int,
     liveCount: Int,
     movieCount: Int,
@@ -1497,6 +1599,7 @@ internal fun HomeScreen(
     onTvGuide: () -> Unit,
     onMovies: () -> Unit,
     onSeries: () -> Unit,
+    onDownloads: () -> Unit = {},
     onSearch: () -> Unit,
     onSports: () -> Unit,
     onAnnouncements: () -> Unit,
@@ -1565,6 +1668,7 @@ internal fun HomeScreen(
                 now = now,
                 activeServerLabel = activeServerLabel,
                 activeServerOnline = activeServerOnline,
+                activeServerStatus = activeServerStatus,
                 onSearch = onSearch,
                 onSports = onSports,
                 onAnnouncements = onAnnouncements,
@@ -1640,11 +1744,11 @@ internal fun HomeScreen(
                                 .testTag("home-series"),
                         )
                         HomeSecondaryPill(
-                            action = HomeAction("Coming Soon", "More features on the way", "", WatchioIconKind.ComingSoon, WatchioIconColors.ComingSoon, null),
+                            action = HomeAction("Downloads", "Watch offline", "", WatchioIconKind.Downloads, WatchioIconColors.ComingSoon, onDownloads),
                             modifier = Modifier
                                 .weight(0.28f)
                                 .fillMaxWidth()
-                                .testTag("home-coming-soon"),
+                                .testTag("home-downloads"),
                         )
                     }
                 }
@@ -1716,6 +1820,7 @@ internal fun ProviderManagementScreen(
                             } else {
                                 null
                             },
+                            providerHealth = state.providerHealth.takeIf { row.provider.id == state.selectedProviderId },
                             refreshing = row.provider.id == state.refreshingProviderId,
                             switching = row.provider.id == state.switchingProviderId,
                             compact = compact,
@@ -1796,6 +1901,7 @@ private fun ProviderCard(
     row: ProviderRowUiState,
     selected: Boolean,
     activeServerLabel: String?,
+    providerHealth: com.iamskorpz.watchioiptv.data.xtream.ProviderHealthState?,
     refreshing: Boolean,
     switching: Boolean,
     compact: Boolean,
@@ -1826,9 +1932,11 @@ private fun ProviderCard(
             }
             Text(row.typeLabel, color = colors.textMuted)
             if (row.provider.id.value.startsWith("xtream-managed-") && activeServerLabel != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(activeServerLabel, color = colors.textSecondary)
-                    Text("Active", color = Color(0xFF22C55E))
+                Text("$activeServerLabel selected", color = colors.textSecondary)
+                providerHealth?.let { health ->
+                    Text("Connection: ${health.connectivity.toDisplayLabel()}", color = colors.textMuted)
+                    Text("Account: ${health.authentication.toDisplayLabel()}", color = colors.textMuted)
+                    Text("Streaming: ${health.streaming.toDisplayLabel()}", color = colors.textMuted)
                 }
             }
             Text("Live ${row.liveCount}  Movies ${row.movieCount}  Series ${row.seriesCount}", color = colors.textSecondary)
@@ -1851,6 +1959,24 @@ private fun ProviderCard(
             }
         }
     }
+}
+
+private fun com.iamskorpz.watchioiptv.data.xtream.ProviderConnectivity.toDisplayLabel(): String = when (this) {
+    com.iamskorpz.watchioiptv.data.xtream.ProviderConnectivity.NotChecked -> "Not checked"
+    com.iamskorpz.watchioiptv.data.xtream.ProviderConnectivity.Connected -> "Connected"
+    com.iamskorpz.watchioiptv.data.xtream.ProviderConnectivity.TemporarilyUnavailable -> "Connection issue"
+}
+
+private fun com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.toDisplayLabel(): String = when (this) {
+    com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.NotChecked -> "Not checked"
+    com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.Verified -> "Verified"
+    com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.Rejected -> "Rejected"
+}
+
+private fun com.iamskorpz.watchioiptv.data.xtream.ProviderStreaming.toDisplayLabel(): String = when (this) {
+    com.iamskorpz.watchioiptv.data.xtream.ProviderStreaming.NotChecked -> "Not checked"
+    com.iamskorpz.watchioiptv.data.xtream.ProviderStreaming.Available -> "Available"
+    com.iamskorpz.watchioiptv.data.xtream.ProviderStreaming.TemporarilyUnavailable -> "Playback issue"
 }
 
 @Composable
@@ -2564,6 +2690,7 @@ internal fun HomeTopBar(
     now: LocalDateTime,
     activeServerLabel: String? = null,
     activeServerOnline: Boolean = true,
+    activeServerStatus: String = if (activeServerOnline) "Connected" else "Connection issue",
     onSearch: () -> Unit,
     onSports: () -> Unit,
     onAnnouncements: () -> Unit,
@@ -2630,8 +2757,12 @@ internal fun HomeTopBar(
             ) {
                 Text(activeServerLabel, color = colors.textSecondary, style = type.label, maxLines = 1)
                 Text(
-                    if (activeServerOnline) "Active" else "Inactive",
-                    color = if (activeServerOnline) Color(0xFF22C55E) else Color(0xFFEF4444),
+                    activeServerStatus,
+                    color = when (activeServerStatus) {
+                        "Connected" -> Color(0xFF22C55E)
+                        "Connection issue" -> Color(0xFFEF4444)
+                        else -> colors.textMuted
+                    },
                     style = type.label,
                     maxLines = 1,
                 )
@@ -3054,8 +3185,25 @@ private fun moviesFactory(container: AppContainer): ViewModelProvider.Factory =
                 clock = SystemWatchioClock,
                 xtreamRepository = container.xtreamRepository,
                 searchRepository = container.searchRepository,
+                catalogRefreshCoordinator = container.catalogRefreshCoordinator,
+                offlineDownloadsRepository = container.offlineMovieDownloadRepository,
+                downloadAuthorizationResolver = container.movieDownloadAuthorizationResolver,
             ) as T
         }
+    }
+
+private fun downloadsFactory(container: AppContainer): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            DownloadsViewModel(container.offlineMovieDownloadRepository) as T
+    }
+
+private fun offlinePlaybackFactory(container: AppContainer): ViewModelProvider.Factory =
+    object : ViewModelProvider.Factory {
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            OfflinePlaybackViewModel(container.offlineMovieDownloadRepository, container.playerManager) as T
     }
 
 private fun seriesFactory(container: AppContainer): ViewModelProvider.Factory =
@@ -3071,6 +3219,8 @@ private fun seriesFactory(container: AppContainer): ViewModelProvider.Factory =
                 clock = SystemWatchioClock,
                 xtreamRepository = container.xtreamRepository,
                 searchRepository = container.searchRepository,
+                catalogRefreshCoordinator = container.catalogRefreshCoordinator,
+                downloadsRepository = container.offlineMovieDownloadRepository,
             ) as T
         }
     }
@@ -3100,6 +3250,7 @@ private fun tvGuideFactory(container: AppContainer, initialCategoryId: String? =
                 playerManager = container.playerManager,
                 clock = SystemWatchioClock,
                 initialCategoryId = initialCategoryId,
+                catalogRefreshCoordinator = container.catalogRefreshCoordinator,
             ) as T
         }
     }
@@ -3935,13 +4086,24 @@ private fun WatchioChoiceCard(
 }
 
 @Composable
-private fun EpgSettingsContent(
+internal fun EpgSettingsContent(
     state: SettingsUiState,
+    onAutomaticContentRefresh: (Boolean) -> Unit = {},
     onEpgAutoRefresh: (Boolean) -> Unit,
     onEpgRefreshInterval: (EpgRefreshInterval) -> Unit,
     onRefreshEpgNow: () -> Unit,
 ) {
     val colors = LocalWatchioColors.current
+    ChoiceSettingRow(
+        title = "Automatic Content Refresh",
+        tagPrefix = "automatic-content-refresh",
+        choices = listOf(true, false),
+        selected = state.automaticContentRefreshEnabled,
+        label = { if (it) "ON" else "OFF" },
+        tagValue = { if (it) "on" else "off" },
+        onSelect = onAutomaticContentRefresh,
+    )
+    Spacer(Modifier.height(8.dp))
     Text("TV Guide / EPG", color = colors.textPrimary, fontWeight = FontWeight.Bold)
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
         WatchioFocusableCard(
@@ -4015,6 +4177,7 @@ private fun providersFactory(container: AppContainer): ViewModelProvider.Factory
                 xtreamRepository = container.xtreamRepository,
                 m3uRepository = container.m3uRepository,
                 endpointManager = container.endpointManager,
+                catalogRefreshCoordinator = container.catalogRefreshCoordinator,
             ) as T
         }
     }
@@ -4048,6 +4211,7 @@ private fun liveTvFactory(container: AppContainer, initialChannel: LiveTvChannel
                 clock = SystemWatchioClock,
                 initialChannel = initialChannel,
                 searchRepository = container.searchRepository,
+                catalogRefreshCoordinator = container.catalogRefreshCoordinator,
             ) as T
         }
     }

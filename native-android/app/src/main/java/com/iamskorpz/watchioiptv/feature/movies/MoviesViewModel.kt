@@ -23,6 +23,18 @@ import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
 import com.iamskorpz.watchioiptv.domain.repository.HistoryItem
 import com.iamskorpz.watchioiptv.domain.repository.HistoryRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
+import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
+import com.iamskorpz.watchioiptv.data.refresh.RefreshStatus
+import com.iamskorpz.watchioiptv.core.database.OfflineDownloadEntity
+import com.iamskorpz.watchioiptv.data.downloads.DownloadEligibility
+import com.iamskorpz.watchioiptv.data.downloads.EnqueueResult
+import com.iamskorpz.watchioiptv.data.downloads.MovieDownloadAuthorizationResolver
+import com.iamskorpz.watchioiptv.data.downloads.PlaylistMovieDownloadAuthorizationResolver
+import com.iamskorpz.watchioiptv.data.downloads.OfflineDownloadPolicy
+import com.iamskorpz.watchioiptv.data.downloads.OfflineDownloadState
+import com.iamskorpz.watchioiptv.data.downloads.OfflineDownloadsRepository
+import com.iamskorpz.watchioiptv.data.downloads.OfflineMovieDownloadCandidate
+import com.iamskorpz.watchioiptv.data.downloads.userMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -61,6 +73,14 @@ data class MovieDetailsUiState(
     val errorMessage: String? = null,
     val details: MovieDetails? = null,
     val autoResumeEnabled: Boolean = true,
+    val download: MovieDownloadUiState = MovieDownloadUiState(),
+)
+
+data class MovieDownloadUiState(
+    val enabled: Boolean = false,
+    val label: String = "Download",
+    val message: String = "Offline download permission has not been established for this movie.",
+    val downloadId: String? = null,
 )
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
@@ -73,6 +93,10 @@ class MoviesViewModel(
     private val clock: WatchioClock,
     private val xtreamRepository: XtreamRepository,
     private val searchRepository: SearchRepository? = null,
+    private val catalogRefreshCoordinator: CatalogRefreshCoordinator? = null,
+    private val offlineDownloadsRepository: OfflineDownloadsRepository? = null,
+    private val downloadAuthorizationResolver: MovieDownloadAuthorizationResolver = PlaylistMovieDownloadAuthorizationResolver,
+    private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
 ) : ViewModel() {
     private val mutableMovies = MutableStateFlow(MoviesUiState())
     private val mutableDetails = MutableStateFlow(MovieDetailsUiState())
@@ -87,12 +111,26 @@ class MoviesViewModel(
     private var initialCategoryResolved = false
     private var initialResumePending = false
     private var initialResumeStartMs = 0L
+    private var downloadRecords: List<OfflineDownloadEntity> = emptyList()
 
     val moviesState: StateFlow<MoviesUiState> = mutableMovies.asStateFlow()
     val detailsState: StateFlow<MovieDetailsUiState> = mutableDetails.asStateFlow()
     val playerState = playerManager.state
 
     init {
+        catalogRefreshCoordinator?.let { coordinator ->
+            viewModelScope.launch {
+                coordinator.updates.collect { event ->
+                    val activeProviderId = moviesRepository.selectedProviderId()
+                    if (event.status == RefreshStatus.Updated &&
+                        event.providerId == activeProviderId &&
+                        ContentType.Movie in event.changedSections
+                    ) {
+                        refreshSilently()
+                    }
+                }
+            }
+        }
         viewModelScope.launch {
             combine(settingsRepository.selectedProviderId, xtreamRepository.catalogSyncStates) { providerId, states ->
                 providerId to providerId?.let { states[CatalogSyncKey(it, ContentType.Movie)] }.orIdle()
@@ -113,6 +151,14 @@ class MoviesViewModel(
         viewModelScope.launch {
             settingsRepository.playerSettings.collect { settings ->
                 mutableDetails.value = mutableDetails.value.copy(autoResumeEnabled = settings.autoResume)
+            }
+        }
+        offlineDownloadsRepository?.let { repository ->
+            viewModelScope.launch {
+                repository.downloads.collect { records ->
+                    downloadRecords = records
+                    refreshMovieDownloadState()
+                }
             }
         }
         viewModelScope.launch {
@@ -139,7 +185,7 @@ class MoviesViewModel(
 
     fun loadMovies() {
         categoryJob?.cancel()
-        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+        categoryJob = viewModelScope.launch(defaultDispatcher) {
             val providerId = moviesRepository.selectedProviderId()
             if (providerId == null) {
                 mutableMovies.value = MoviesUiState(loading = false, errorMessage = "Add a provider first.")
@@ -189,13 +235,60 @@ class MoviesViewModel(
         }
     }
 
+    fun refreshSilently() {
+        categoryJob?.cancel()
+        categoryJob = viewModelScope.launch(defaultDispatcher) {
+            val providerId = moviesRepository.selectedProviderId() ?: return@launch
+            val categories = moviesRepository.categories(providerId)
+            if (categories.isEmpty()) return@launch
+
+            val current = mutableMovies.value
+            val restored = current.selectedCategory?.let { selected ->
+                categories.firstOrNull { it.id == selected.id }
+            }
+            val targetCategory = restored ?: categories.firstOrNull() ?: return@launch
+
+            val currentItemCount = current.movies.size.coerceAtLeast(MoviesRepository.PAGE_SIZE)
+            val updatedMovies = moviesRepository.moviePage(providerId, targetCategory, 0, currentItemCount)
+
+            val activeQuery = current.searchQuery
+            mutableMovies.value = current.copy(
+                categories = categories,
+                selectedCategory = targetCategory,
+                movies = updatedMovies,
+                hasMore = activeQuery.isBlank() && updatedMovies.size == currentItemCount,
+            )
+
+            // If user has a movie details screen open, refresh details without dismissing
+            selectedMovie?.let { currentMovie ->
+                if (mutableDetails.value.details != null) {
+                    val freshMovie = updatedMovies.firstOrNull { it.id == currentMovie.id }
+                        ?: moviesRepository.movie(providerId, currentMovie.id)
+                        ?: currentMovie
+                    selectedMovie = freshMovie
+                    val updatedDetails = runCatching { moviesRepository.details(freshMovie) }.getOrNull()
+                    if (updatedDetails != null) {
+                        mutableDetails.value = mutableDetails.value.copy(
+                            details = updatedDetails,
+                        )
+                    }
+                }
+            }
+
+            searchCacheWarmupJob?.cancel()
+            searchCacheWarmupJob = viewModelScope.launch(Dispatchers.IO) {
+                searchRepository?.warm(providerId) ?: moviesRepository.getOrLoadCatalog(providerId)
+            }
+        }
+    }
+
     fun selectCategory(category: MovieCategory) {
         categoryJob?.cancel()
         manualCategorySelected = true
         manualCategoryId = category.id
         initialCategoryResolved = true
         mutableMovies.value = mutableMovies.value.copy(selectedCategory = category, movies = emptyList(), loadingMore = false, hasMore = false)
-        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+        categoryJob = viewModelScope.launch(defaultDispatcher) {
             val providerId = moviesRepository.selectedProviderId() ?: return@launch
             val items = moviesRepository.moviePage(providerId, category, 0, MoviesRepository.PAGE_SIZE)
             mutableMovies.value = mutableMovies.value.copy(movies = items, hasMore = items.size == MoviesRepository.PAGE_SIZE)
@@ -214,7 +307,7 @@ class MoviesViewModel(
         if (query.isBlank()) {
             searchQueryFlow.value = ""
             categoryJob?.cancel()
-            categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            categoryJob = viewModelScope.launch(defaultDispatcher) {
                 val providerId = moviesRepository.selectedProviderId() ?: return@launch
                 val currentCategory = mutableMovies.value.selectedCategory
                     ?: mutableMovies.value.categories.firstOrNull()
@@ -230,7 +323,7 @@ class MoviesViewModel(
         }
     }
 
-    private suspend fun executeSearch(query: String) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+    private suspend fun executeSearch(query: String) = kotlinx.coroutines.withContext(defaultDispatcher) {
         val providerId = moviesRepository.selectedProviderId() ?: return@withContext
         val shared = searchRepository
         if (shared != null) {
@@ -290,7 +383,7 @@ class MoviesViewModel(
         if (state.loadingMore || !state.hasMore || state.searchQuery.isNotBlank()) return
         val category = state.selectedCategory ?: return
         mutableMovies.value = state.copy(loadingMore = true)
-        categoryJob = viewModelScope.launch(Dispatchers.Default) {
+        categoryJob = viewModelScope.launch(defaultDispatcher) {
             val providerId = moviesRepository.selectedProviderId() ?: run {
                 mutableMovies.value = mutableMovies.value.copy(loadingMore = false, hasMore = false)
                 return@launch
@@ -316,7 +409,14 @@ class MoviesViewModel(
         viewModelScope.launch {
             val currentAutoResume = mutableDetails.value.autoResumeEnabled
             mutableDetails.value = MovieDetailsUiState(loading = true, autoResumeEnabled = currentAutoResume)
-            mutableDetails.value = MovieDetailsUiState(loading = false, details = moviesRepository.details(movie), autoResumeEnabled = currentAutoResume)
+            val details = moviesRepository.details(movie)
+            mutableDetails.value = MovieDetailsUiState(
+                loading = false,
+                details = details,
+                autoResumeEnabled = currentAutoResume,
+                download = movieDownloadState(movie),
+            )
+            offlineDownloadsRepository?.backfillMetadata(details.toOfflineDownloadCandidate())
         }
     }
 
@@ -348,6 +448,81 @@ class MoviesViewModel(
             mutableDetails.value = mutableDetails.value.copy(details = details.copy(movie = details.movie.copy(isFavorite = nowFavorite)))
         }
     }
+
+    fun downloadMovie() {
+        val details = mutableDetails.value.details ?: return
+        val movie = details.movie
+        val repository = offlineDownloadsRepository ?: return
+        val candidate = details.toOfflineDownloadCandidate()
+        if (OfflineDownloadPolicy.evaluate(candidate) !is DownloadEligibility.Allowed) return
+        mutableDetails.value = mutableDetails.value.copy(
+            download = mutableDetails.value.download.copy(enabled = false, label = "Queued", message = "Adding movie to Downloads…"),
+        )
+        viewModelScope.launch {
+            val result = repository.enqueue(candidate)
+            mutableDetails.value = mutableDetails.value.copy(
+                download = when (result) {
+                    is EnqueueResult.Accepted -> MovieDownloadUiState(false, "Queued", "Download queued.", result.downloadId)
+                    is EnqueueResult.AlreadyExists -> movieDownloadState(movie).copy(downloadId = result.downloadId)
+                    is EnqueueResult.Denied -> MovieDownloadUiState(false, "Unavailable", result.reason.userMessage())
+                },
+            )
+        }
+    }
+
+    private fun refreshMovieDownloadState() {
+        val movie = mutableDetails.value.details?.movie ?: selectedMovie ?: return
+        mutableDetails.value = mutableDetails.value.copy(download = movieDownloadState(movie))
+    }
+
+    private fun movieDownloadState(movie: WatchioMovieItem): MovieDownloadUiState {
+        val existing = downloadRecords.firstOrNull {
+            it.providerId == movie.providerId.value && it.contentId == movie.id
+        }
+        if (existing != null) {
+            val state = runCatching { OfflineDownloadState.valueOf(existing.state) }.getOrDefault(OfflineDownloadState.Failed)
+            return when (state) {
+                OfflineDownloadState.Queued -> MovieDownloadUiState(false, "Queued", "Waiting to download.", existing.downloadId)
+                OfflineDownloadState.Downloading -> MovieDownloadUiState(false, "Downloading", "${existing.percentDownloaded.toInt().coerceIn(0, 100)}% downloaded.", existing.downloadId)
+                OfflineDownloadState.Paused -> MovieDownloadUiState(false, "Paused", "Resume this movie from Downloads.", existing.downloadId)
+                OfflineDownloadState.Completed -> MovieDownloadUiState(false, "Downloaded", "Available offline in Downloads.", existing.downloadId)
+                OfflineDownloadState.Failed -> MovieDownloadUiState(false, "Download failed", "Retry this movie from Downloads.", existing.downloadId)
+                OfflineDownloadState.Removing -> MovieDownloadUiState(false, "Removing", "Removing offline media…", existing.downloadId)
+            }
+        }
+        val candidate = mutableDetails.value.details
+            ?.takeIf { it.movie.id == movie.id }
+            ?.toOfflineDownloadCandidate()
+            ?: movie.toOfflinePolicyCandidate()
+        return when (val eligibility = OfflineDownloadPolicy.evaluate(candidate)) {
+            is DownloadEligibility.Allowed -> MovieDownloadUiState(true, "Download", "Save this authorised movie for offline viewing.")
+            is DownloadEligibility.Denied -> MovieDownloadUiState(false, "Unavailable", eligibility.reason.userMessage())
+        }
+    }
+
+    private fun MovieDetails.toOfflineDownloadCandidate() = OfflineMovieDownloadCandidate(
+        providerId = movie.providerId.value,
+        contentId = movie.id,
+        title = title,
+        posterUrl = posterUrl,
+        backdropUrl = backdropUrl,
+        containerExtension = movie.containerExtension,
+        authorization = downloadAuthorizationResolver.authorizationFor(movie.providerId.value, movie.id),
+        synopsis = plot,
+        releaseYear = releaseDate?.take(4),
+        genre = genre,
+        rating = rating,
+        runtime = runtime,
+    )
+
+    private fun WatchioMovieItem.toOfflinePolicyCandidate() = OfflineMovieDownloadCandidate(
+        providerId = providerId.value,
+        contentId = id,
+        title = name,
+        posterUrl = posterUrl,
+        containerExtension = containerExtension,
+        authorization = downloadAuthorizationResolver.authorizationFor(providerId.value, id),
+    )
 
     fun play(resume: Boolean = true) {
         val movie = mutableDetails.value.details?.movie ?: selectedMovie ?: return

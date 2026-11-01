@@ -13,6 +13,10 @@ import com.iamskorpz.watchioiptv.data.series.SeriesDetails
 import com.iamskorpz.watchioiptv.data.series.SeriesRepository
 import com.iamskorpz.watchioiptv.data.series.WatchioEpisodeItem
 import com.iamskorpz.watchioiptv.data.series.WatchioSeriesItem
+import com.iamskorpz.watchioiptv.core.database.OfflineDownloadEntity
+import com.iamskorpz.watchioiptv.data.downloads.DownloadAuthorization
+import com.iamskorpz.watchioiptv.data.downloads.OfflineDownloadsRepository
+import com.iamskorpz.watchioiptv.data.downloads.OfflineMovieDownloadCandidate
 import com.iamskorpz.watchioiptv.data.library.SearchRepository
 import com.iamskorpz.watchioiptv.data.library.SearchScope
 import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
@@ -25,6 +29,8 @@ import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
 import com.iamskorpz.watchioiptv.domain.repository.HistoryItem
 import com.iamskorpz.watchioiptv.domain.repository.HistoryRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
+import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
+import com.iamskorpz.watchioiptv.data.refresh.RefreshStatus
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -59,6 +65,7 @@ data class SeriesDetailsUiState(
     val targetEpisodeId: String? = null,
     val activeTab: String = "episodes",
     val autoResumeEnabled: Boolean = true,
+    val episodeDownloads: Map<String, OfflineDownloadEntity> = emptyMap(),
 ) {
     val selectedEpisodes: List<WatchioEpisodeItem>
         get() = details?.episodes?.filter { it.seasonNumber == selectedSeasonNumber }.orEmpty()
@@ -77,6 +84,9 @@ class SeriesViewModel(
     private val clock: WatchioClock,
     private val xtreamRepository: XtreamRepository,
     private val searchRepository: SearchRepository? = null,
+    private val catalogRefreshCoordinator: CatalogRefreshCoordinator? = null,
+    private val defaultDispatcher: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default,
+    private val downloadsRepository: OfflineDownloadsRepository? = null,
 ) : ViewModel() {
     private val mutableSeries = MutableStateFlow(SeriesUiState())
     private val mutableDetails = MutableStateFlow(SeriesDetailsUiState())
@@ -93,6 +103,7 @@ class SeriesViewModel(
     private val isEpisodeTransitionInProgress = java.util.concurrent.atomic.AtomicBoolean(false)
     private var lastSavedCompletedEpisodeId: String? = null
     private var lastProgressSaveEpochMs = 0L
+    private var downloadRecords: List<OfflineDownloadEntity> = emptyList()
 
     val seriesState: StateFlow<SeriesUiState> = mutableSeries.asStateFlow()
     val detailsState: StateFlow<SeriesDetailsUiState> = mutableDetails.asStateFlow()
@@ -100,6 +111,31 @@ class SeriesViewModel(
     val playerState = playerManager.state
 
     init {
+        downloadsRepository?.let { downloads ->
+            viewModelScope.launch {
+                downloads.downloads.collect { records ->
+                    downloadRecords = records
+                    val details = mutableDetails.value.details
+                    val matching = if (details == null) emptyMap() else records
+                        .filter { it.contentType == "Episode" && it.providerId == details.series.providerId.value && it.showId == details.series.id }
+                        .associateBy { it.contentId }
+                    mutableDetails.value = mutableDetails.value.copy(episodeDownloads = matching)
+                }
+            }
+        }
+        catalogRefreshCoordinator?.let { coordinator ->
+            viewModelScope.launch {
+                coordinator.updates.collect { event ->
+                    val activeProviderId = seriesRepository.selectedProviderId()
+                    if (event.status == RefreshStatus.Updated &&
+                        event.providerId == activeProviderId &&
+                        ContentType.Series in event.changedSections
+                    ) {
+                        refreshSilently()
+                    }
+                }
+            }
+        }
         viewModelScope.launch {
             combine(settingsRepository.selectedProviderId, xtreamRepository.catalogSyncStates) { providerId, states ->
                 providerId to providerId?.let { states[CatalogSyncKey(it, ContentType.Series)] }.orIdle()
@@ -207,7 +243,7 @@ class SeriesViewModel(
 
     fun loadSeries() {
         categoryJob?.cancel()
-        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+        categoryJob = viewModelScope.launch(defaultDispatcher) {
             val providerId = seriesRepository.selectedProviderId()
             if (providerId == null) {
                 mutableSeries.value = SeriesUiState(loading = false, errorMessage = "Add a provider first.")
@@ -229,10 +265,59 @@ class SeriesViewModel(
         }
     }
 
+    fun refreshSilently() {
+        categoryJob?.cancel()
+        categoryJob = viewModelScope.launch(defaultDispatcher) {
+            val providerId = seriesRepository.selectedProviderId() ?: return@launch
+            val categories = seriesRepository.categories(providerId)
+            if (categories.isEmpty()) return@launch
+
+            val current = mutableSeries.value
+            val restored = current.selectedCategory?.let { selected ->
+                categories.firstOrNull { it.id == selected.id }
+            }
+            val targetCategory = restored ?: categories.firstOrNull() ?: return@launch
+
+            val currentItemCount = current.series.size.coerceAtLeast(SeriesRepository.PAGE_SIZE)
+            val updatedSeries = seriesRepository.seriesPage(providerId, targetCategory, 0, currentItemCount)
+
+            val activeQuery = current.searchQuery
+            mutableSeries.value = current.copy(
+                categories = categories,
+                selectedCategory = targetCategory,
+                series = updatedSeries,
+                hasMore = activeQuery.isBlank() && updatedSeries.size == currentItemCount,
+            )
+
+            // If user has series details screen open, refresh details silently without closing
+            val currentDetails = mutableDetails.value.details
+            if (currentDetails != null) {
+                val currentSeries = currentDetails.series
+                val freshSeries: WatchioSeriesItem = updatedSeries.firstOrNull { it.series.id == currentSeries.id }?.series
+                    ?: seriesRepository.item(providerId, currentSeries.id)
+                    ?: currentSeries
+                val updatedDetails = runCatching { seriesRepository.details(freshSeries) }.getOrNull()
+                if (updatedDetails != null) {
+                    val preservedSeason = mutableDetails.value.selectedSeasonNumber
+                        ?.takeIf { sNum -> updatedDetails.seasons.any { it.seasonNumber == sNum } }
+                        ?: updatedDetails.seasons.firstOrNull { it.seasonNumber == 1 }?.seasonNumber
+                        ?: updatedDetails.seasons.firstOrNull { it.seasonNumber > 0 }?.seasonNumber
+                        ?: updatedDetails.seasons.firstOrNull()?.seasonNumber
+                    mutableDetails.value = mutableDetails.value.copy(
+                        details = updatedDetails,
+                        selectedSeasonNumber = preservedSeason,
+                    )
+                }
+            }
+
+            searchRepository?.warm(providerId)
+        }
+    }
+
     fun selectCategory(category: SeriesCategory) {
         categoryJob?.cancel()
         mutableSeries.value = mutableSeries.value.copy(selectedCategory = category, series = emptyList(), loadingMore = false, hasMore = false)
-        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+        categoryJob = viewModelScope.launch(defaultDispatcher) {
             val providerId = seriesRepository.selectedProviderId() ?: return@launch
             val items = seriesRepository.seriesPage(providerId, category, 0, SeriesRepository.PAGE_SIZE)
             mutableSeries.value = mutableSeries.value.copy(series = items, hasMore = items.size == SeriesRepository.PAGE_SIZE)
@@ -259,7 +344,7 @@ class SeriesViewModel(
         if (state.loadingMore || !state.hasMore || state.searchQuery.isNotBlank()) return
         val category = state.selectedCategory ?: return
         mutableSeries.value = state.copy(loadingMore = true)
-        categoryJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+        categoryJob = viewModelScope.launch(defaultDispatcher) {
             val providerId = seriesRepository.selectedProviderId() ?: run {
                 mutableSeries.value = mutableSeries.value.copy(loadingMore = false, hasMore = false)
                 return@launch
@@ -279,11 +364,13 @@ class SeriesViewModel(
     fun loadDetails(series: WatchioSeriesItem, targetEpisodeId: String? = null) {
         viewModelScope.launch {
             val currentAutoResume = mutableDetails.value.autoResumeEnabled
+            val catalogDetails = series.catalogDetails()
             mutableDetails.value = SeriesDetailsUiState(
                 loading = true,
-                details = series.catalogDetails(),
+                details = catalogDetails,
                 autoResumeEnabled = currentAutoResume,
                 targetEpisodeId = targetEpisodeId,
+                episodeDownloads = matchingDownloads(catalogDetails),
             )
             val details = runCatching { seriesRepository.details(series) }.getOrElse {
                 mutableDetails.value = mutableDetails.value.copy(
@@ -304,7 +391,12 @@ class SeriesViewModel(
                 selectedSeasonNumber = selected,
                 targetEpisodeId = targetEpisodeId,
                 autoResumeEnabled = currentAutoResume,
+                episodeDownloads = matchingDownloads(details),
             )
+            val existingEpisodeIds = matchingDownloads(details).keys
+            details.episodes.filter { it.episodeId in existingEpisodeIds }.forEach { episode ->
+                downloadsRepository?.backfillMetadata(episode.toDownloadCandidate(details))
+            }
         }
     }
 
@@ -348,14 +440,22 @@ class SeriesViewModel(
         viewModelScope.launch {
             val providerId = seriesRepository.selectedProviderId()
             val item = providerId?.let { seriesRepository.item(it, seriesId) } ?: return@launch
-            val refreshed = seriesRepository.details(item)
+            val refreshed = runCatching { seriesRepository.details(item) }.getOrElse {
+                mutableDetails.value = mutableDetails.value.copy(
+                    loading = false,
+                    errorMessage = "Unable to refresh episodes from this provider.",
+                )
+                return@launch
+            }
             val selected = current.selectedSeasonNumber ?: refreshed.seasons.firstOrNull { it.seasonNumber == 1 }?.seasonNumber
             mutableDetails.value = current.copy(
                 loading = false,
+                errorMessage = null,
                 details = refreshed,
                 selectedSeasonNumber = selected,
                 activeTab = current.activeTab,
                 autoResumeEnabled = current.autoResumeEnabled,
+                episodeDownloads = matchingDownloads(refreshed),
             )
         }
     }
@@ -408,6 +508,53 @@ class SeriesViewModel(
             startPlaybackLoop(episode)
         }
     }
+
+    fun downloadEpisode(episode: WatchioEpisodeItem) {
+        val details = mutableDetails.value.details ?: return
+        val repository = downloadsRepository ?: return
+        viewModelScope.launch { repository.enqueue(episode.toDownloadCandidate(details)) }
+    }
+
+    fun downloadSeason(seasonNumber: Int) {
+        val details = mutableDetails.value.details ?: return
+        val repository = downloadsRepository ?: return
+        viewModelScope.launch {
+            details.episodes.filter { it.seasonNumber == seasonNumber }.sortedBy { it.episodeNumber }.forEach { episode ->
+                repository.enqueue(episode.toDownloadCandidate(details))
+            }
+        }
+    }
+
+    fun pauseEpisode(downloadId: String) = downloadsRepository?.pause(downloadId)
+    fun resumeEpisode(downloadId: String) = downloadsRepository?.resume(downloadId)
+    fun retryEpisode(downloadId: String) = downloadsRepository?.retry(downloadId)
+    fun cancelEpisode(downloadId: String) = downloadsRepository?.cancel(downloadId)
+
+    private fun WatchioEpisodeItem.toDownloadCandidate(details: SeriesDetails) = OfflineMovieDownloadCandidate(
+        providerId = providerId.value,
+        contentId = episodeId,
+        title = "${details.title} - S${seasonNumber.toString().padStart(2, '0')}E${episodeNumber.toString().padStart(2, '0')} - $title",
+        posterUrl = details.posterUrl,
+        backdropUrl = details.backdropUrl,
+        thumbnailUrl = imageUrl,
+        containerExtension = containerExtension,
+        authorization = DownloadAuthorization.ProviderApproved,
+        contentType = "Episode",
+        showId = seriesId,
+        showTitle = details.title,
+        seasonNumber = seasonNumber,
+        episodeNumber = episodeNumber,
+        synopsis = details.plot,
+        releaseYear = details.releaseDate?.take(4),
+        genre = details.genre,
+        rating = rating ?: details.rating,
+        runtime = duration ?: details.runtime,
+        episodeTitle = title,
+    )
+
+    private fun matchingDownloads(details: SeriesDetails): Map<String, OfflineDownloadEntity> = downloadRecords
+        .filter { it.contentType == "Episode" && it.providerId == details.series.providerId.value && it.showId == details.series.id }
+        .associateBy { it.contentId }
 
     fun playTopLevel(resume: Boolean = true) {
         val details = mutableDetails.value.details ?: return

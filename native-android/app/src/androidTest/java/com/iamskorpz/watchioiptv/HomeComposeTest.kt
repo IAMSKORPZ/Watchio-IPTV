@@ -87,8 +87,8 @@ class HomeComposeTest {
         composeRule.onNodeWithContentDescription("Notifications, no unread notifications").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Settings").assertIsDisplayed()
         composeRule.onNodeWithTag("home-top-icon-Settings").assertIsDisplayed()
-        composeRule.onNodeWithTag("home-coming-soon").assertIsDisplayed().assertHasNoClickAction()
-        composeRule.onNodeWithTag("home-icon-ComingSoon").assertIsDisplayed()
+        composeRule.onNodeWithTag("home-downloads").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithTag("home-icon-Downloads").assertIsDisplayed()
     }
 
     @Test
@@ -120,6 +120,18 @@ class HomeComposeTest {
         composeRule.onNodeWithTag("live-epg-panel").assertIsDisplayed()
         composeRule.onNodeWithTag("live-search").assertIsDisplayed()
         composeRule.onNodeWithTag("live-more").assertIsDisplayed()
+    }
+
+    @Test
+    fun downloadsTileOpensLibraryAndBackReturnsHome() {
+        enterConfiguredOrProviderSetup()
+        if (composeRule.onAllNodesWithTag("home-downloads").fetchSemanticsNodes().isEmpty()) return
+
+        composeRule.onNodeWithTag("home-downloads").performClick()
+        composeRule.onNodeWithTag("downloads-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("downloads-empty").assertIsDisplayed()
+        composeRule.onNodeWithTag("downloads-back").performClick()
+        composeRule.onNodeWithTag("home-screen").assertIsDisplayed()
     }
 
     @Test

@@ -6,6 +6,8 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
+const val SQLITE_MAX_BIND_PARAMS = 500
+
 @Dao
 interface CategoryDao {
     @Upsert
@@ -22,8 +24,27 @@ interface CategoryDao {
 
     @Transaction
     suspend fun replaceCategories(providerId: String, contentType: String, categories: List<CategoryEntity>) {
+        replaceCategoriesWithDiff(providerId, contentType, categories)
+    }
+
+    @Transaction
+    suspend fun replaceCategoriesWithDiff(
+        providerId: String,
+        contentType: String,
+        categories: List<CategoryEntity>,
+    ): Boolean {
+        val existing = getByType(providerId, contentType)
+        val sortedIncoming = categories.sortedWith(compareBy<CategoryEntity> { it.serverOrder }.thenBy { it.name })
+        if (existing == sortedIncoming) {
+            return false
+        }
         deleteByProviderAndType(providerId, contentType)
-        upsertAll(categories)
+        if (categories.isNotEmpty()) {
+            categories.chunked(SQLITE_MAX_BIND_PARAMS).forEach { chunk ->
+                upsertAll(chunk)
+            }
+        }
+        return true
     }
 }
 
@@ -52,8 +73,35 @@ interface LiveStreamDao {
 
     @Transaction
     suspend fun replaceLiveStreams(providerId: String, streams: List<LiveStreamEntity>) {
+        replaceLiveStreamsWithDiff(providerId, streams)
+    }
+
+    @Transaction
+    suspend fun replaceLiveStreamsWithDiff(providerId: String, streams: List<LiveStreamEntity>): Boolean {
+        val existingById = getByProvider(providerId).associateBy { it.streamId }
+        val changed = existingById.size != streams.size || streams.any { incoming ->
+            val current = existingById[incoming.streamId] ?: return@any true
+            current.copy(createdAtEpochMs = 0L, updatedAtEpochMs = 0L) !=
+                incoming.copy(createdAtEpochMs = 0L, updatedAtEpochMs = 0L)
+        }
+        if (!changed) {
+            return false
+        }
+        val preservedStreams = streams.map { incoming ->
+            val current = existingById[incoming.streamId]
+            if (current != null) {
+                incoming.copy(createdAtEpochMs = current.createdAtEpochMs)
+            } else {
+                incoming
+            }
+        }
         deleteByProvider(providerId)
-        upsertAll(streams)
+        if (preservedStreams.isNotEmpty()) {
+            preservedStreams.chunked(SQLITE_MAX_BIND_PARAMS).forEach { chunk ->
+                upsertAll(chunk)
+            }
+        }
+        return true
     }
 }
 
@@ -94,8 +142,26 @@ interface VodDao {
 
     @Transaction
     suspend fun replaceMovies(providerId: String, movies: List<VodStreamEntity>) {
+        replaceMoviesWithDiff(providerId, movies)
+    }
+
+    @Transaction
+    suspend fun replaceMoviesWithDiff(providerId: String, movies: List<VodStreamEntity>): Boolean {
+        val existingById = getByProvider(providerId).associateBy { it.streamId }
+        val changed = existingById.size != movies.size || movies.any { incoming ->
+            val current = existingById[incoming.streamId] ?: return@any true
+            current.copy(updatedAtEpochMs = 0L) != incoming.copy(updatedAtEpochMs = 0L)
+        }
+        if (!changed) {
+            return false
+        }
         deleteByProvider(providerId)
-        upsertAll(movies)
+        if (movies.isNotEmpty()) {
+            movies.chunked(SQLITE_MAX_BIND_PARAMS).forEach { chunk ->
+                upsertAll(chunk)
+            }
+        }
+        return true
     }
 }
 
@@ -124,6 +190,9 @@ interface SeriesDao {
 
     @Query("DELETE FROM series WHERE providerId = :providerId")
     suspend fun deleteByProvider(providerId: String)
+
+    @Query("DELETE FROM series WHERE providerId = :providerId AND seriesId IN (:seriesIds)")
+    suspend fun deleteByIds(providerId: String, seriesIds: List<String>)
 
     @Query("SELECT * FROM series WHERE providerId = :providerId ORDER BY serverOrder ASC, name ASC")
     suspend fun getByProvider(providerId: String): List<SeriesEntity>
@@ -180,8 +249,69 @@ interface SeriesDao {
 
     @Transaction
     suspend fun replaceSeries(providerId: String, series: List<SeriesEntity>) {
-        deleteByProvider(providerId)
-        upsertAll(series)
+        replaceSeriesWithDiff(providerId, series)
+    }
+
+    @Transaction
+    suspend fun replaceSeriesWithDiff(
+        providerId: String,
+        series: List<SeriesEntity>,
+        lastModifiedBySeriesId: Map<String, Long> = emptyMap(),
+    ): Boolean {
+        val existingById = getByProvider(providerId).associateBy { it.seriesId }
+        val incomingIds = series.mapTo(HashSet(series.size)) { it.seriesId }
+        val obsoleteIds = existingById.keys.filter { it !in incomingIds }
+        if (obsoleteIds.isNotEmpty()) {
+            obsoleteIds.chunked(SQLITE_MAX_BIND_PARAMS).forEach { chunk ->
+                deleteByIds(providerId, chunk)
+            }
+        }
+        val rowsToUpsert = ArrayList<SeriesEntity>(series.size)
+        for (incoming in series) {
+            val existing = existingById[incoming.seriesId]
+            val merged = if (existing == null) {
+                // Brand-new catalogue row has not had its seasons/episodes fetched yet.
+                incoming.copy(updatedAtEpochMs = 0L)
+            } else {
+                val remoteLastModified = lastModifiedBySeriesId[incoming.seriesId]
+                val detailTimestamp = if (
+                    remoteLastModified != null &&
+                    existing.updatedAtEpochMs > 0L &&
+                    remoteLastModified > existing.updatedAtEpochMs
+                ) {
+                    // Server indicates newer series modification than our last detail fetch;
+                    // mark detail freshness stale while keeping cached episodes intact.
+                    0L
+                } else {
+                    existing.updatedAtEpochMs
+                }
+                val preferExistingDetails = detailTimestamp > 0L
+                incoming.copy(
+                    coverUrl = if (preferExistingDetails) existing.coverUrl?.takeIf { it.isNotBlank() } ?: incoming.coverUrl else incoming.coverUrl?.takeIf { it.isNotBlank() } ?: existing.coverUrl,
+                    plot = if (preferExistingDetails) existing.plot?.takeIf { it.isNotBlank() } ?: incoming.plot else incoming.plot?.takeIf { it.isNotBlank() } ?: existing.plot,
+                    cast = if (preferExistingDetails) existing.cast?.takeIf { it.isNotBlank() } ?: incoming.cast else incoming.cast?.takeIf { it.isNotBlank() } ?: existing.cast,
+                    director = if (preferExistingDetails) existing.director?.takeIf { it.isNotBlank() } ?: incoming.director else incoming.director?.takeIf { it.isNotBlank() } ?: existing.director,
+                    genre = if (preferExistingDetails) existing.genre?.takeIf { it.isNotBlank() } ?: incoming.genre else incoming.genre?.takeIf { it.isNotBlank() } ?: existing.genre,
+                    releaseDate = if (preferExistingDetails) existing.releaseDate?.takeIf { it.isNotBlank() } ?: incoming.releaseDate else incoming.releaseDate?.takeIf { it.isNotBlank() } ?: existing.releaseDate,
+                    rating = if (preferExistingDetails) existing.rating?.takeIf { it.isNotBlank() } ?: incoming.rating else incoming.rating?.takeIf { it.isNotBlank() } ?: existing.rating,
+                    rating5Based = existing.rating5Based?.takeIf { it.isNotBlank() } ?: incoming.rating5Based,
+                    trailer = if (preferExistingDetails) existing.trailer?.takeIf { it.isNotBlank() } ?: incoming.trailer else incoming.trailer?.takeIf { it.isNotBlank() } ?: existing.trailer,
+                    runtime = if (preferExistingDetails) existing.runtime?.takeIf { it.isNotBlank() } ?: incoming.runtime else incoming.runtime?.takeIf { it.isNotBlank() } ?: existing.runtime,
+                    backdropUrl = existing.backdropUrl?.takeIf { it.isNotBlank() } ?: incoming.backdropUrl,
+                    tmdbId = existing.tmdbId ?: incoming.tmdbId,
+                    updatedAtEpochMs = detailTimestamp,
+                )
+            }
+            if (existing != merged) {
+                rowsToUpsert += merged
+            }
+        }
+        if (rowsToUpsert.isNotEmpty()) {
+            rowsToUpsert.chunked(SQLITE_MAX_BIND_PARAMS).forEach { chunk ->
+                upsertAll(chunk)
+            }
+        }
+        return obsoleteIds.isNotEmpty() || rowsToUpsert.isNotEmpty()
     }
 
     @Transaction
@@ -206,8 +336,16 @@ interface SeriesDao {
         )
         deleteSeasons(providerId, series.seriesId)
         deleteEpisodes(providerId, series.seriesId)
-        upsertSeasons(seasons)
-        upsertEpisodes(episodes)
+        if (seasons.isNotEmpty()) {
+            seasons.chunked(SQLITE_MAX_BIND_PARAMS).forEach { chunk ->
+                upsertSeasons(chunk)
+            }
+        }
+        if (episodes.isNotEmpty()) {
+            episodes.chunked(SQLITE_MAX_BIND_PARAMS).forEach { chunk ->
+                upsertEpisodes(chunk)
+            }
+        }
     }
 
     @Query("DELETE FROM episodes WHERE providerId = :providerId AND seriesId = :seriesId")

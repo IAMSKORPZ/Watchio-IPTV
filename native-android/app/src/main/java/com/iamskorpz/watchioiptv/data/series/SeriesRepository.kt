@@ -25,6 +25,7 @@ import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlResolver
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
 import com.iamskorpz.watchioiptv.domain.repository.HistoryRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -50,6 +51,7 @@ class SeriesRepository(
     private val retrofitFactory: (String) -> Retrofit,
     private val tmdbRetrofitFactory: (String) -> Retrofit,
     private val clock: WatchioClock,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private var activeEpisode: WatchioEpisodeItem? = null
     @Volatile
@@ -80,7 +82,7 @@ class SeriesRepository(
         activeEpisode = null
     }
 
-    suspend fun categories(providerId: ProviderId): List<SeriesCategory> = withContext(Dispatchers.IO) {
+    suspend fun categories(providerId: ProviderId): List<SeriesCategory> = withContext(ioDispatcher) {
         listOf(
             SeriesCategory("all", "ALL SERIES", SeriesCategoryKind.All),
             SeriesCategory("continue_watching", "CONTINUE WATCHING", SeriesCategoryKind.ContinueWatching),
@@ -89,7 +91,7 @@ class SeriesRepository(
         ) + database.categoryDao().getByType(providerId.value, ContentType.Series.persisted).map { it.toSeriesCategory() }
     }
 
-    suspend fun getOrLoadCatalog(providerId: ProviderId): SeriesCatalogCache = withContext(Dispatchers.IO) {
+    suspend fun getOrLoadCatalog(providerId: ProviderId): SeriesCatalogCache = withContext(ioDispatcher) {
         val current = catalogCache
         if (current != null && current.providerId == providerId) {
             return@withContext current
@@ -146,7 +148,7 @@ class SeriesRepository(
         }
     }
 
-    suspend fun seriesCards(providerId: ProviderId, category: SeriesCategory, query: String = ""): List<SeriesCardUiModel> = withContext(Dispatchers.IO) {
+    suspend fun seriesCards(providerId: ProviderId, category: SeriesCategory, query: String = ""): List<SeriesCardUiModel> = withContext(ioDispatcher) {
         val catalog = getOrLoadCatalog(providerId)
         val normalizedQuery = if (query.isNotBlank()) TextNormalizer.normalizeForSearch(query) else ""
 
@@ -274,7 +276,7 @@ class SeriesRepository(
         offset: Int,
         limit: Int,
         query: String = "",
-    ): List<SeriesCardUiModel> = withContext(Dispatchers.IO) {
+    ): List<SeriesCardUiModel> = withContext(ioDispatcher) {
         val provider = database.providerDao().findById(providerId.value) ?: return@withContext emptyList()
         val providerType = ProviderType.fromPersisted(provider.type)
         val normalizedQuery = TextNormalizer.normalizeForSearch(query)
@@ -358,13 +360,22 @@ class SeriesRepository(
         }
     }
 
-    suspend fun details(series: WatchioSeriesItem): SeriesDetails = withContext(Dispatchers.IO) {
+    suspend fun details(series: WatchioSeriesItem): SeriesDetails = withContext(ioDispatcher) {
         val cachedSeries = database.seriesDao().find(series.providerId.value, series.id)
         val cachedSeasons = database.seriesDao().getSeasons(series.providerId.value, series.id)
         val cachedEpisodes = database.episodeDao().getBySeries(series.providerId.value, series.id)
-        val hasFreshCache = cachedEpisodes.isNotEmpty() && cachedSeries != null && clock.nowEpochMs() - cachedSeries.updatedAtEpochMs < DETAIL_CACHE_MS
+        val now = clock.nowEpochMs()
+        val detailUpdatedAtEpochMs = cachedSeries?.updatedAtEpochMs ?: 0L
+        val hasFreshCache = cachedEpisodes.isNotEmpty() &&
+            detailUpdatedAtEpochMs > 0L &&
+            now >= detailUpdatedAtEpochMs &&
+            now - detailUpdatedAtEpochMs < DETAIL_CACHE_MS
         if (!hasFreshCache && series.providerType == ProviderType.Xtream) {
-            loadXtreamDetails(series)
+            if (cachedEpisodes.isNotEmpty()) {
+                runCatching { loadXtreamDetails(series, preserveExistingOnEmpty = true) }
+            } else {
+                loadXtreamDetails(series, preserveExistingOnEmpty = false)
+            }
         } else if (cachedEpisodes.isEmpty() && series.providerType != ProviderType.Xtream) {
             cacheM3uDetails(series)
         }
@@ -406,10 +417,18 @@ class SeriesRepository(
         return EpisodePlaybackRequest(episode, url, episode.headers, start)
     }
 
+    suspend fun offlinePlayback(providerId: String, seriesId: String, episodeId: String): EpisodePlaybackRequest {
+        val provider = database.providerDao().findById(providerId)
+            ?: throw IllegalStateException("Episode provider is unavailable.")
+        val entity = database.episodeDao().find(providerId, seriesId, episodeId)
+            ?: throw IllegalStateException("Episode source is unavailable.")
+        return playback(entity.toEpisode(ProviderType.fromPersisted(provider.type), emptyList()), resume = false)
+    }
+
     fun shouldResume(positionMs: Long?, durationMs: Long?): Boolean = shouldResumePosition(positionMs, durationMs)
     fun isCompleted(positionMs: Long?, durationMs: Long?): Boolean = isCompletedPosition(positionMs, durationMs)
 
-    private suspend fun loadXtreamDetails(series: WatchioSeriesItem) {
+    private suspend fun loadXtreamDetails(series: WatchioSeriesItem, preserveExistingOnEmpty: Boolean = false) {
         val provider = database.providerDao().findById(series.providerId.value)
             ?: throw IllegalStateException("Series provider is unavailable.")
         val credentials = credentialStore.getXtreamCredentials(series.providerId.value)
@@ -425,6 +444,9 @@ class SeriesRepository(
         val episodes = response.episodes.flatMap { (seasonKey, list) ->
             val season = seasonKey.toIntOrNull() ?: 0
             list.mapIndexedNotNull { index, dto -> dto.toEpisodeEntity(series, season, index + 1, now) }
+        }
+        if (preserveExistingOnEmpty && episodes.isEmpty()) {
+            throw IllegalStateException("Empty series details response ignored to preserve cached episodes.")
         }
         val seasons = synthesizeSeasonEntities(series.providerId, series.id, response.seasons, episodes, now)
         database.seriesDao().replaceDetails(series.providerId.value, updated, seasons, episodes)

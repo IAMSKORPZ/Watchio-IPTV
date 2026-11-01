@@ -23,6 +23,7 @@ import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlResolver
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
 import com.iamskorpz.watchioiptv.domain.repository.HistoryRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -52,6 +53,7 @@ class MoviesRepository(
     private val retrofitFactory: (String) -> Retrofit,
     private val tmdbRetrofitFactory: (String) -> Retrofit,
     private val clock: WatchioClock,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val cacheMutex = Mutex()
     @Volatile
@@ -71,7 +73,7 @@ class MoviesRepository(
 
     suspend fun selectedProviderId(): ProviderId? = settingsRepository.selectedProviderId.first()
 
-    suspend fun categories(providerId: ProviderId): List<MovieCategory> = withContext(Dispatchers.IO) {
+    suspend fun categories(providerId: ProviderId): List<MovieCategory> = withContext(ioDispatcher) {
         listOf(
             MovieCategory("all", "ALL MOVIES", MovieCategoryKind.All),
             MovieCategory("continue_watching", "CONTINUE WATCHING", MovieCategoryKind.ContinueWatching),
@@ -80,7 +82,7 @@ class MoviesRepository(
         ) + database.categoryDao().getByType(providerId.value, ContentType.Movie.persisted).map { it.toMovieCategory() }
     }
 
-    suspend fun getOrLoadCatalog(providerId: ProviderId): MovieCatalogCache = withContext(Dispatchers.IO) {
+    suspend fun getOrLoadCatalog(providerId: ProviderId): MovieCatalogCache = withContext(ioDispatcher) {
         val current = catalogCache
         if (current != null && current.providerId == providerId) {
             return@withContext current
@@ -134,7 +136,7 @@ class MoviesRepository(
         }
     }
 
-    suspend fun movies(providerId: ProviderId, category: MovieCategory, query: String = ""): List<WatchioMovieItem> = withContext(Dispatchers.IO) {
+    suspend fun movies(providerId: ProviderId, category: MovieCategory, query: String = ""): List<WatchioMovieItem> = withContext(ioDispatcher) {
         val catalog = getOrLoadCatalog(providerId)
         val normalizedQuery = if (query.isNotBlank()) TextNormalizer.normalizeForSearch(query) else ""
 
@@ -189,7 +191,7 @@ class MoviesRepository(
         offset: Int,
         limit: Int,
         query: String = "",
-    ): List<WatchioMovieItem> = withContext(Dispatchers.IO) {
+    ): List<WatchioMovieItem> = withContext(ioDispatcher) {
         val provider = database.providerDao().findById(providerId.value) ?: return@withContext emptyList()
         val providerType = ProviderType.fromPersisted(provider.type)
         val normalizedQuery = TextNormalizer.normalizeForSearch(query)
@@ -223,7 +225,7 @@ class MoviesRepository(
         query: String,
         limit: Int = SEARCH_LIMIT,
         includeFuzzy: Boolean = true,
-    ): List<WatchioMovieItem> = withContext(Dispatchers.IO) {
+    ): List<WatchioMovieItem> = withContext(ioDispatcher) {
         if (TextNormalizer.normalizeForSearch(query).isBlank()) return@withContext emptyList()
         val startedNs = System.nanoTime()
         val cacheWasWarm = catalogCache?.providerId == providerId
@@ -296,7 +298,7 @@ class MoviesRepository(
         )
     }
 
-    suspend fun details(movie: WatchioMovieItem): MovieDetails = withContext(Dispatchers.IO) {
+    suspend fun details(movie: WatchioMovieItem): MovieDetails = withContext(ioDispatcher) {
         val cached = database.movieDetailDao().findDetail(movie.providerId.value, movie.id)
         val freshEnough = cached != null && clock.nowEpochMs() - cached.updatedAtEpochMs < DETAIL_CACHE_MS
         val detail = if (freshEnough) cached else loadXtreamDetail(movie) ?: cached

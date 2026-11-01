@@ -1,5 +1,6 @@
 package com.iamskorpz.watchioiptv
 
+import android.annotation.SuppressLint
 import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
+@SuppressLint("UnsafeOptInUsageError")
 class WatchioNativeApplication : Application(), ImageLoaderFactory {
     lateinit var container: AppContainer
         private set
@@ -21,6 +23,9 @@ class WatchioNativeApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        appScope.launch(Dispatchers.IO) {
+            container.offlineMovieDownloadRepository.reconcile()
+        }
         appScope.launch {
             combine(
                 container.settingsRepository.epgAutoRefreshEnabled,

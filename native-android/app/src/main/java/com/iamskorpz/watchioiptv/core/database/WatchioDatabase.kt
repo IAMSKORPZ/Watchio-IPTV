@@ -25,8 +25,9 @@ import androidx.room.RoomDatabase
         MovieDetailEntity::class,
         TmdbTrailerCacheEntity::class,
         SportsFixtureCacheEntity::class,
+        OfflineDownloadEntity::class,
     ],
-    version = 7,
+    version = 10,
     exportSchema = true,
 )
 abstract class WatchioDatabase : RoomDatabase() {
@@ -43,4 +44,5 @@ abstract class WatchioDatabase : RoomDatabase() {
     abstract fun epgDao(): EpgDao
     abstract fun movieDetailDao(): MovieDetailDao
     abstract fun sportsCacheDao(): SportsCacheDao
+    abstract fun offlineDownloadDao(): OfflineDownloadDao
 }

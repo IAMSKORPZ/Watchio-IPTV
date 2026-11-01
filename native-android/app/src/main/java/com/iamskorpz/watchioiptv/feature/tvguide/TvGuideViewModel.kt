@@ -6,6 +6,9 @@ import com.iamskorpz.watchioiptv.data.live.LiveTvCategory
 import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.core.player.WatchioPlayerManager
 import com.iamskorpz.watchioiptv.core.util.WatchioClock
+import com.iamskorpz.watchioiptv.domain.model.ContentType
+import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
+import com.iamskorpz.watchioiptv.data.refresh.RefreshStatus
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -42,12 +45,21 @@ class TvGuideViewModel(
     private val playerManager: WatchioPlayerManager,
     private val clock: WatchioClock,
     initialCategoryId: String? = null,
+    private val catalogRefreshCoordinator: CatalogRefreshCoordinator? = null,
 ) : ViewModel() {
     constructor(
         repository: TvGuideRepository,
         playerManager: WatchioPlayerManager,
         clock: WatchioClock,
-    ) : this(repository, playerManager, clock, null)
+    ) : this(repository, playerManager, clock, null, null)
+
+    constructor(
+        repository: TvGuideRepository,
+        playerManager: WatchioPlayerManager,
+        clock: WatchioClock,
+        initialCategoryId: String? = null,
+    ) : this(repository, playerManager, clock, initialCategoryId, null)
+
     private val mutableState = MutableStateFlow(TvGuideUiState(nowEpochMs = clock.nowEpochMs()))
     private var ticker: Job? = null
     private var loadJob: Job? = null
@@ -61,6 +73,19 @@ class TvGuideViewModel(
 
     init {
         observeProvider()
+        catalogRefreshCoordinator?.let { coordinator ->
+            viewModelScope.launch {
+                coordinator.updates.collect { event ->
+                    if (event.status == RefreshStatus.Updated &&
+                        event.providerId == activeProviderId &&
+                        ContentType.Live in event.changedSections
+                    ) {
+                        val now = clock.nowEpochMs()
+                        load(activeProviderId, mutableState.value.window, now)
+                    }
+                }
+            }
+        }
         startTicker()
     }
 

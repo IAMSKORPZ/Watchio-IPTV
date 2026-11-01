@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv.data.xtream
 
 import com.iamskorpz.watchioiptv.core.model.ProviderId
+import com.iamskorpz.watchioiptv.domain.model.ContentType
 
 data class XtreamCredentialsInput(
     val displayName: String,
@@ -50,6 +51,7 @@ sealed interface XtreamImportState {
         val liveCount: Int,
         val movieCount: Int,
         val seriesCount: Int,
+        val changedSections: Set<ContentType> = emptySet(),
     ) : XtreamImportState
     data class Failure(
         val stage: XtreamImportStage,
