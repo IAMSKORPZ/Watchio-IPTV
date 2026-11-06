@@ -18,6 +18,8 @@ import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncKey
 import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncState
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
 import com.iamskorpz.watchioiptv.domain.model.ContentType
+import com.iamskorpz.watchioiptv.domain.model.ProviderType
+import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlRequest
 import com.iamskorpz.watchioiptv.domain.repository.FavoriteItem
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
 import com.iamskorpz.watchioiptv.domain.repository.HistoryItem
@@ -536,7 +538,18 @@ class MoviesViewModel(
                 initialResumeStartMs = 0L
                 initialResumePending = false
             }
-            playerManager.load(PlaybackMedia(playback.url, movie.name, playback.headers, playback.startPositionMs, isLive = false))
+            playerManager.load(
+                PlaybackMedia(
+                    playback.url,
+                    movie.name,
+                    playback.headers,
+                    playback.startPositionMs,
+                    isLive = false,
+                    recoveryRequest = if (movie.providerType == ProviderType.Xtream) {
+                        PlaybackUrlRequest(movie.providerId, ContentType.Movie, movie.id, movie.containerExtension?.let { ".$it" })
+                    } else null,
+                ),
+            )
             startProgressSave(movie)
         }
     }

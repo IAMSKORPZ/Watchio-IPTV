@@ -372,6 +372,14 @@ fun WatchioNativeApp(
     val activeAppearance by container.settingsRepository.activeAppearance.collectAsStateWithLifecycle(initialValue = WatchioThemeDefinition.WatchioDefault)
     val inputMode by container.settingsRepository.inputMode.collectAsStateWithLifecycle(initialValue = InputMode.Auto)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    LaunchedEffect(container) {
+        container.playbackAccountBlocked.collect {
+            navController.navigate("bootstrap") {
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
     val context = LocalContext.current
     val detectedDeviceInput = remember(context) { context.detectDeviceInput() }
     val effectiveInputMode = if (inputMode == InputMode.Auto) detectedDeviceInput.inputMode else inputMode

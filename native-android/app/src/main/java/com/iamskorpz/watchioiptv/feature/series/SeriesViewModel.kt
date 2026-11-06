@@ -24,6 +24,8 @@ import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncKey
 import com.iamskorpz.watchioiptv.data.xtream.CatalogSyncState
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
 import com.iamskorpz.watchioiptv.domain.model.ContentType
+import com.iamskorpz.watchioiptv.domain.model.ProviderType
+import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlRequest
 import com.iamskorpz.watchioiptv.domain.repository.FavoriteItem
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
 import com.iamskorpz.watchioiptv.domain.repository.HistoryItem
@@ -504,7 +506,16 @@ class SeriesViewModel(
                 initialResumeStartMs = 0L
                 initialResumePending = false
             }
-            playerManager.load(PlaybackMedia(request.url, episode.title, request.headers, request.startPositionMs, isLive = false))
+            playerManager.load(
+                PlaybackMedia(
+                    request.url,
+                    episode.title,
+                    request.headers,
+                    request.startPositionMs,
+                    isLive = false,
+                    recoveryRequest = episode.recoveryRequest(),
+                ),
+            )
             startPlaybackLoop(episode)
         }
     }
@@ -808,6 +819,7 @@ class SeriesViewModel(
                         headers = request.headers,
                         startPositionMs = 0L,
                         isLive = false,
+                        recoveryRequest = nextEpisode.recoveryRequest(),
                     )
                 )
 
@@ -818,6 +830,11 @@ class SeriesViewModel(
             }
         }
     }
+
+    private fun WatchioEpisodeItem.recoveryRequest(): PlaybackUrlRequest? =
+        if (providerType == ProviderType.Xtream) {
+            PlaybackUrlRequest(providerId, ContentType.Episode, episodeId, containerExtension?.let { ".$it" })
+        } else null
 
     private suspend fun saveCompletedProgress(episode: WatchioEpisodeItem, durationMs: Long) {
         if (lastSavedCompletedEpisodeId == episode.episodeId) return

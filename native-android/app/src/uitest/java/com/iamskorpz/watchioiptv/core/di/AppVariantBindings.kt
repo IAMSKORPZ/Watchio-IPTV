@@ -11,11 +11,20 @@ import com.iamskorpz.watchioiptv.data.series.SeriesRepository
 import com.iamskorpz.watchioiptv.uitest.UitestOfflineDownloadSourceResolver
 import com.iamskorpz.watchioiptv.uitest.StartupNotificationFixture
 import com.iamskorpz.watchioiptv.uitest.fixtureArtifactDownloadsEnabled
+import com.iamskorpz.watchioiptv.uitest.UitestWatchioEndpointConfigSource
+import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointConfigSource
+import com.iamskorpz.watchioiptv.core.player.NoOpPlaybackFailoverDiagnostics
+import com.iamskorpz.watchioiptv.core.player.PlaybackFailoverDiagnostics
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 
 internal object AppVariantBindings {
+    fun createPlaybackFailoverDiagnostics(): PlaybackFailoverDiagnostics = NoOpPlaybackFailoverDiagnostics
+
+    fun createEndpointConfigSource(context: Context, client: OkHttpClient): WatchioEndpointConfigSource =
+        UitestWatchioEndpointConfigSource(context)
+
     fun createOfflineDownloadSourceResolver(moviesRepository: MoviesRepository, seriesRepository: SeriesRepository): OfflineDownloadSourceResolver =
         UitestOfflineDownloadSourceResolver
 

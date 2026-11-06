@@ -39,9 +39,9 @@ import com.iamskorpz.watchioiptv.data.refresh.AndroidNetworkConnectivityChecker
 import com.iamskorpz.watchioiptv.data.refresh.CatalogAutoRefreshScheduler
 import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
 import com.iamskorpz.watchioiptv.data.series.SeriesRepository
-import com.iamskorpz.watchioiptv.data.xtream.AndroidWatchioEndpointConfigSource
 import com.iamskorpz.watchioiptv.data.xtream.HttpWatchioDnsResolver
 import com.iamskorpz.watchioiptv.data.xtream.WATCHIO_DNS_RESOLVER_URL
+import com.iamskorpz.watchioiptv.data.xtream.PlaybackEndpointRecoveryCoordinator
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
 import com.iamskorpz.watchioiptv.data.xtream.XtreamPlaybackUrlResolver
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
@@ -82,6 +82,8 @@ import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.enabledSources
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 private val Context.watchioDataStore by preferencesDataStore(name = "watchio_native_settings")
 
@@ -108,8 +110,12 @@ class AppContainer(context: Context) {
     val secretStore: SecretStore = AndroidSecretStore(appContext)
     val providerCredentialStore = ProviderCredentialStore(secretStore)
     val networkModule = NetworkModule()
-    val endpointManager = WatchioEndpointManager(AndroidWatchioEndpointConfigSource(appContext, networkModule.okHttpClient))
+    val endpointManager = WatchioEndpointManager(
+        AppVariantBindings.createEndpointConfigSource(appContext, networkModule.okHttpClient),
+    )
     val dnsResolver = HttpWatchioDnsResolver(networkModule.okHttpClient, WATCHIO_DNS_RESOLVER_URL)
+    private val mutablePlaybackAccountBlocked = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val playbackAccountBlocked = mutablePlaybackAccountBlocked.asSharedFlow()
 
     private val announcementRemote = AppVariantBindings.createAnnouncementRemoteDataSource(
         appContext,
@@ -126,6 +132,8 @@ class AppContainer(context: Context) {
             offlineMovieDownloadRepository.mediaStore.playbackDataSourceFactory,
             onRemotePlaybackAvailable = endpointManager::reportStreamingAvailable,
             onRemotePlaybackFailure = endpointManager::reportStreamingFailure,
+            endpointRecovery = playbackEndpointRecovery,
+            failoverDiagnostics = AppVariantBindings.createPlaybackFailoverDiagnostics(),
         )
     }
     val providerRepository: ProviderRepository = RoomProviderRepository(
@@ -188,6 +196,15 @@ class AppContainer(context: Context) {
         credentialStore = providerCredentialStore,
         settingsRepository = settingsRepository,
     )
+    val playbackEndpointRecovery by lazy {
+        PlaybackEndpointRecoveryCoordinator(
+            providerUrl = { providerRepository.getProvider(it)?.serverUrl },
+            validateAccount = xtreamRepository::validateAccount,
+            resolveUrl = playbackUrlResolver::resolve,
+            connectivityChecker = AndroidNetworkConnectivityChecker(appContext),
+            onAccountBlocked = { mutablePlaybackAccountBlocked.tryEmit(it); Unit },
+        )
+    }
     val liveTvRepository = LiveTvRepository(
         database = database,
         settingsRepository = settingsRepository,

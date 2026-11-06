@@ -3,6 +3,9 @@ package com.iamskorpz.watchioiptv.feature.tvguide
 import com.iamskorpz.watchioiptv.core.database.WatchioDatabase
 import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.core.player.PlaybackMedia
+import com.iamskorpz.watchioiptv.domain.model.ContentType
+import com.iamskorpz.watchioiptv.domain.model.ProviderType
+import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlRequest
 import com.iamskorpz.watchioiptv.data.epg.EpgChannelMatcher
 import com.iamskorpz.watchioiptv.data.epg.EpgMatchIndex
 import com.iamskorpz.watchioiptv.data.epg.EpgRefreshCoordinator
@@ -136,6 +139,9 @@ class TvGuideRepository(
             title = request.channel.name,
             headers = request.headers,
             isLive = true,
+            recoveryRequest = if (channel.liveChannel.providerType == ProviderType.Xtream) {
+                PlaybackUrlRequest(channel.liveChannel.providerId, ContentType.Live, channel.liveChannel.id)
+            } else null,
         )
     }
 

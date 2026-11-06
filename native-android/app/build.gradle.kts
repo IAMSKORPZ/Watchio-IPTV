@@ -51,6 +51,9 @@ android {
             .orElse("")
             .get()
         buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
+        buildConfigField("String", "FAILOVER_TEST_PROVIDER_NAME", "\"\"")
+        buildConfigField("String", "FAILOVER_TEST_USERNAME", "\"\"")
+        buildConfigField("String", "FAILOVER_TEST_PASSWORD", "\"\"")
     }
 
     buildFeatures {
@@ -151,6 +154,20 @@ android {
             buildConfigField("String", "UPDATE_CHANNEL", "\"uitest\"")
             buildConfigField("String", "UPDATE_CHANNEL_DISPLAY_NAME", "\"Test\"")
             buildConfigField("String", "UPDATE_MANIFEST_URL", "\"watchio://uitest/update.json\"")
+        }
+        create("syntheticfailovertest") {
+            initWith(getByName("local"))
+            applicationIdSuffix = ".syntheticfailovertest"
+            versionNameSuffix = "-syntheticfailovertest"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("debug")
+            resValue("string", "app_name", "Watchio Synthetic Failover Test")
+            buildConfigField("String", "UPDATE_CHANNEL", "\"syntheticfailovertest\"")
+            buildConfigField("String", "UPDATE_CHANNEL_DISPLAY_NAME", "\"Synthetic Failover Test\"")
+            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"\"")
+            buildConfigField("String", "FAILOVER_TEST_PROVIDER_NAME", "\"Watchio Synthetic Fixture\"")
+            buildConfigField("String", "FAILOVER_TEST_USERNAME", "\"synthetic_test_user\"")
+            buildConfigField("String", "FAILOVER_TEST_PASSWORD", "\"synthetic_test_password\"")
         }
         release {
             isMinifyEnabled = true

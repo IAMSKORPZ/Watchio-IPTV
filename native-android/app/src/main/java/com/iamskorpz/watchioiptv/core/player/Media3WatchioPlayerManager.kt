@@ -18,7 +18,10 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.iamskorpz.watchioiptv.R
@@ -34,6 +37,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
 
 @UnstableApi
@@ -43,6 +47,8 @@ class Media3WatchioPlayerManager(
     private val offlineDataSourceFactory: DataSource.Factory? = null,
     private val onRemotePlaybackAvailable: () -> Unit = {},
     private val onRemotePlaybackFailure: (Throwable) -> Unit = {},
+    private val endpointRecovery: PlaybackEndpointRecovery? = null,
+    private val failoverDiagnostics: PlaybackFailoverDiagnostics = NoOpPlaybackFailoverDiagnostics,
 ) : WatchioPlayerManager {
     private var player: ExoPlayer? = null
     private var playerView: PlayerView? = null
@@ -52,6 +58,10 @@ class Media3WatchioPlayerManager(
     private var loadGeneration = 0L
     private var retryCount = 0
     private var retryJob: Job? = null
+    private var endpointRecoveryJob: Job? = null
+    private var endpointRecoveryInProgress = false
+    private var pendingTerminalError: PlaybackException? = null
+    private val endpointRecoveryGate = PlaybackEndpointRecoveryGate()
     private var playerSettings = PlayerSettings()
     private var currentVideoScalingMode = VideoScalingMode.Fit
     private var lastNonZeroVolume = 1.0f
@@ -73,7 +83,11 @@ class Media3WatchioPlayerManager(
 
     override suspend fun load(media: PlaybackMedia) {
         retryJob?.cancel()
+        endpointRecoveryJob?.cancel()
+        endpointRecoveryInProgress = false
+        pendingTerminalError = null
         retryCount = 0
+        endpointRecoveryGate.reset()
         lastMedia = media
         loadGeneration += 1
         currentMetadata = currentMetadata.copy(
@@ -94,6 +108,7 @@ class Media3WatchioPlayerManager(
             isMuted = player?.volume == 0f,
         )
         mutableState.value = WatchioPlayerState.Connecting(currentMetadata)
+        failoverDiagnostics.trace("load generation=$loadGeneration source=${media.sourceType} targetMs=${media.startPositionMs}")
         loadIntoPlayer(media, currentMetadata.loadGeneration)
     }
 
@@ -118,7 +133,10 @@ class Media3WatchioPlayerManager(
             .setDataSourceFactory(dataSourceFactory)
             .createMediaSource(mediaItem)
         exoPlayer.setMediaSource(mediaSource)
-        if (media.startPositionMs > 0L) exoPlayer.seekTo(media.startPositionMs)
+        if (media.startPositionMs > 0L) {
+            failoverDiagnostics.trace("seek-apply generation=$generation targetMs=${media.startPositionMs}")
+            exoPlayer.seekTo(media.startPositionMs)
+        }
         currentMetadata = currentMetadata.copy(loadGeneration = generation)
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
@@ -137,10 +155,14 @@ class Media3WatchioPlayerManager(
 
     override fun stop() {
         retryJob?.cancel()
+        endpointRecoveryJob?.cancel()
+        endpointRecoveryInProgress = false
+        pendingTerminalError = null
         player?.stop()
         player?.clearMediaItems()
         lastMedia = null
         retryCount = 0
+        endpointRecoveryGate.reset()
         currentMetadata = currentMetadata.copy(
             currentMedia = null,
             positionMs = 0L,
@@ -157,6 +179,9 @@ class Media3WatchioPlayerManager(
 
     override fun retry() {
         retryJob?.cancel()
+        endpointRecoveryJob?.cancel()
+        endpointRecoveryInProgress = false
+        pendingTerminalError = null
         retryCount = 0
         lastMedia?.let { media ->
             loadGeneration += 1
@@ -179,6 +204,7 @@ class Media3WatchioPlayerManager(
                 if (snapshot.currentMedia?.isLive == true && !snapshot.isSeekable) target
                 else snapshot.durationMs?.let { target.coerceAtMost(it) } ?: target
             }
+        failoverDiagnostics.trace("seek-request generation=$loadGeneration requestedMs=$positionMs targetMs=$safePosition durationMs=${snapshot.durationMs ?: -1L}")
         player?.seekTo(safePosition)
         currentMetadata = snapshot.copy(positionMs = safePosition)
         mutableState.value = when (mutableState.value) {
@@ -452,6 +478,9 @@ class Media3WatchioPlayerManager(
 
     override fun release() {
         retryJob?.cancel()
+        endpointRecoveryJob?.cancel()
+        endpointRecoveryInProgress = false
+        pendingTerminalError = null
         playerView?.player = null
         playerView = null
         fullscreenContainer = null
@@ -474,6 +503,12 @@ class Media3WatchioPlayerManager(
             exoPlayer.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     currentMetadata = snapshot()
+                    if (playbackState == Player.STATE_READY) {
+                        failoverDiagnostics.trace(
+                            "ready generation=${currentMetadata.loadGeneration} positionMs=${currentMetadata.positionMs} " +
+                                "durationMs=${currentMetadata.durationMs ?: -1L} playing=${exoPlayer.isPlaying}",
+                        )
+                    }
                     mutableState.value = when (playbackState) {
                         Player.STATE_BUFFERING -> WatchioPlayerState.Buffering(currentMetadata)
                         Player.STATE_READY -> if (exoPlayer.isPlaying) {
@@ -500,11 +535,20 @@ class Media3WatchioPlayerManager(
 
                 override fun onTracksChanged(tracks: Tracks) {
                     updateMetadataState()
+                    val trace = snapshot()
+                    failoverDiagnostics.trace(
+                        "tracks generation=${trace.loadGeneration} audio=${trace.selectedAudioTrack?.language ?: trace.selectedAudioTrack?.id ?: "none"} " +
+                            "subtitle=${trace.selectedSubtitleTrack?.language ?: trace.selectedSubtitleTrack?.id ?: "none"}",
+                    )
                 }
 
                 override fun onRenderedFirstFrame() {
                     if (lastMedia?.sourceType == PlaybackSourceType.Remote) onRemotePlaybackAvailable()
                     currentMetadata = snapshot().copy(firstFrameRendered = true)
+                    failoverDiagnostics.trace(
+                        "first-frame generation=${currentMetadata.loadGeneration} positionMs=${currentMetadata.positionMs} " +
+                            "durationMs=${currentMetadata.durationMs ?: -1L}",
+                    )
                     mutableState.value = if (exoPlayer.isPlaying) {
                         WatchioPlayerState.Playing(currentMetadata)
                     } else {
@@ -527,19 +571,127 @@ class Media3WatchioPlayerManager(
                 override fun onPlayerError(error: PlaybackException) {
                     if (lastMedia?.sourceType == PlaybackSourceType.Remote) onRemotePlaybackFailure(error)
                     currentMetadata = snapshot()
+                    failoverDiagnostics.trace(
+                        "player-error generation=${currentMetadata.loadGeneration} positionMs=${currentMetadata.positionMs} " +
+                            "code=${error.errorCode} type=${error.javaClass.simpleName}",
+                    )
+                    lastMedia = lastMedia?.withRecoveryPosition(currentMetadata.positionMs)
                     val message = PlayerReliability.userMessage(error)
+                    val failure = error.toPlaybackFailure()
+                    val attemptCount = retryCount + 1
+                    if (endpointRecoveryInProgress) {
+                        pendingTerminalError = error
+                        return
+                    }
                     if (
-                        playerSettings.autoRetryStreams &&
-                        PlayerReliability.shouldAutoRetry(error) &&
-                        retryCount < playerSettings.retryAttempts.coerceIn(1, PlayerReliability.MaxAutomaticRetries)
+                        endpointRecovery != null &&
+                        lastMedia?.recoveryRequest != null &&
+                        PlaybackEndpointFailureClassifier.shouldAttemptRecovery(failure, attemptCount) &&
+                        endpointRecoveryGate.tryStart()
                     ) {
-                        scheduleRetry(message, currentMetadata.loadGeneration)
+                        attemptEndpointRecovery(failure, error, message, currentMetadata.loadGeneration, attemptCount)
                     } else {
-                        mutableState.value = WatchioPlayerState.Failed(message, currentMetadata)
+                        handleStandardPlayerError(error, message, currentMetadata.loadGeneration)
                     }
                 }
             })
+            exoPlayer.addAnalyticsListener(object : AnalyticsListener {
+                override fun onLoadError(
+                    eventTime: AnalyticsListener.EventTime,
+                    loadEventInfo: LoadEventInfo,
+                    mediaLoadData: MediaLoadData,
+                    error: IOException,
+                    wasCanceled: Boolean,
+                ) {
+                    if (wasCanceled || endpointRecoveryInProgress || endpointRecoveryGate.hasStarted()) return
+                    val media = lastMedia ?: return
+                    if (media.sourceType != PlaybackSourceType.Remote || media.recoveryRequest == null) return
+                    val failure = error.toPlaybackFailure()
+                    if (!PlaybackEndpointFailureClassifier.shouldAttemptRecovery(failure, attemptCount = 1)) return
+                    currentMetadata = snapshot()
+                    lastMedia = media.withRecoveryPosition(currentMetadata.positionMs)
+                    if (!endpointRecoveryGate.tryStart()) return
+                    attemptEndpointRecovery(
+                        failure = failure,
+                        terminalError = null,
+                        message = "Unable to connect to stream.",
+                        generation = currentMetadata.loadGeneration,
+                        attemptCount = 1,
+                    )
+                }
+            })
             player = exoPlayer
+        }
+    }
+
+    private fun attemptEndpointRecovery(
+        failure: PlaybackFailure,
+        terminalError: PlaybackException?,
+        message: String,
+        generation: Long,
+        attemptCount: Int,
+    ) {
+        val recovery = endpointRecovery ?: run {
+            terminalError?.let { handleStandardPlayerError(it, message, generation) }
+            return
+        }
+        val media = lastMedia ?: return
+        val capturedPositionMs = snapshot().positionMs
+        failoverDiagnostics.trace(
+            "recovery-start generation=$generation capturedMs=$capturedPositionMs attempt=$attemptCount failure=${failure.javaClass.simpleName}",
+        )
+        endpointRecoveryInProgress = true
+        mutableState.value = WatchioPlayerState.Recovering("Checking provider connection...", currentMetadata)
+        endpointRecoveryJob = scope.launch {
+            val result = recovery.recover(media, failure, attemptCount, capturedPositionMs)
+            if (currentMetadata.loadGeneration != generation) {
+                endpointRecoveryInProgress = false
+                pendingTerminalError = null
+                return@launch
+            }
+            endpointRecoveryInProgress = false
+            when (result) {
+                is PlaybackEndpointRecoveryResult.Retry -> {
+                    failoverDiagnostics.trace(
+                        "recovery-retry oldGeneration=$generation targetMs=${result.media.startPositionMs} source=${result.media.sourceType}",
+                    )
+                    pendingTerminalError = null
+                    lastMedia = result.media
+                    loadGeneration += 1
+                    currentMetadata = snapshot().copy(
+                        currentMedia = result.media,
+                        positionMs = result.media.startPositionMs,
+                        firstFrameRendered = false,
+                        loadGeneration = loadGeneration,
+                    )
+                    mutableState.value = WatchioPlayerState.Connecting(currentMetadata)
+                    player?.stop()
+                    loadIntoPlayer(result.media, loadGeneration)
+                }
+                is PlaybackEndpointRecoveryResult.AccountBlocked -> {
+                    failoverDiagnostics.trace("recovery-account-blocked generation=$generation")
+                    pendingTerminalError = null
+                    mutableState.value = WatchioPlayerState.Failed(result.message, currentMetadata)
+                }
+                PlaybackEndpointRecoveryResult.NotRecovered -> {
+                    failoverDiagnostics.trace("recovery-not-recovered generation=$generation")
+                    val fallback = pendingTerminalError ?: terminalError
+                    pendingTerminalError = null
+                    fallback?.let { handleStandardPlayerError(it, message, generation) }
+                }
+            }
+        }
+    }
+
+    private fun handleStandardPlayerError(error: PlaybackException, message: String, generation: Long) {
+        if (
+            playerSettings.autoRetryStreams &&
+            PlayerReliability.shouldAutoRetry(error) &&
+            retryCount < playerSettings.retryAttempts.coerceIn(1, PlayerReliability.MaxAutomaticRetries)
+        ) {
+            scheduleRetry(message, generation)
+        } else {
+            mutableState.value = WatchioPlayerState.Failed(message, currentMetadata)
         }
     }
 
@@ -561,6 +713,9 @@ class Media3WatchioPlayerManager(
         private val SESSION_ID = AtomicLong(0L)
     }
 }
+
+internal fun PlaybackMedia.withRecoveryPosition(positionMs: Long): PlaybackMedia =
+    if (isLive) copy(startPositionMs = 0L) else if (positionMs <= 0L) this else copy(startPositionMs = positionMs)
 
 @UnstableApi
 fun VideoScalingMode.toResizeMode(): Int = when (this) {

@@ -2,6 +2,7 @@ package com.iamskorpz.watchioiptv.core.player
 
 import android.view.ViewGroup
 import com.iamskorpz.watchioiptv.domain.repository.VideoScalingMode
+import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlRequest
 import kotlinx.coroutines.flow.StateFlow
 
 interface WatchioPlayerManager {
@@ -37,6 +38,7 @@ data class PlaybackMedia(
     val sourceType: PlaybackSourceType = PlaybackSourceType.Remote,
     val cacheKey: String? = null,
     val mimeType: String? = null,
+    val recoveryRequest: PlaybackUrlRequest? = null,
 )
 
 enum class PlaybackSourceType {

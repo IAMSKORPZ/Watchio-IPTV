@@ -26,7 +26,10 @@ class XtreamPlaybackUrlResolver(
             ContentType.Live -> "live/${credentials.username}/${credentials.password}/${request.contentId}.$ext"
             ContentType.Movie -> "movie/${credentials.username}/${credentials.password}/${request.contentId}.$ext"
             ContentType.Series, ContentType.Episode -> {
-                val episodeId = request.subContentId?.takeUnless { it.startsWith(".") } ?: request.contentId
+                val episodeId = request.subContentId
+                    ?.takeUnless { it.startsWith(".") }
+                    ?.removeSuffix(".$ext")
+                    ?: request.contentId
                 "series/${credentials.username}/${credentials.password}/$episodeId.$ext"
             }
         }

@@ -123,6 +123,77 @@ class XtreamRepository(
         )
     }
 
+    /** Verifies account access without refreshing or replacing any catalogue data. */
+    suspend fun validateAccount(providerId: ProviderId): AccountValidationResult = withContext(Dispatchers.IO) {
+        val provider = database.providerDao().findById(providerId.value)
+            ?: return@withContext AccountValidationResult.Blocked("Sign in to continue.")
+        if (!provider.enabled) {
+            return@withContext AccountValidationResult.Blocked("This account is disabled. Sign in with another account.")
+        }
+        val credentials = credentialStore.getXtreamCredentials(providerId.value)
+            ?: return@withContext AccountValidationResult.Blocked("Saved sign-in details are unavailable. Please sign in again.")
+
+        try {
+            val auth = if (provider.id.startsWith(MANAGED_PROVIDER_PREFIX)) {
+                val manager = endpointManager
+                    ?: return@withContext AccountValidationResult.Retryable("Watchio could not reach the service configuration. Please retry.")
+                val selected = manager.resolve(provider.serverUrl) { endpoint ->
+                    validateStartupEndpoint(endpoint.url, credentials.username, credentials.password)
+                }
+                if (selected.endpoint.url != provider.serverUrl) {
+                    database.providerDao().upsert(
+                        provider.copy(serverUrl = selected.endpoint.url, updatedAtEpochMs = clock.nowEpochMs()),
+                    )
+                }
+                selected.value
+            } else {
+                validateStartupEndpoint(
+                    provider.serverUrl ?: return@withContext AccountValidationResult.Retryable("Provider endpoint is unavailable."),
+                    credentials.username,
+                    credentials.password,
+                )
+            }
+            settingsRepository.persistAccountMetadata(providerId, auth)
+            classifyAccountValidation(auth, clock.nowEpochMs())
+        } catch (failure: EndpointAttemptFailure.Account) {
+            AccountValidationResult.Blocked(failure.message ?: "This account cannot sign in. Please use another account.")
+        } catch (failure: EndpointAttemptFailure.Unavailable) {
+            AccountValidationResult.Retryable("Watchio could not reach the provider. Check the connection and retry.")
+        } catch (failure: HttpException) {
+            if (failure.code() == 401 || failure.code() == 403) {
+                AccountValidationResult.Blocked("This account cannot sign in. Please renew your subscription or use another account.")
+            } else {
+                AccountValidationResult.Retryable("Watchio could not verify this account. Check the connection and retry.")
+            }
+        } catch (failure: IOException) {
+            AccountValidationResult.Retryable("Watchio could not reach the provider. Check the connection and retry.")
+        } catch (failure: IllegalStateException) {
+            AccountValidationResult.Retryable("Watchio could not reach the provider. Check the connection and retry.")
+        }
+    }
+
+    private suspend fun validateStartupEndpoint(serverUrl: String, username: String, password: String): XtreamAuthInfo {
+        return try {
+            val auth = timedRequest("startup_account_validation") {
+                api(serverUrl).playerInfo(username, password)
+            }.toAuthInfo()
+            when (val result = classifyAccountValidation(auth, clock.nowEpochMs())) {
+                AccountValidationResult.Active -> auth
+                is AccountValidationResult.Blocked -> throw EndpointAttemptFailure.Account(result.message)
+                is AccountValidationResult.Retryable -> throw EndpointAttemptFailure.Unavailable(IllegalStateException(result.message))
+            }
+        } catch (failure: EndpointAttemptFailure) {
+            throw failure
+        } catch (failure: HttpException) {
+            if (failure.code() == 401 || failure.code() == 403) {
+                throw EndpointAttemptFailure.Account("This account cannot sign in. Please renew your subscription or use another account.")
+            }
+            throw EndpointAttemptFailure.Unavailable(failure)
+        } catch (failure: IOException) {
+            throw EndpointAttemptFailure.Unavailable(failure)
+        }
+    }
+
     suspend fun refreshLive(providerId: ProviderId): XtreamImportState.Success =
         refreshSection(providerId, ContentType.Live)
 
@@ -842,4 +913,28 @@ private suspend fun SettingsRepository.persistAccountMetadata(providerId: Provid
             allowedOutputFormats = auth.allowedOutputFormats.mapNotNull { it.trim().takeIf(String::isNotBlank) },
         ),
     )
+}
+
+internal fun classifyAccountValidation(auth: XtreamAuthInfo, nowEpochMs: Long): AccountValidationResult {
+    val status = auth.status?.trim()?.lowercase().orEmpty()
+    val expiryEpochMs = auth.expiration?.toLongOrNull()?.times(1_000L)
+    val expired = expiryEpochMs != null && expiryEpochMs > 0L && expiryEpochMs <= nowEpochMs
+    return when {
+        expired || "expired" in status -> AccountValidationResult.Blocked(
+            "Your account has expired. Please renew your subscription or sign in with another account.",
+        )
+        "disabled" in status -> AccountValidationResult.Blocked(
+            "Your account is disabled. Please contact your provider or sign in with another account.",
+        )
+        "revoked" in status || "banned" in status -> AccountValidationResult.Blocked(
+            "Your account access has been revoked. Please contact your provider or sign in with another account.",
+        )
+        auth.authenticated && (status.isBlank() || status == "active") -> AccountValidationResult.Active
+        !auth.authenticated -> AccountValidationResult.Blocked(
+            "This account cannot sign in. Please renew your subscription or use another account.",
+        )
+        else -> AccountValidationResult.Retryable(
+            "Watchio could not confirm this account's status. Please retry.",
+        )
+    }
 }

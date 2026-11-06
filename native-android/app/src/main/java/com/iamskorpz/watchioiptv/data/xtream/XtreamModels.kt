@@ -25,6 +25,12 @@ data class XtreamAuthInfo(
     val timezone: String?,
 )
 
+sealed interface AccountValidationResult {
+    data object Active : AccountValidationResult
+    data class Blocked(val message: String) : AccountValidationResult
+    data class Retryable(val message: String) : AccountValidationResult
+}
+
 enum class XtreamImportStage(val label: String) {
     Idle("Idle"),
     Authenticating("Authenticating"),

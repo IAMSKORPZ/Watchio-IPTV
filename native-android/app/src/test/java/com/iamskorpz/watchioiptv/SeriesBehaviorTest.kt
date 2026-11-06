@@ -106,6 +106,25 @@ class SeriesBehaviorTest {
     }
 
     @Test
+    fun episodeResolverNeverDuplicatesContainerExtension() = runTest {
+        val secrets = ProviderCredentialStore(FakeSecretStore())
+        secrets.saveXtreamCredentials("provider-a", XtreamCredentials("user", "pass"))
+        val resolver = XtreamPlaybackUrlResolver(FakeProviderRepository(), secrets, FakeSettingsRepository())
+
+        listOf("mp4", "mkv", "ts").forEach { extension ->
+            val canonical = resolver.resolve(
+                PlaybackUrlRequest(ProviderId("provider-a"), ContentType.Episode, "401", ".$extension"),
+            )
+            val legacy = resolver.resolve(
+                PlaybackUrlRequest(ProviderId("provider-a"), ContentType.Episode, "series-1", "401.$extension"),
+            )
+
+            assertEquals("http://example.invalid/series/user/pass/401.$extension", canonical)
+            assertEquals(canonical, legacy)
+        }
+    }
+
+    @Test
     fun episodeResumeUsesVodThresholds() {
         assertFalse(MoviesRepository.shouldResumePosition(20_000, 600_000))
         assertTrue(MoviesRepository.shouldResumePosition(120_000, 600_000))

@@ -17,6 +17,8 @@ import com.iamskorpz.watchioiptv.data.library.SearchRepository
 import com.iamskorpz.watchioiptv.data.library.SearchScope
 import com.iamskorpz.watchioiptv.data.library.WatchioSearchResult
 import com.iamskorpz.watchioiptv.domain.model.ContentType
+import com.iamskorpz.watchioiptv.domain.model.ProviderType
+import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlRequest
 import com.iamskorpz.watchioiptv.domain.repository.FavoriteItem
 import com.iamskorpz.watchioiptv.domain.repository.FavoritesRepository
 import com.iamskorpz.watchioiptv.domain.repository.HistoryItem
@@ -342,6 +344,9 @@ class LiveTvViewModel(
                     title = channel.name,
                     headers = playback.headers,
                     isLive = true,
+                    recoveryRequest = if (channel.providerType == ProviderType.Xtream) {
+                        PlaybackUrlRequest(channel.providerId, ContentType.Live, channel.id)
+                    } else null,
                 ),
             )
             historyRepository.upsert(

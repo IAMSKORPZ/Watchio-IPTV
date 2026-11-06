@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "endpoints": [
+    {
+      "id": "synthetic-primary",
+      "url": "http://127.0.0.1:18081",
+      "priority": 0,
+      "enabled": true
+    },
+    {
+      "id": "synthetic-secondary",
+      "url": "http://127.0.0.1:18082",
+      "priority": 1,
+      "enabled": true
+    }
+  ]
+}
