@@ -107,10 +107,10 @@ class QuickLoginViewModel(
                     invitation = invitation,
                     credentials = QuickLoginCredentials(
                         providerName = provider.displayName,
-                        serverUrl = provider.serverUrl.takeUnless { provider.id.value.startsWith(MANAGED_PROVIDER_PREFIX) },
+                        serverUrl = null,
                         username = credentials.username,
                         password = credentials.password,
-                        mode = if (provider.id.value.startsWith(MANAGED_PROVIDER_PREFIX)) "managed" else "legacy",
+                        mode = "managed",
                     ),
                 )
             }.onSuccess {
@@ -141,15 +141,7 @@ class QuickLoginViewModel(
             _state.value = _state.value.copy(isBusy = true, invitation = null, expiresAtEpochMs = null, status = "Connecting provider…", errorMessage = null)
             runCatching {
                 QuickLoginBootstrapTrace.mark("quicklogin_sync_started")
-                xtreamRepository.addProviderTwoPhase(
-                    XtreamCredentialsInput(
-                        displayName = credentials.providerName,
-                        serverUrl = credentials.serverUrl,
-                        username = credentials.username,
-                        password = credentials.password,
-                        managed = credentials.mode == "managed",
-                    ),
-                )
+                xtreamRepository.addProviderTwoPhase(credentials.toManagedInput())
             }.onSuccess {
                 QuickLoginBootstrapTrace.mark("quicklogin_initial_sync_completed", metadata = "epg_triggered=false series_episode_startup_count=0")
                 _state.value = _state.value.copy(isBusy = false, received = true, status = "Quick Login complete.")
@@ -167,7 +159,12 @@ class QuickLoginViewModel(
         println("QuickLogin:$name")
     }
 
-    private companion object {
-        const val MANAGED_PROVIDER_PREFIX = "xtream-managed-"
-    }
 }
+
+internal fun QuickLoginCredentials.toManagedInput(): XtreamCredentialsInput = XtreamCredentialsInput(
+    displayName = providerName,
+    serverUrl = null,
+    username = username,
+    password = password,
+    managed = true,
+)

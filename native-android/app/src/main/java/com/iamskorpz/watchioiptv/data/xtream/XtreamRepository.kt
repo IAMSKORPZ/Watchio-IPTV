@@ -559,20 +559,6 @@ class XtreamRepository(
         if (duplicate) throw DuplicateXtreamProviderException()
     }
 
-    suspend fun switchManagedProviderServer(providerId: ProviderId, endpointId: String): WatchioEndpoint {
-        val provider = database.providerDao().findById(providerId.value)?.toDomain()
-            ?: throw IllegalArgumentException("Provider not found.")
-        require(provider.id.value.startsWith(MANAGED_PROVIDER_PREFIX)) { "Server switching is only available for managed providers." }
-        provider.serverUrl ?: throw IllegalArgumentException("Provider has no server URL.")
-        val credentials = credentialStore.getXtreamCredentials(providerId.value)
-            ?: throw IllegalArgumentException("Provider credentials not found.")
-        val manager = endpointManager ?: throw IllegalStateException("Watchio couldn't reach the service configuration. Please try again.")
-        manager.refreshConfig()
-        val selected = manager.switchTo(endpointId) { endpoint -> authenticateEndpoint(endpoint.url, credentials.username, credentials.password) }
-        database.providerDao().upsert(provider.copy(serverUrl = selected.endpoint.url, updatedAtEpochMs = clock.nowEpochMs()).toEntity())
-        return selected.endpoint
-    }
-
     private suspend fun findExistingProvider(serverUrl: String, username: String) =
         database.providerDao().findByTypeAndServer(ProviderType.Xtream.persisted, serverUrl).firstOrNull { provider ->
             credentialStore.getXtreamCredentials(provider.id)?.username == username
@@ -639,16 +625,10 @@ class XtreamRepository(
     }
 
     suspend fun addProviderTwoPhase(input: XtreamCredentialsInput): XtreamImportState.Success =
-        addProviderTwoPhaseInternal(input, null)
-
-    suspend fun addDnsProviderTwoPhase(
-        input: XtreamCredentialsInput,
-        endpoint: WatchioEndpoint,
-    ): XtreamImportState.Success = addProviderTwoPhaseInternal(input.copy(managed = true), endpoint)
+        addProviderTwoPhaseInternal(input)
 
     private suspend fun addProviderTwoPhaseInternal(
         input: XtreamCredentialsInput,
-        dnsEndpoint: WatchioEndpoint?,
     ): XtreamImportState.Success = withContext(Dispatchers.IO) {
         val name = input.displayName.trim().takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("Provider name is required.")
@@ -657,14 +637,13 @@ class XtreamRepository(
         val password = input.password.takeIf { it.isNotBlank() }
             ?: throw IllegalArgumentException("Password is required.")
 
-        val managedSelection = if (input.managed && dnsEndpoint == null) {
+        val managedSelection = if (input.managed) {
             ensureNoManagedDuplicate(username)
             val manager = endpointManager
                 ?: throw IllegalStateException("Watchio couldn't reach the service configuration. Please try again.")
             manager.resolve { endpoint -> authenticateEndpoint(endpoint.url, username, password) }
         } else null
-        if (dnsEndpoint != null) ensureNoManagedDuplicate(username)
-        val normalizedUrl = dnsEndpoint?.url ?: managedSelection?.endpoint?.url ?: XtreamUrlNormalizer.normalize(input.serverUrl.orEmpty())
+        val normalizedUrl = managedSelection?.endpoint?.url ?: XtreamUrlNormalizer.normalize(input.serverUrl.orEmpty())
             ?: throw IllegalArgumentException("Enter a valid server URL.")
         val existing = if (input.managed) null else findExistingProvider(normalizedUrl, username)
         val providerId = existing?.let { ProviderId(it.id) }
@@ -678,7 +657,6 @@ class XtreamRepository(
             QuickLoginBootstrapTrace.mark("quicklogin_auth_started")
             val auth = managedSelection?.value ?: timedRequest("player_api_authentication") { api.playerInfo(username, password) }.toAuthInfo()
             if (!auth.authenticated) throw IllegalArgumentException("Incorrect username or password.")
-            if (dnsEndpoint != null) endpointManager?.activate(dnsEndpoint)
             QuickLoginBootstrapTrace.mark("quicklogin_auth_completed", started)
 
             started = traceNow()

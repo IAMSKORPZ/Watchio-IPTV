@@ -116,33 +116,42 @@ class WatchioEndpointManager(
     val configuredEndpoints: StateFlow<List<WatchioEndpoint>> = _configuredEndpoints.asStateFlow()
 
     suspend fun <T> resolve(preferred: String? = null, attempt: suspend (WatchioEndpoint) -> T): EndpointSelection<T> = mutex.withLock {
-        val candidates = candidatesUnlocked(preferred)
+        var candidates = candidatesUnlocked(preferred)
         if (candidates.isEmpty()) throw IllegalStateException("Watchio couldn't reach the service configuration. Please try again.")
         var lastFailure: Throwable? = null
-        for (candidate in candidates) {
-            try {
-                val result = attemptWithRetry(candidate, attempt)
-                source.saveLastWorking(candidate.url)
-                _activeEndpoint.value = candidate
-                _activeEndpointOnline.value = true
-                _health.value = ProviderHealthState(
-                    selectedEndpointId = candidate.id,
-                    connectivity = ProviderConnectivity.Connected,
-                    authentication = ProviderAuthentication.Verified,
-                    streaming = _health.value.streaming.takeIf { _health.value.selectedEndpointId == candidate.id }
-                        ?: ProviderStreaming.NotChecked,
-                )
-                return@withLock EndpointSelection(candidate, result)
-            } catch (failure: EndpointAttemptFailure.Account) {
-                _health.value = ProviderHealthState(
-                    selectedEndpointId = candidate.id,
-                    connectivity = ProviderConnectivity.Connected,
-                    authentication = ProviderAuthentication.Rejected,
-                    lastFailure = ProviderFailureKind.Authentication,
-                )
-                throw failure
-            } catch (failure: EndpointAttemptFailure.Unavailable) {
-                lastFailure = failure.cause ?: failure
+        val attemptedUrls = mutableSetOf<String>()
+        repeat(CONFIG_PASSES) { pass ->
+            for (candidate in candidates.filterNot { it.url in attemptedUrls }) {
+                attemptedUrls += candidate.url
+                try {
+                    val result = attemptWithRetry(candidate, attempt)
+                    source.saveLastWorking(candidate.url)
+                    _activeEndpoint.value = candidate
+                    _activeEndpointOnline.value = true
+                    _health.value = ProviderHealthState(
+                        selectedEndpointId = candidate.id,
+                        connectivity = ProviderConnectivity.Connected,
+                        authentication = ProviderAuthentication.Verified,
+                        streaming = _health.value.streaming.takeIf { _health.value.selectedEndpointId == candidate.id }
+                            ?: ProviderStreaming.NotChecked,
+                    )
+                    return@withLock EndpointSelection(candidate, result)
+                } catch (failure: EndpointAttemptFailure.Account) {
+                    _health.value = ProviderHealthState(
+                        selectedEndpointId = candidate.id,
+                        connectivity = ProviderConnectivity.Connected,
+                        authentication = ProviderAuthentication.Rejected,
+                        lastFailure = ProviderFailureKind.Authentication,
+                    )
+                    throw failure
+                } catch (failure: EndpointAttemptFailure.Unavailable) {
+                    lastFailure = failure.cause ?: failure
+                }
+            }
+            if (pass < CONFIG_PASSES - 1) {
+                memoryConfig = loadConfig()
+                _configuredEndpoints.value = memoryConfig!!.endpoints
+                candidates = candidatesUnlocked(preferred)
             }
         }
         _activeEndpointOnline.value = false
@@ -236,29 +245,6 @@ class WatchioEndpointManager(
         configured[(currentIndex + 1).mod(configured.size)]
     }
 
-    suspend fun dnsEndpoint(endpointId: String?, directUrl: String?): WatchioEndpoint = mutex.withLock {
-        val configured = candidatesUnlocked()
-        val id = endpointId?.trim()?.takeIf { it.isNotBlank() }
-        if (id != null) {
-            return@withLock configured.firstOrNull { it.id.equals(id, ignoreCase = true) }
-                ?: throw IllegalArgumentException("No provider is available for this account.")
-        }
-        val normalized = directUrl?.let(WatchioEndpointConfigParser::normalize)
-            ?: throw IllegalArgumentException("The login service returned an invalid provider.")
-        WatchioEndpoint(id = "dns", url = normalized)
-    }
-
-    fun activate(endpoint: WatchioEndpoint) {
-        source.saveLastWorking(endpoint.url)
-        _activeEndpoint.value = endpoint
-        _activeEndpointOnline.value = true
-        _health.value = ProviderHealthState(
-            selectedEndpointId = endpoint.id,
-            connectivity = ProviderConnectivity.Connected,
-            authentication = ProviderAuthentication.Verified,
-        )
-    }
-
     fun reportStreamingAvailable() {
         if (_activeEndpoint.value == null) return
         _health.value = _health.value.copy(streaming = ProviderStreaming.Available, lastFailure = null)
@@ -322,6 +308,7 @@ class WatchioEndpointManager(
     }
 
     private companion object {
+        const val CONFIG_PASSES = 2
         const val CONNECTION_ATTEMPTS = 2
         const val RETRY_BACKOFF_MS = 250L
     }

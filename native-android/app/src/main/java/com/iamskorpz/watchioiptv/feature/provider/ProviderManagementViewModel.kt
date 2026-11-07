@@ -27,7 +27,6 @@ data class ProviderManagementUiState(
     val providers: List<ProviderRowUiState> = emptyList(),
     val selectedProviderId: ProviderId? = null,
     val refreshingProviderId: ProviderId? = null,
-    val switchingProviderId: ProviderId? = null,
     val serverChoices: List<ManagedServerChoice> = emptyList(),
     val providerHealth: ProviderHealthState = ProviderHealthState(),
     val message: String? = null,
@@ -59,7 +58,6 @@ class ProviderManagementViewModel(
 ) : ViewModel() {
     private val status = MutableStateFlow(ProviderManagementUiState())
     private var refreshJob: Job? = null
-    private var switchJob: Job? = null
 
     private val endpointState = combine(
         endpointManager.configuredEndpoints,
@@ -134,18 +132,6 @@ class ProviderManagementViewModel(
 
     init {
         viewModelScope.launch { runCatching { endpointManager.refreshConfig() } }
-    }
-
-    fun switchServer(providerId: ProviderId, endpointId: String) {
-        if (switchJob?.isActive == true) return
-        switchJob = viewModelScope.launch {
-            status.value = status.value.copy(switchingProviderId = providerId, message = "Switching server...")
-            val result = runCatching { xtreamRepository.switchManagedProviderServer(providerId, endpointId) }
-            status.value = status.value.copy(
-                switchingProviderId = null,
-                message = result.fold(onSuccess = { "${managedServerLabel(it.id)} active" }, onFailure = { it.message ?: "Server switch failed." }),
-            )
-        }
     }
 
     private suspend fun counts(provider: WatchioProvider): Counts = when (provider.type) {

@@ -245,6 +245,7 @@ import com.iamskorpz.watchioiptv.ui.theme.LocalWatchioAppearance
 import com.iamskorpz.watchioiptv.ui.theme.watchioScreenBackgroundColor
 import com.iamskorpz.watchioiptv.data.live.LiveTvChannel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.flowOf
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -361,6 +362,19 @@ internal fun navigateHomeAsRoot(navController: NavHostController) {
     }
 }
 
+internal fun accountBlockedMessage(status: String?, expiryEpochMs: Long?, nowEpochMs: Long): String? {
+    val normalized = status?.trim()?.lowercase().orEmpty()
+    return when {
+        expiryEpochMs != null && expiryEpochMs > 0L && expiryEpochMs <= nowEpochMs || "expired" in normalized ->
+            "Your account has expired. Please renew your subscription or sign in with another account."
+        "disabled" in normalized ->
+            "Your account is disabled. Please contact your provider or sign in with another account."
+        "revoked" in normalized || "banned" in normalized ->
+            "Your account access has been revoked. Please contact your provider or sign in with another account."
+        else -> null
+    }
+}
+
 @Composable
 fun WatchioNativeApp(
     container: AppContainer,
@@ -372,6 +386,31 @@ fun WatchioNativeApp(
     val activeAppearance by container.settingsRepository.activeAppearance.collectAsStateWithLifecycle(initialValue = WatchioThemeDefinition.WatchioDefault)
     val inputMode by container.settingsRepository.inputMode.collectAsStateWithLifecycle(initialValue = InputMode.Auto)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val selectedProviderId by container.settingsRepository.selectedProviderId.collectAsStateWithLifecycle(initialValue = null)
+    val selectedExpiry by remember(selectedProviderId) {
+        selectedProviderId?.let(container.settingsRepository::observeProviderExpiryEpochMs) ?: flowOf(null)
+    }.collectAsStateWithLifecycle(initialValue = null)
+    val selectedAccountMetadata by remember(selectedProviderId) {
+        selectedProviderId?.let(container.settingsRepository::observeXtreamAccountMetadata)
+            ?: flowOf(com.iamskorpz.watchioiptv.domain.repository.XtreamAccountMetadata())
+    }.collectAsStateWithLifecycle(initialValue = com.iamskorpz.watchioiptv.domain.repository.XtreamAccountMetadata())
+    var accountNowEpochMs by remember(selectedProviderId, selectedExpiry) { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(selectedProviderId, selectedExpiry) {
+        while (selectedProviderId != null && selectedExpiry != null && accountNowEpochMs < selectedExpiry!!) {
+            delay(minOf(30_000L, (selectedExpiry!! - accountNowEpochMs).coerceAtLeast(1L)))
+            accountNowEpochMs = System.currentTimeMillis()
+        }
+    }
+    val sessionBlocked = accountBlockedMessage(selectedAccountMetadata.status, selectedExpiry, accountNowEpochMs)
+    LaunchedEffect(sessionBlocked, currentBackStackEntry?.destination?.route) {
+        val route = currentBackStackEntry?.destination?.route.orEmpty()
+        if (sessionBlocked != null && route != "bootstrap" && !route.startsWith("providers/") && route != "quick-login") {
+            navController.navigate("bootstrap") {
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
     LaunchedEffect(container) {
         container.playbackAccountBlocked.collect {
             navController.navigate("bootstrap") {
@@ -458,6 +497,7 @@ fun WatchioNativeApp(
                                 container.providerRepository,
                                 container.settingsRepository,
                                 detectedDeviceInput.inputMode,
+                                container.xtreamRepository::validateAccount,
                             ) as T
                         }
                     },
@@ -467,6 +507,11 @@ fun WatchioNativeApp(
                     when (destination) {
                         BootstrapDestination.Ready -> navigateHomeAsRoot(navController)
                         BootstrapDestination.NeedsXtreamLogin -> navController.navigate("providers/xtream/add") {
+                            popUpTo("bootstrap") { inclusive = true }
+                        }
+                        is BootstrapDestination.AccountBlocked -> navController.navigate(
+                            "providers/xtream/add?message=${Uri.encode((destination as BootstrapDestination.AccountBlocked).message)}",
+                        ) {
                             popUpTo("bootstrap") { inclusive = true }
                         }
                         else -> Unit
@@ -479,6 +524,18 @@ fun WatchioNativeApp(
                         onAutomatic = bootstrapViewModel::chooseAutomatic,
                         onMobile = bootstrapViewModel::chooseMobile,
                         onTv = bootstrapViewModel::chooseTv,
+                    )
+                    is BootstrapDestination.AccountBlocked -> BootstrapLoadingScreen()
+                    is BootstrapDestination.ConnectionRequired -> AccountAccessScreen(
+                        message = (destination as BootstrapDestination.ConnectionRequired).message,
+                        primaryLabel = "Retry",
+                        onPrimary = bootstrapViewModel::retry,
+                        secondaryLabel = "Sign In Another Account",
+                        onSecondary = {
+                            navController.navigate("providers/xtream/add") {
+                                popUpTo("bootstrap") { inclusive = true }
+                            }
+                        },
                     )
                     BootstrapDestination.NeedsXtreamLogin,
                     BootstrapDestination.Ready -> BootstrapLoadingScreen()
@@ -646,7 +703,6 @@ fun WatchioNativeApp(
                     state = state,
                     onSelect = providersViewModel::select,
                     onRefresh = providersViewModel::refresh,
-                    onSwitchServer = providersViewModel::switchServer,
                     onDelete = providersViewModel::delete,
                     onAddXtreamProvider = { navController.navigate("providers/xtream/add") },
                     onAddM3uUrlProvider = { navController.navigate("providers/m3u/url/add") },
@@ -670,7 +726,6 @@ fun WatchioNativeApp(
                     state = state,
                     onSelect = providersViewModel::select,
                     onRefresh = providersViewModel::refresh,
-                    onSwitchServer = providersViewModel::switchServer,
                     onDelete = providersViewModel::delete,
                     onAddXtreamProvider = { navController.navigate("providers/xtream/add") },
                     onAddM3uUrlProvider = { navController.navigate("providers/m3u/url/add") },
@@ -690,7 +745,6 @@ fun WatchioNativeApp(
                     state = state,
                     onSelect = providersViewModel::select,
                     onRefresh = providersViewModel::refresh,
-                    onSwitchServer = providersViewModel::switchServer,
                     onDelete = providersViewModel::delete,
                     onAddXtreamProvider = { navController.navigate("providers/xtream/add") },
                     onAddM3uUrlProvider = { navController.navigate("providers/m3u/url/add") },
@@ -1139,12 +1193,21 @@ fun WatchioNativeApp(
                     },
                 )
             }
-            composable("providers/xtream/add") {
+            composable(
+                route = "providers/xtream/add?message={message}",
+                arguments = listOf(navArgument("message") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            ) { backStackEntry ->
                 val providerViewModel: XtreamProviderViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         @Suppress("UNCHECKED_CAST")
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return XtreamProviderViewModel(container.xtreamRepository) as T
+                            return XtreamProviderViewModel(
+                                container.xtreamRepository,
+                                initialErrorMessage = backStackEntry.arguments?.getString("message"),
+                                initialProviderName = BuildConfig.FAILOVER_TEST_PROVIDER_NAME,
+                                initialUsername = BuildConfig.FAILOVER_TEST_USERNAME,
+                                initialPassword = BuildConfig.FAILOVER_TEST_PASSWORD,
+                            ) as T
                         }
                     },
                 )
@@ -1160,28 +1223,6 @@ fun WatchioNativeApp(
                         }
                     },
                     onQuickLogin = { navController.navigate("quick-login") },
-                    onBack = { navController.popBackStack() },
-                )
-            }
-            composable("providers/dns/add") {
-                val providerViewModel: XtreamProviderViewModel = viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        @Suppress("UNCHECKED_CAST")
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return XtreamProviderViewModel(
-                                container.xtreamRepository,
-                                container.dnsResolver,
-                                container.endpointManager,
-                            ) as T
-                        }
-                    },
-                )
-                val state by providerViewModel.state.collectAsStateWithLifecycle()
-                DnsLoginScreen(
-                    state = state,
-                    onUsername = providerViewModel::updateUsername,
-                    onPassword = providerViewModel::updatePassword,
-                    onConnect = { providerViewModel.connectDns { navigateHomeAsRoot(navController) } },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -1494,6 +1535,40 @@ private fun BootstrapLoadingScreen() {
 }
 
 @Composable
+private fun AccountAccessScreen(
+    message: String,
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
+) {
+    val colors = LocalWatchioColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(watchioScreenBackgroundColor())
+            .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("Account Check", color = colors.textPrimary, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        Text(message, color = colors.textSecondary)
+        Spacer(Modifier.height(24.dp))
+        WatchioButton(primaryLabel, onPrimary, modifier = Modifier.testTag("account-access-primary"))
+        if (secondaryLabel != null && onSecondary != null) {
+            Spacer(Modifier.height(12.dp))
+            WatchioButton(
+                secondaryLabel,
+                onSecondary,
+                variant = WatchioButtonVariant.Secondary,
+                modifier = Modifier.testTag("account-access-secondary"),
+            )
+        }
+    }
+}
+
+@Composable
 internal fun DeviceModeScreen(
     detection: DeviceInputDetection,
     onAutomatic: () -> Unit,
@@ -1782,7 +1857,6 @@ internal fun ProviderManagementScreen(
     state: ProviderManagementUiState,
     onSelect: (com.iamskorpz.watchioiptv.core.model.ProviderId) -> Unit,
     onRefresh: (com.iamskorpz.watchioiptv.core.model.ProviderId) -> Unit,
-    onSwitchServer: (com.iamskorpz.watchioiptv.core.model.ProviderId, String) -> Unit,
     onDelete: (com.iamskorpz.watchioiptv.core.model.ProviderId) -> Unit,
     onAddXtreamProvider: () -> Unit,
     onAddM3uUrlProvider: () -> Unit,
@@ -1791,7 +1865,6 @@ internal fun ProviderManagementScreen(
 ) {
     val colors = LocalWatchioColors.current
     var pendingDelete by remember { mutableStateOf<ProviderRowUiState?>(null) }
-    var pendingSwitch by remember { mutableStateOf<ProviderRowUiState?>(null) }
     val firstFocus = remember { FocusRequester() }
     BackHandler(onBack = onBack)
     Column(
@@ -1830,11 +1903,9 @@ internal fun ProviderManagementScreen(
                             },
                             providerHealth = state.providerHealth.takeIf { row.provider.id == state.selectedProviderId },
                             refreshing = row.provider.id == state.refreshingProviderId,
-                            switching = row.provider.id == state.switchingProviderId,
                             compact = compact,
                             onSelect = { onSelect(row.provider.id) },
                             onRefresh = { onRefresh(row.provider.id) },
-                            onSwitchServer = { pendingSwitch = row },
                             onDelete = { pendingDelete = row },
                             focusRequester = if (row == state.providers.first()) firstFocus else null,
                         )
@@ -1880,28 +1951,6 @@ internal fun ProviderManagementScreen(
             },
         )
     }
-    pendingSwitch?.let { row ->
-        AlertDialog(
-            onDismissRequest = { pendingSwitch = null },
-            title = { Text("SWITCH SERVER") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.serverChoices.forEach { server ->
-                        TextButton(
-                            onClick = {
-                                pendingSwitch = null
-                                onSwitchServer(row.provider.id, server.id)
-                            },
-                            enabled = !server.active,
-                        ) { Text(if (server.active) "${server.name} (Active)" else server.name) }
-                    }
-                    if (state.serverChoices.isEmpty()) Text("No servers available", color = colors.textMuted)
-                }
-            },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { pendingSwitch = null }) { Text("Cancel") } },
-        )
-    }
 }
 
 @Composable
@@ -1911,11 +1960,9 @@ private fun ProviderCard(
     activeServerLabel: String?,
     providerHealth: com.iamskorpz.watchioiptv.data.xtream.ProviderHealthState?,
     refreshing: Boolean,
-    switching: Boolean,
     compact: Boolean,
     onSelect: () -> Unit,
     onRefresh: () -> Unit,
-    onSwitchServer: () -> Unit,
     onDelete: () -> Unit,
     focusRequester: FocusRequester? = null,
 ) {
@@ -1952,17 +1999,14 @@ private fun ProviderCard(
             }
         }
         Spacer(Modifier.height(10.dp))
-        val managed = row.provider.id.value.startsWith("xtream-managed-")
         if (compact) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 WatchioButton(if (refreshing) "Refreshing..." else "Refresh", onRefresh, variant = WatchioButtonVariant.CompactAction, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("provider-refresh-${row.provider.id.value}"), loading = refreshing)
-                if (managed) WatchioButton(if (switching) "Switching..." else "Switch Server", onSwitchServer, variant = WatchioButtonVariant.Secondary, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("provider-switch-${row.provider.id.value}"), loading = switching)
                 WatchioButton("Remove", onDelete, variant = WatchioButtonVariant.Danger, modifier = Modifier.fillMaxWidth().height(48.dp).testTag("provider-remove-${row.provider.id.value}"))
             }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 WatchioButton(if (refreshing) "Refreshing..." else "Refresh", onRefresh, variant = WatchioButtonVariant.CompactAction, modifier = Modifier.weight(1f).height(48.dp).testTag("provider-refresh-${row.provider.id.value}"), loading = refreshing)
-                if (managed) WatchioButton(if (switching) "Switching..." else "Switch Server", onSwitchServer, variant = WatchioButtonVariant.Secondary, modifier = Modifier.weight(1f).height(48.dp).testTag("provider-switch-${row.provider.id.value}"), loading = switching)
                 WatchioButton("Remove", onDelete, variant = WatchioButtonVariant.Danger, modifier = Modifier.weight(1f).height(48.dp).testTag("provider-remove-${row.provider.id.value}"))
             }
         }
@@ -2156,86 +2200,6 @@ internal fun XtreamProviderScreen(
                     modifier = Modifier.width(160.dp).bringIntoViewRequester(cancelBringIntoView).focusProperties { up = quickLoginFocus }.tvVerticalFocus(up = quickLoginFocus, upBringIntoView = quickLoginBringIntoView, scope = formScope).bringIntoViewOnFocus().testTag("xtream-cancel"),
                 )
             }
-        }
-    }
-}
-
-@Composable
-internal fun DnsLoginScreen(
-    state: com.iamskorpz.watchioiptv.feature.provider.XtreamProviderFormState,
-    onUsername: (String) -> Unit,
-    onPassword: (String) -> Unit,
-    onConnect: () -> Unit,
-    onBack: () -> Unit,
-    imeVisibleOverride: Boolean? = null,
-) {
-    val colors = LocalWatchioColors.current
-    val type = LocalWatchioTypography.current
-    val radii = LocalWatchioRadii.current
-    val usernameFocus = remember { FocusRequester() }
-    val passwordFocus = remember { FocusRequester() }
-    val loginFocus = remember { FocusRequester() }
-    val backFocus = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val focusManager = LocalFocusManager.current
-    var tvKeyboardRequested by remember { mutableStateOf(false) }
-    val busy = state.importState is XtreamImportState.Importing
-    DismissImeBeforeNavigationBack(
-        fallbackFocus = loginFocus,
-        onNavigateBack = onBack,
-        imeVisibleOverride = imeVisibleOverride,
-        keyboardRequested = tvKeyboardRequested,
-        onKeyboardDismissed = { tvKeyboardRequested = false },
-    )
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = colors.textPrimary, unfocusedTextColor = colors.textPrimary,
-        cursorColor = colors.focusBorder, focusedBorderColor = colors.focusBorder,
-        unfocusedBorderColor = colors.textMuted.copy(alpha = 0.55f),
-        focusedLabelColor = colors.textPrimary, unfocusedLabelColor = colors.textSecondary,
-        focusedContainerColor = colors.surfaceElevated.copy(alpha = 0.92f),
-        unfocusedContainerColor = colors.surfaceElevated.copy(alpha = 0.72f),
-    )
-    LaunchedEffect(Unit) { usernameFocus.requestFocus() }
-    Box(
-        Modifier.fillMaxSize().background(watchioScreenBackgroundColor()).verticalScroll(rememberScrollState()).imePadding().padding(24.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier.widthIn(max = 580.dp).fillMaxWidth().clip(RoundedCornerShape(radii.lg))
-                .background(colors.surfaceCard.copy(alpha = 0.76f)).padding(22.dp).testTag("dns-login-screen"),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            WatchioLogoMark()
-            Text("DNS Login", color = colors.textPrimary, style = type.screenTitle, fontWeight = FontWeight.Bold)
-            Text("Enter your account details. Watchio will find your provider.", color = colors.textSecondary, style = type.body, textAlign = TextAlign.Center)
-            OutlinedTextField(
-                value = state.username, onValueChange = onUsername, label = { Text("Username") }, singleLine = true,
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }), colors = fieldColors,
-                modifier = Modifier.fillMaxWidth().height(56.dp).trackTvKeyboardRequest { tvKeyboardRequested = true }.focusRequester(usernameFocus).focusProperties { down = passwordFocus }.tvVerticalFocus(down = passwordFocus).testTag("dns-username"),
-            )
-            OutlinedTextField(
-                value = state.password, onValueChange = onPassword, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    tvKeyboardRequested = false
-                    keyboardController?.hide()
-                    focusManager.clearFocus(force = true)
-                    loginFocus.requestFocus()
-                }), colors = fieldColors,
-                modifier = Modifier.fillMaxWidth().height(56.dp).trackTvKeyboardRequest { tvKeyboardRequested = true }.focusRequester(passwordFocus).focusProperties { up = usernameFocus; down = loginFocus }.tvVerticalFocus(up = usernameFocus, down = loginFocus).testTag("dns-password"),
-            )
-            state.errorMessage?.let { Text(it, color = Color(0xFFFF6B7A), style = type.body, modifier = Modifier.fillMaxWidth().testTag("dns-error")) }
-            XtreamLoginAction(
-                text = if (busy) "SIGNING IN..." else "LOGIN", onClick = onConnect,
-                focusRequester = loginFocus, primary = true, enabled = !busy && state.username.isNotBlank() && state.password.isNotBlank(), loading = busy,
-                modifier = Modifier.fillMaxWidth().height(56.dp).focusProperties { up = passwordFocus; down = backFocus }.tvVerticalFocus(up = passwordFocus, down = backFocus).testTag("dns-connect"),
-            )
-            XtreamLoginAction(
-                text = "Back", onClick = onBack, focusRequester = backFocus, tertiary = true,
-                modifier = Modifier.width(160.dp).focusProperties { up = loginFocus }.tvVerticalFocus(up = loginFocus).testTag("dns-back"),
-            )
         }
     }
 }

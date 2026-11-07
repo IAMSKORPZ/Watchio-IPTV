@@ -19,7 +19,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performImeAction
@@ -29,7 +28,6 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.iamskorpz.watchioiptv.feature.provider.XtreamProviderFormState
 import com.iamskorpz.watchioiptv.ui.XtreamProviderScreen
-import com.iamskorpz.watchioiptv.ui.DnsLoginScreen
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
 import org.junit.Rule
 import org.junit.Test
@@ -179,26 +177,6 @@ class ProviderFormComposeTest {
     }
 
     @Test
-    fun dnsLoginHasOnlyUsernamePasswordAndDpadActions() {
-        composeRule.activity.setContent {
-            WatchioTheme {
-                DnsLoginScreen(
-                    state = XtreamProviderFormState(username = "fake-user", password = "fake-pass"),
-                    onUsername = {}, onPassword = {}, onConnect = {}, onBack = {},
-                )
-            }
-        }
-        composeRule.onNodeWithTag("dns-username").assertIsFocused()
-        composeRule.onNodeWithTag("dns-username").performKeyInput { pressKey(Key.DirectionDown) }
-        composeRule.onNodeWithTag("dns-password").assertIsFocused()
-        composeRule.onNodeWithTag("dns-password").performKeyInput { pressKey(Key.DirectionDown) }
-        composeRule.onNodeWithContentDescription("LOGIN").assertIsFocused()
-        composeRule.onAllNodesWithTag("xtream-server-url").assertCountEquals(0)
-        composeRule.onAllNodesWithText("Provider Name").assertCountEquals(0)
-        assertTrue(composeRule.onNodeWithTag("dns-password").fetchSemanticsNode().config.contains(androidx.compose.ui.semantics.SemanticsProperties.Password))
-    }
-
-    @Test
     fun xtreamBackDismissesImeBeforeNavigatingAndRestoresDpadFocus() {
         var imeVisible by mutableStateOf(true)
         var backCount = 0
@@ -223,28 +201,6 @@ class ProviderFormComposeTest {
         composeRule.runOnIdle { imeVisible = false }
         composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
         composeRule.runOnIdle { assertEquals(1, backCount) }
-    }
-
-    @Test
-    fun dnsBackDismissesImeWithoutLeavingScreen() {
-        var imeVisible by mutableStateOf(true)
-        var backCount = 0
-        composeRule.activity.setContent {
-            WatchioTheme {
-                DnsLoginScreen(
-                    state = XtreamProviderFormState(username = "fake-user", password = "fake-pass"),
-                    onUsername = {}, onPassword = {}, onConnect = {}, onBack = { backCount++ },
-                    imeVisibleOverride = imeVisible,
-                )
-            }
-        }
-
-        composeRule.onNodeWithTag("dns-password").performClick()
-        // Some TV IMEs consume Back themselves. The insets transition must still
-        // clear the text field and return focus to a remote-friendly action.
-        composeRule.runOnIdle { imeVisible = false }
-        composeRule.onNodeWithContentDescription("LOGIN").assertIsFocused()
-        composeRule.runOnIdle { assertEquals(0, backCount) }
     }
 
     @Test
@@ -288,21 +244,4 @@ class ProviderFormComposeTest {
         composeRule.runOnIdle { assertEquals(0, xtreamSubmissions) }
     }
 
-    @Test
-    fun dnsPasswordDoneDismissesImeAndFocusesLoginWithoutSubmitting() {
-        var submissions = 0
-        composeRule.activity.setContent {
-            WatchioTheme {
-                DnsLoginScreen(
-                    state = XtreamProviderFormState(username = "User", password = "Password"),
-                    onUsername = {}, onPassword = {}, onConnect = { submissions++ }, onBack = {},
-                    imeVisibleOverride = true,
-                )
-            }
-        }
-
-        composeRule.onNodeWithTag("dns-password").performClick().performImeAction()
-        composeRule.onNodeWithContentDescription("LOGIN").assertIsFocused()
-        composeRule.runOnIdle { assertEquals(0, submissions) }
-    }
 }

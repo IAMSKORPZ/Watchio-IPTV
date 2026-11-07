@@ -227,6 +227,21 @@ class WatchioEndpointManagerTest {
         assertEquals(ProviderConnectivity.TemporarilyUnavailable, manager.health.value.connectivity)
     }
 
+    @Test fun outageRefreshesConfigAndUsesNewAuthenticatedEndpoint() = runBlocking {
+        val source = FakeSource(config("https://old.test"), null, config("https://bundled.test"))
+        val manager = WatchioEndpointManager(source, retryDelay = {})
+        assertEquals("https://old.test", manager.candidates().single().url)
+        source.remoteValue = config("https://old.test", "https://new.test")
+
+        val selected = manager.resolve("https://old.test") { endpoint ->
+            if (endpoint.url == "https://old.test") throw EndpointAttemptFailure.Unavailable(IOException())
+            endpoint.url
+        }
+
+        assertEquals("https://new.test", selected.endpoint.url)
+        assertEquals("https://new.test", source.lastWorking())
+    }
+
     @Test fun restoredEndpointIsSelectedButNotFalselyReportedConnected() = runBlocking {
         val manager = WatchioEndpointManager(source(objectConfig(endpoint("MediaTitans", "https://one.test", 1))))
         manager.restoreActive("https://one.test")
@@ -287,26 +302,6 @@ class WatchioEndpointManagerTest {
 
     @Test fun noEndpointsFailsSafely() = runBlocking {
         assertTrue(expectFailure<IllegalStateException> { WatchioEndpointManager(source(config())).resolve { it.url } }.message!!.contains("service configuration"))
-    }
-
-    @Test fun dnsIdMapsToEnabledManagedEndpoint() = runBlocking {
-        val manager = WatchioEndpointManager(source(objectConfig(endpoint("primary", "http://provider.test:8880", 0))))
-        assertEquals("http://provider.test:8880", manager.dnsEndpoint("PRIMARY", null).url)
-    }
-
-    @Test fun dnsDisabledOrUnknownIdIsRejected() = runBlocking {
-        val manager = WatchioEndpointManager(source(objectConfig(endpoint("disabled", "https://disabled.test", 0, false))))
-        expectFailure<IllegalArgumentException> { manager.dnsEndpoint("disabled", null) }
-        expectFailure<IllegalArgumentException> { manager.dnsEndpoint("unknown", null) }
-        Unit
-    }
-
-    @Test fun dnsDirectUrlIsNormalizedAndUnsafeUrlRejected() = runBlocking {
-        val manager = WatchioEndpointManager(source(objectConfig()))
-        assertEquals("http://provider.test:8880", manager.dnsEndpoint(null, " HTTP://PROVIDER.TEST:8880/ ").url)
-        expectFailure<IllegalArgumentException> { manager.dnsEndpoint(null, "http://user:pass@provider.test:8880") }
-        expectFailure<IllegalArgumentException> { manager.dnsEndpoint(null, "not a url") }
-        Unit
     }
 
     @Test fun concurrentCallsAreSerialized() = runBlocking {

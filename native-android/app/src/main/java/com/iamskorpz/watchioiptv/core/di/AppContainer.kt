@@ -39,10 +39,8 @@ import com.iamskorpz.watchioiptv.data.refresh.AndroidNetworkConnectivityChecker
 import com.iamskorpz.watchioiptv.data.refresh.CatalogAutoRefreshScheduler
 import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
 import com.iamskorpz.watchioiptv.data.series.SeriesRepository
-import com.iamskorpz.watchioiptv.data.xtream.HttpWatchioDnsResolver
-import com.iamskorpz.watchioiptv.data.xtream.WATCHIO_DNS_RESOLVER_URL
-import com.iamskorpz.watchioiptv.data.xtream.PlaybackEndpointRecoveryCoordinator
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
+import com.iamskorpz.watchioiptv.data.xtream.PlaybackEndpointRecoveryCoordinator
 import com.iamskorpz.watchioiptv.data.xtream.XtreamPlaybackUrlResolver
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
 import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlResolver
@@ -113,7 +111,6 @@ class AppContainer(context: Context) {
     val endpointManager = WatchioEndpointManager(
         AppVariantBindings.createEndpointConfigSource(appContext, networkModule.okHttpClient),
     )
-    val dnsResolver = HttpWatchioDnsResolver(networkModule.okHttpClient, WATCHIO_DNS_RESOLVER_URL)
     private val mutablePlaybackAccountBlocked = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val playbackAccountBlocked = mutablePlaybackAccountBlocked.asSharedFlow()
 

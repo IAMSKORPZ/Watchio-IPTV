@@ -11,7 +11,6 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -58,8 +57,7 @@ class ProviderManagementComposeTest {
         composeRule.onNodeWithText("AW999").assertIsDisplayed()
         composeRule.onNodeWithText("Active").assertIsDisplayed()
         composeRule.onNodeWithTag("provider-refresh-${providerId.value}").assertIsDisplayed()
-        composeRule.onNodeWithTag("provider-management-content").performScrollToNode(hasTestTag("provider-switch-${providerId.value}"))
-        composeRule.onNodeWithTag("provider-switch-${providerId.value}").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithTag("provider-switch-${providerId.value}").fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithTag("provider-management-content").performScrollToNode(hasTestTag("provider-remove-${providerId.value}"))
         composeRule.onNodeWithTag("provider-remove-${providerId.value}").assertIsDisplayed()
         composeRule.onNodeWithTag("provider-management-content").performScrollToNode(hasTestTag("providers-add-xtream"))
@@ -88,7 +86,7 @@ class ProviderManagementComposeTest {
             .performClick()
         composeRule.onNodeWithTag("provider-refresh-${providerId.value}").performClick()
         composeRule.onNodeWithTag("provider-select-${providerId.value}").performKeyInput { pressKey(Key.DirectionDown) }
-        composeRule.onNodeWithContentDescription("Switch Server").assertIsFocused()
+        composeRule.onNodeWithTag("provider-remove-${providerId.value}").assertIsFocused()
         composeRule.onNodeWithTag("provider-management-content").performScrollToNode(hasTestTag("providers-add-xtream"))
         composeRule.onNodeWithTag("providers-add-xtream").performClick()
         assertEquals(providerId, selected)
@@ -105,7 +103,6 @@ class ProviderManagementComposeTest {
                     state = ProviderManagementUiState(),
                     onSelect = {},
                     onRefresh = {},
-                    onSwitchServer = { _, _ -> },
                     onDelete = {},
                     onAddXtreamProvider = { opened = "xtream" },
                     onAddM3uUrlProvider = { opened = "url" },
@@ -127,10 +124,9 @@ class ProviderManagementComposeTest {
     }
 
     @Test
-    fun multipleProvidersAndManagedActionsKeepExistingCallbacks() {
+    fun multipleProvidersDoNotExposeManualServerSelection() {
         val managedId = ProviderId("xtream-managed-primary")
         val m3uId = ProviderId("m3u-secondary")
-        var switched: Pair<ProviderId, String>? = null
         var removed: ProviderId? = null
         showScreen(
             state = ProviderManagementUiState(
@@ -141,15 +137,12 @@ class ProviderManagementComposeTest {
                     ManagedServerChoice("backup", "MediaTitans", active = false),
                 ),
             ),
-            onSwitch = { provider, server -> switched = provider to server },
             onDelete = { removed = it },
         )
 
         composeRule.onNodeWithTag("provider-select-${managedId.value}").assertIsDisplayed()
         composeRule.onNodeWithTag("provider-select-${m3uId.value}").assertIsDisplayed()
-        composeRule.onNodeWithTag("provider-switch-${managedId.value}").performClick()
-        composeRule.onNodeWithText("MediaTitans").performClick()
-        assertEquals(managedId to "backup", switched)
+        assertTrue(composeRule.onAllNodesWithTag("provider-switch-${managedId.value}").fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithTag("provider-remove-${managedId.value}").performClick()
         composeRule.onNodeWithTag("provider-remove-confirm").performClick()
         assertEquals(managedId, removed)
@@ -161,7 +154,6 @@ class ProviderManagementComposeTest {
         onSelect: (ProviderId) -> Unit = {},
         onRefresh: (ProviderId) -> Unit = {},
         onAddXtream: () -> Unit = {},
-        onSwitch: (ProviderId, String) -> Unit = { _, _ -> },
         onDelete: (ProviderId) -> Unit = {},
     ) {
         lateinit var inputModeManager: InputModeManager
@@ -172,7 +164,6 @@ class ProviderManagementComposeTest {
                     state = state,
                     onSelect = onSelect,
                     onRefresh = onRefresh,
-                    onSwitchServer = onSwitch,
                     onDelete = onDelete,
                     onAddXtreamProvider = onAddXtream,
                     onAddM3uUrlProvider = {},

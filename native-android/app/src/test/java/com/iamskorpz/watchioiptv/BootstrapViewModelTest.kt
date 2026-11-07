@@ -9,6 +9,8 @@ import com.iamskorpz.watchioiptv.domain.repository.ProviderRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
 import com.iamskorpz.watchioiptv.feature.bootstrap.BootstrapDestination
 import com.iamskorpz.watchioiptv.feature.bootstrap.BootstrapViewModel
+import com.iamskorpz.watchioiptv.data.xtream.AccountValidationResult
+import com.iamskorpz.watchioiptv.ui.accountBlockedMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -167,6 +169,83 @@ class BootstrapViewModelTest {
 
         assertEquals(BootstrapDestination.Ready, viewModel.destination.value)
         assertEquals(xtream, settings.selectedProviderId.value)
+    }
+
+    @Test
+    fun expiredAccountNeverReachesHome() = runTest(dispatcher) {
+        val provider = xtreamProvider()
+        val viewModel = BootstrapViewModel(
+            FakeProviderRepository(provider),
+            completedSettings(provider.id),
+            validateAccount = { AccountValidationResult.Blocked("Your account has expired.") },
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(BootstrapDestination.AccountBlocked("Your account has expired."), viewModel.destination.value)
+    }
+
+    @Test
+    fun disabledAndRevokedAccountsRemainBlocked() = runTest(dispatcher) {
+        for (message in listOf("Your account is disabled.", "Your account access has been revoked.")) {
+            val provider = xtreamProvider()
+            val viewModel = BootstrapViewModel(
+                FakeProviderRepository(provider),
+                completedSettings(provider.id),
+                validateAccount = { AccountValidationResult.Blocked(message) },
+            )
+            advanceUntilIdle()
+            assertEquals(BootstrapDestination.AccountBlocked(message), viewModel.destination.value)
+        }
+    }
+
+    @Test
+    fun temporaryFailureRequiresRetryAndDoesNotClaimExpiry() = runTest(dispatcher) {
+        val provider = xtreamProvider()
+        var result: AccountValidationResult = AccountValidationResult.Retryable("Connection unavailable.")
+        val viewModel = BootstrapViewModel(
+            FakeProviderRepository(provider),
+            completedSettings(provider.id),
+            validateAccount = { result },
+        )
+        advanceUntilIdle()
+        assertEquals(BootstrapDestination.ConnectionRequired("Connection unavailable."), viewModel.destination.value)
+
+        result = AccountValidationResult.Active
+        viewModel.retry()
+        advanceUntilIdle()
+        assertEquals(BootstrapDestination.Ready, viewModel.destination.value)
+    }
+
+    @Test
+    fun activeAccountReachesHomeAfterValidation() = runTest(dispatcher) {
+        val provider = xtreamProvider()
+        val viewModel = BootstrapViewModel(
+            FakeProviderRepository(provider),
+            completedSettings(provider.id),
+            validateAccount = { AccountValidationResult.Active },
+        )
+        advanceUntilIdle()
+        assertEquals(BootstrapDestination.Ready, viewModel.destination.value)
+    }
+
+    @Test
+    fun definitiveSessionStatusBlocksAuthenticatedNavigation() {
+        assertEquals(
+            "Your account has expired. Please renew your subscription or sign in with another account.",
+            accountBlockedMessage("Active", 999L, 1_000L),
+        )
+        assertEquals(null, accountBlockedMessage("Active", 2_000L, 1_000L))
+        assertEquals(null, accountBlockedMessage(null, null, 1_000L))
+    }
+
+    private fun xtreamProvider() = WatchioProvider(
+        ProviderId("provider-a"), "Provider A", ProviderType.Xtream, "http://example.invalid", 1, 1, null, true,
+    )
+
+    private fun completedSettings(providerId: ProviderId) = FakeSettingsRepository().apply {
+        selectedProviderId.value = providerId
+        deviceModeOnboardingCompleted.value = true
     }
 }
 
