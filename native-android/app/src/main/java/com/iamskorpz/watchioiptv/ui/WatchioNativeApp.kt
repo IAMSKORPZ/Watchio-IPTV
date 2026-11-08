@@ -1990,7 +1990,7 @@ private fun ProviderCard(
                 Text("$activeServerLabel selected", color = colors.textSecondary)
                 providerHealth?.let { health ->
                     Text("Connection: ${health.connectivity.toDisplayLabel()}", color = colors.textMuted)
-                    Text("Account: ${health.authentication.toDisplayLabel()}", color = colors.textMuted)
+                    Text("Account: ${row.accountState.toDisplayLabel()}", color = colors.textMuted)
                     Text("Streaming: ${health.streaming.toDisplayLabel()}", color = colors.textMuted)
                 }
             }
@@ -2023,6 +2023,16 @@ private fun com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.toDispl
     com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.NotChecked -> "Not checked"
     com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.Verified -> "Verified"
     com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.Rejected -> "Rejected"
+}
+
+private fun com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.toDisplayLabel(): String = when (this) {
+    com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.NotChecked -> "Not checked"
+    com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.Verified -> "Verified"
+    com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.Expired -> "Expired"
+    com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.Disabled -> "Disabled"
+    com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.Revoked -> "Revoked"
+    com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.Rejected -> "Rejected"
+    com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.Unverified -> "Unverified"
 }
 
 private fun com.iamskorpz.watchioiptv.data.xtream.ProviderStreaming.toDisplayLabel(): String = when (this) {

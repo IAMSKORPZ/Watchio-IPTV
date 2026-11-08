@@ -7,6 +7,9 @@ import com.iamskorpz.watchioiptv.data.m3u.M3uRepository
 import com.iamskorpz.watchioiptv.data.refresh.CatalogRefreshCoordinator
 import com.iamskorpz.watchioiptv.data.refresh.RefreshTrigger
 import com.iamskorpz.watchioiptv.data.refresh.getOrThrow
+import com.iamskorpz.watchioiptv.data.xtream.AccountBlockReason
+import com.iamskorpz.watchioiptv.data.xtream.AccountValidationResult
+import com.iamskorpz.watchioiptv.data.xtream.EndpointAttemptFailure
 import com.iamskorpz.watchioiptv.data.xtream.WatchioEndpointManager
 import com.iamskorpz.watchioiptv.data.xtream.ProviderHealthState
 import com.iamskorpz.watchioiptv.data.xtream.XtreamRepository
@@ -40,6 +43,7 @@ data class ProviderRowUiState(
     val movieCount: Int,
     val seriesCount: Int,
     val refreshState: String,
+    val accountState: ProviderAccountState = ProviderAccountState.NotChecked,
 ) {
     val typeLabel: String = when (provider.type) {
         ProviderType.Xtream -> "Xtream"
@@ -47,6 +51,8 @@ data class ProviderRowUiState(
         ProviderType.M3uFile -> "Local M3U"
     }
 }
+
+enum class ProviderAccountState { NotChecked, Verified, Expired, Disabled, Revoked, Rejected, Unverified }
 
 class ProviderManagementViewModel(
     private val providerRepository: ProviderRepository,
@@ -58,6 +64,7 @@ class ProviderManagementViewModel(
 ) : ViewModel() {
     private val status = MutableStateFlow(ProviderManagementUiState())
     private var refreshJob: Job? = null
+    private val accountStates = MutableStateFlow<Map<ProviderId, ProviderAccountState>>(emptyMap())
 
     private val endpointState = combine(
         endpointManager.configuredEndpoints,
@@ -70,7 +77,8 @@ class ProviderManagementViewModel(
         settingsRepository.selectedProviderId,
         status,
         endpointState,
-    ) { providers, selectedProviderId, current, endpoints ->
+        accountStates,
+    ) { providers, selectedProviderId, current, endpoints, accounts ->
         val rows = providers.map { provider ->
             val counts = counts(provider)
             ProviderRowUiState(
@@ -79,6 +87,7 @@ class ProviderManagementViewModel(
                 movieCount = counts.movies,
                 seriesCount = counts.series,
                 refreshState = if (current.refreshingProviderId == provider.id) "Refreshing..." else provider.lastRefreshAtEpochMs?.let { "Updated" } ?: "Idle",
+                accountState = accounts[provider.id] ?: ProviderAccountState.NotChecked,
             )
         }
         current.copy(
@@ -101,17 +110,27 @@ class ProviderManagementViewModel(
         if (refreshJob?.isActive == true) return
         refreshJob = viewModelScope.launch {
             status.value = status.value.copy(refreshingProviderId = providerId, message = "Refreshing...")
+            val provider = providerRepository.getProvider(providerId)
             val result = runCatching {
+                provider ?: error("Provider not found.")
                 val coordinator = catalogRefreshCoordinator
                 if (coordinator != null) {
                     coordinator.refreshProvider(providerId, RefreshTrigger.Manual).getOrThrow()
                 } else {
-                    val provider = providerRepository.getProvider(providerId) ?: error("Provider not found.")
                     when (provider.type) {
                         ProviderType.Xtream -> xtreamRepository.refreshProvider(providerId)
                         ProviderType.M3uUrl, ProviderType.M3uFile -> m3uRepository.refresh(providerId.value)
                     }
                 }
+            }
+            if (provider?.type == ProviderType.Xtream) {
+                accountStates.value = accountStates.value + (
+                    providerId to when (val failure = result.exceptionOrNull()) {
+                        null -> ProviderAccountState.Verified
+                        is EndpointAttemptFailure.Account -> failure.toProviderAccountState()
+                        else -> ProviderAccountState.Unverified
+                    }
+                )
             }
             status.value = status.value.copy(
                 refreshingProviderId = null,
@@ -145,4 +164,18 @@ class ProviderManagementViewModel(
         val activeUrl: String?,
         val health: ProviderHealthState,
     )
+}
+
+internal fun AccountValidationResult.Blocked.toProviderAccountState(): ProviderAccountState = when (reason) {
+    AccountBlockReason.Expired -> ProviderAccountState.Expired
+    AccountBlockReason.Disabled -> ProviderAccountState.Disabled
+    AccountBlockReason.Revoked -> ProviderAccountState.Revoked
+    AccountBlockReason.InvalidCredentials -> ProviderAccountState.Rejected
+}
+
+internal fun EndpointAttemptFailure.Account.toProviderAccountState(): ProviderAccountState = when (reason) {
+    AccountBlockReason.Expired -> ProviderAccountState.Expired
+    AccountBlockReason.Disabled -> ProviderAccountState.Disabled
+    AccountBlockReason.Revoked -> ProviderAccountState.Revoked
+    AccountBlockReason.InvalidCredentials -> ProviderAccountState.Rejected
 }

@@ -27,9 +27,14 @@ data class XtreamAuthInfo(
 
 sealed interface AccountValidationResult {
     data object Active : AccountValidationResult
-    data class Blocked(val message: String) : AccountValidationResult
+    data class Blocked(
+        val message: String,
+        val reason: AccountBlockReason = AccountBlockReason.InvalidCredentials,
+    ) : AccountValidationResult
     data class Retryable(val message: String) : AccountValidationResult
 }
+
+enum class AccountBlockReason { Expired, Disabled, Revoked, InvalidCredentials }
 
 enum class XtreamImportStage(val label: String) {
     Idle("Idle"),

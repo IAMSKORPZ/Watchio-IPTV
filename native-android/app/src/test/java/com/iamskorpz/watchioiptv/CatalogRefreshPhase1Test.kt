@@ -264,6 +264,44 @@ class CatalogRefreshPhase1Test {
     }
 
     @Test
+    fun blockedAccountStopsBeforeAnyCatalogueRequest() = runBlocking {
+        for (status in listOf("Expired", "Disabled", "Revoked")) {
+            server.enqueue(
+                jsonResponse(
+                    """{"user_info":{"username":"fake-user","auth":1,"status":"$status"},"server_info":{}}""",
+                ),
+            )
+            val before = server.requestCount
+
+            val result = runCatching {
+                xtreamRepository.addProvider(xtreamInput(displayName = status, username = "user-$status"))
+            }
+
+            assertTrue(result.isFailure)
+            assertEquals(1, server.requestCount - before)
+        }
+    }
+
+    @Test
+    fun previouslyActiveAccountRevokedOnRefreshKeepsCachedCatalogueAndMakesOnlyValidationRequest() = runBlocking {
+        enqueueXtreamCatalog(live = 2, movies = 2, series = 2)
+        val added = xtreamRepository.addProvider(xtreamInput())
+        val initialCounts = xtreamRepository.counts(added.providerId)
+        server.enqueue(
+            jsonResponse(
+                """{"user_info":{"username":"fake-user","auth":1,"status":"Revoked"},"server_info":{}}""",
+            ),
+        )
+        val before = server.requestCount
+
+        val result = runCatching { xtreamRepository.refreshProvider(added.providerId) }
+
+        assertTrue(result.isFailure)
+        assertEquals(1, server.requestCount - before)
+        assertEquals(initialCounts, xtreamRepository.counts(added.providerId))
+    }
+
+    @Test
     fun concurrentRefreshDeduplicationPreventsDuplicateXtreamRequests() = runBlocking {
         enqueueXtreamCatalog(live = 2, movies = 2, series = 2)
         val added = xtreamRepository.addProvider(xtreamInput())

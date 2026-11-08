@@ -156,7 +156,10 @@ class XtreamRepository(
             settingsRepository.persistAccountMetadata(providerId, auth)
             classifyAccountValidation(auth, clock.nowEpochMs())
         } catch (failure: EndpointAttemptFailure.Account) {
-            AccountValidationResult.Blocked(failure.message ?: "This account cannot sign in. Please use another account.")
+            AccountValidationResult.Blocked(
+                failure.message ?: "This account cannot sign in. Please use another account.",
+                failure.reason,
+            )
         } catch (failure: EndpointAttemptFailure.Unavailable) {
             AccountValidationResult.Retryable("Watchio could not reach the provider. Check the connection and retry.")
         } catch (failure: HttpException) {
@@ -177,11 +180,7 @@ class XtreamRepository(
             val auth = timedRequest("startup_account_validation") {
                 api(serverUrl).playerInfo(username, password)
             }.toAuthInfo()
-            when (val result = classifyAccountValidation(auth, clock.nowEpochMs())) {
-                AccountValidationResult.Active -> auth
-                is AccountValidationResult.Blocked -> throw EndpointAttemptFailure.Account(result.message)
-                is AccountValidationResult.Retryable -> throw EndpointAttemptFailure.Unavailable(IllegalStateException(result.message))
-            }
+            requireAuthorizedAccount(auth)
         } catch (failure: EndpointAttemptFailure) {
             throw failure
         } catch (failure: HttpException) {
@@ -230,8 +229,9 @@ class XtreamRepository(
         val resolved = resolveProviderEndpoint(provider.toDomain(), credentials)
         val serverUrl = resolved.first
         val api = api(serverUrl)
-        val auth = resolved.second ?: api.playerInfo(credentials.username, credentials.password).toAuthInfo()
-        if (!auth.authenticated) throw IllegalArgumentException("Incorrect username or password.")
+        val auth = requireAuthorizedAccount(
+            resolved.second ?: api.playerInfo(credentials.username, credentials.password).toAuthInfo(),
+        )
         settingsRepository.persistAccountMetadata(providerId, auth)
         val now = clock.nowEpochMs()
         val baselineRefreshAt = provider.lastRefreshAtEpochMs
@@ -386,9 +386,7 @@ class XtreamRepository(
             var started = traceNow()
             QuickLoginBootstrapTrace.mark("quicklogin_auth_started")
             val auth = authenticatedInfo ?: timedRequest("player_api_authentication") { api.playerInfo(username, password) }.toAuthInfo()
-            if (!auth.authenticated) {
-                throw IllegalArgumentException("Incorrect username or password.")
-            }
+            requireAuthorizedAccount(auth)
             QuickLoginBootstrapTrace.mark("quicklogin_auth_completed", started)
 
             stage = XtreamImportStage.LoadingLiveCategories
@@ -541,6 +539,9 @@ class XtreamRepository(
             if (throwable is EmptyCatalogResponseException) {
                 throw throwable
             }
+            if (throwable is EndpointAttemptFailure) {
+                throw throwable
+            }
             throw IllegalStateException(failure.message, throwable)
         }
     }
@@ -586,12 +587,7 @@ class XtreamRepository(
     private suspend fun authenticateEndpoint(serverUrl: String, username: String, password: String): XtreamAuthInfo {
         return try {
             val auth = timedRequest("player_api_authentication") { api(serverUrl).playerInfo(username, password) }.toAuthInfo()
-            if (!auth.authenticated) {
-                val status = auth.status.orEmpty().lowercase()
-                val message = if (status.contains("expired") || status.contains("disabled")) "Account is ${auth.status}." else "Username or password is incorrect."
-                throw EndpointAttemptFailure.Account(message)
-            }
-            auth
+            requireAuthorizedAccount(auth)
         } catch (failure: EndpointAttemptFailure.Account) {
             throw failure
         } catch (failure: HttpException) {
@@ -623,6 +619,13 @@ class XtreamRepository(
             }
             .getOrThrow()
     }
+
+    private fun requireAuthorizedAccount(auth: XtreamAuthInfo): XtreamAuthInfo =
+        when (val result = classifyAccountValidation(auth, clock.nowEpochMs())) {
+            AccountValidationResult.Active -> auth
+            is AccountValidationResult.Blocked -> throw EndpointAttemptFailure.Account(result.message, result.reason)
+            is AccountValidationResult.Retryable -> throw EndpointAttemptFailure.Unavailable(IllegalStateException(result.message))
+        }
 
     suspend fun addProviderTwoPhase(input: XtreamCredentialsInput): XtreamImportState.Success =
         addProviderTwoPhaseInternal(input)
@@ -656,7 +659,7 @@ class XtreamRepository(
             var started = traceNow()
             QuickLoginBootstrapTrace.mark("quicklogin_auth_started")
             val auth = managedSelection?.value ?: timedRequest("player_api_authentication") { api.playerInfo(username, password) }.toAuthInfo()
-            if (!auth.authenticated) throw IllegalArgumentException("Incorrect username or password.")
+            requireAuthorizedAccount(auth)
             QuickLoginBootstrapTrace.mark("quicklogin_auth_completed", started)
 
             started = traceNow()
@@ -866,6 +869,8 @@ class XtreamRepository(
     }
 
     private fun Throwable.safeMessage(): String = when (this) {
+        is EndpointAttemptFailure.Account -> message ?: "This account cannot sign in."
+        is EndpointAttemptFailure.Unavailable -> "Unable to connect to provider."
         is DuplicateXtreamProviderException -> "Provider appears to already exist."
         is EmptyCatalogResponseException -> message ?: "Provider returned an empty catalogue while cached content exists."
         is SocketTimeoutException -> "Connection timed out."
@@ -898,19 +903,22 @@ internal fun classifyAccountValidation(auth: XtreamAuthInfo, nowEpochMs: Long): 
     val expiryEpochMs = auth.expiration?.toLongOrNull()?.times(1_000L)
     val expired = expiryEpochMs != null && expiryEpochMs > 0L && expiryEpochMs <= nowEpochMs
     return when {
-        expired || "expired" in status -> AccountValidationResult.Blocked(
-            "Your account has expired. Please renew your subscription or sign in with another account.",
-        )
-        "disabled" in status -> AccountValidationResult.Blocked(
-            "Your account is disabled. Please contact your provider or sign in with another account.",
-        )
-        "revoked" in status || "banned" in status -> AccountValidationResult.Blocked(
-            "Your account access has been revoked. Please contact your provider or sign in with another account.",
-        )
-        auth.authenticated && (status.isBlank() || status == "active") -> AccountValidationResult.Active
         !auth.authenticated -> AccountValidationResult.Blocked(
             "This account cannot sign in. Please renew your subscription or use another account.",
         )
+        expired || "expired" in status -> AccountValidationResult.Blocked(
+            "Your account has expired. Please renew your subscription or sign in with another account.",
+            AccountBlockReason.Expired,
+        )
+        "disabled" in status -> AccountValidationResult.Blocked(
+            "Your account is disabled. Please contact your provider or sign in with another account.",
+            AccountBlockReason.Disabled,
+        )
+        "revoked" in status || "banned" in status -> AccountValidationResult.Blocked(
+            "Your account access has been revoked. Please contact your provider or sign in with another account.",
+            AccountBlockReason.Revoked,
+        )
+        auth.authenticated && (status.isBlank() || status == "active") -> AccountValidationResult.Active
         else -> AccountValidationResult.Retryable(
             "Watchio could not confirm this account's status. Please retry.",
         )

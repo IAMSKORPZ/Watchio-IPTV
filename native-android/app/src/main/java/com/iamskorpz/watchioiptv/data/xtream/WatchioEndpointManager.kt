@@ -81,7 +81,10 @@ interface WatchioEndpointConfigSource {
 }
 
 sealed class EndpointAttemptFailure(message: String, cause: Throwable? = null) : Exception(message, cause) {
-    class Account(message: String) : EndpointAttemptFailure(message)
+    class Account(
+        message: String,
+        val reason: AccountBlockReason = AccountBlockReason.InvalidCredentials,
+    ) : EndpointAttemptFailure(message)
     class Unavailable(cause: Throwable) : EndpointAttemptFailure("Endpoint unavailable.", cause)
 }
 

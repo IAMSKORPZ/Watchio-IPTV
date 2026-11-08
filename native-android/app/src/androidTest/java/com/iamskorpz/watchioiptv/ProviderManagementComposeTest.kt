@@ -25,6 +25,7 @@ import com.iamskorpz.watchioiptv.domain.model.ProviderType
 import com.iamskorpz.watchioiptv.domain.model.WatchioProvider
 import com.iamskorpz.watchioiptv.feature.provider.ManagedServerChoice
 import com.iamskorpz.watchioiptv.feature.provider.ProviderManagementUiState
+import com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState
 import com.iamskorpz.watchioiptv.feature.provider.ProviderRowUiState
 import com.iamskorpz.watchioiptv.ui.ProviderManagementScreen
 import com.iamskorpz.watchioiptv.ui.theme.WatchioTheme
@@ -65,6 +66,21 @@ class ProviderManagementComposeTest {
         composeRule.onNodeWithTag("providers-add-xtream").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("https://secret.example:8880", substring = true).fetchSemanticsNodes().isEmpty())
         assertTrue(composeRule.onAllNodesWithText("private-id", substring = true).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun revokedAccountNeverDisplaysVerified() {
+        val providerId = ProviderId("xtream-managed-primary")
+        showScreen(
+            ProviderManagementUiState(
+                providers = listOf(providerRow(providerId, accountState = ProviderAccountState.Revoked)),
+                selectedProviderId = providerId,
+                serverChoices = listOf(ManagedServerChoice("private-id", "AW999", active = true)),
+            ),
+        )
+
+        composeRule.onNodeWithText("Account: Revoked").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("Account: Verified").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
@@ -181,6 +197,7 @@ class ProviderManagementComposeTest {
         id: ProviderId,
         type: ProviderType = ProviderType.Xtream,
         name: String = "Family TV",
+        accountState: ProviderAccountState = ProviderAccountState.NotChecked,
     ) = ProviderRowUiState(
         provider = WatchioProvider(
             id = id,
@@ -196,5 +213,6 @@ class ProviderManagementComposeTest {
         movieCount = 45,
         seriesCount = 23,
         refreshState = "Updated",
+        accountState = accountState,
     )
 }
