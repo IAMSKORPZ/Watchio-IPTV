@@ -19,10 +19,15 @@ import com.iamskorpz.watchioiptv.domain.repository.ProviderRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
 import com.iamskorpz.watchioiptv.feature.home.managedServerLabel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -54,6 +59,48 @@ data class ProviderRowUiState(
 
 enum class ProviderAccountState { NotChecked, Verified, Expired, Disabled, Revoked, Rejected, Unverified }
 
+sealed interface ProviderRemovalOutcome {
+    data object InactiveProviderRemoved : ProviderRemovalOutcome
+    data class ActiveProviderSelected(val providerId: ProviderId) : ProviderRemovalOutcome
+    data object DownloadsOnly : ProviderRemovalOutcome
+    data object LoginRequired : ProviderRemovalOutcome
+}
+
+internal suspend fun removeProviderAndResolve(
+    providerId: ProviderId,
+    providerRepository: ProviderRepository,
+    settingsRepository: SettingsRepository,
+    validateAccount: suspend (ProviderId) -> AccountValidationResult,
+    hasPlayableDownloads: suspend () -> Boolean,
+    onActiveProviderRemoval: suspend () -> Unit,
+): ProviderRemovalOutcome {
+    val activeProviderId = settingsRepository.selectedProviderId.first()
+    val removingActiveProvider = activeProviderId == providerId
+    if (removingActiveProvider) settingsRepository.setSelectedProviderId(null)
+    try {
+        if (removingActiveProvider) onActiveProviderRemoval()
+        providerRepository.deleteProvider(providerId)
+    } catch (failure: Throwable) {
+        if (removingActiveProvider) settingsRepository.setSelectedProviderId(activeProviderId)
+        throw failure
+    }
+    if (!removingActiveProvider) return ProviderRemovalOutcome.InactiveProviderRemoved
+
+    val next = providerRepository.getProviders()
+        .asSequence()
+        .filter { it.enabled && it.type == ProviderType.Xtream }
+        .map { it.id }
+        .firstOrNull { runCatching { validateAccount(it) }.getOrNull() == AccountValidationResult.Active }
+    return if (next != null) {
+        settingsRepository.setSelectedProviderId(next)
+        ProviderRemovalOutcome.ActiveProviderSelected(next)
+    } else if (runCatching { hasPlayableDownloads() }.getOrDefault(false)) {
+        ProviderRemovalOutcome.DownloadsOnly
+    } else {
+        ProviderRemovalOutcome.LoginRequired
+    }
+}
+
 class ProviderManagementViewModel(
     private val providerRepository: ProviderRepository,
     private val settingsRepository: SettingsRepository,
@@ -61,10 +108,16 @@ class ProviderManagementViewModel(
     private val m3uRepository: M3uRepository,
     private val endpointManager: WatchioEndpointManager,
     private val catalogRefreshCoordinator: CatalogRefreshCoordinator? = null,
+    private val validateAccount: suspend (ProviderId) -> AccountValidationResult = xtreamRepository::validateAccount,
+    private val hasPlayableDownloads: suspend () -> Boolean = { false },
+    private val stopPlayback: () -> Unit = {},
+    private val invalidateProviderState: (ProviderId) -> Unit = {},
 ) : ViewModel() {
     private val status = MutableStateFlow(ProviderManagementUiState())
     private var refreshJob: Job? = null
     private val accountStates = MutableStateFlow<Map<ProviderId, ProviderAccountState>>(emptyMap())
+    private val mutableRemovalOutcomes = MutableSharedFlow<ProviderRemovalOutcome>(extraBufferCapacity = 1)
+    val removalOutcomes: SharedFlow<ProviderRemovalOutcome> = mutableRemovalOutcomes.asSharedFlow()
 
     private val endpointState = combine(
         endpointManager.configuredEndpoints,
@@ -141,11 +194,29 @@ class ProviderManagementViewModel(
 
     fun delete(providerId: ProviderId) {
         viewModelScope.launch {
-            providerRepository.deleteProvider(providerId)
-            val remaining = providerRepository.getProviders()
-            val next = remaining.firstOrNull { it.enabled && it.type == ProviderType.Xtream }?.id
-            settingsRepository.setSelectedProviderId(next)
-            status.value = status.value.copy(message = if (next == null) "Provider removed. Add a provider to continue." else "Provider removed")
+            val result = runCatching {
+                removeProviderAndResolve(
+                    providerId = providerId,
+                    providerRepository = providerRepository,
+                    settingsRepository = settingsRepository,
+                    validateAccount = validateAccount,
+                    hasPlayableDownloads = hasPlayableDownloads,
+                    onActiveProviderRemoval = {
+                        stopPlayback()
+                        refreshJob?.cancelAndJoin()
+                        catalogRefreshCoordinator?.cancelProviderRefreshes(providerId)
+                        invalidateProviderState(providerId)
+                    },
+                )
+            }
+            result.onSuccess { outcome ->
+                status.value = status.value.copy(
+                    message = if (outcome == ProviderRemovalOutcome.InactiveProviderRemoved) "Provider removed" else null,
+                )
+                mutableRemovalOutcomes.emit(outcome)
+            }.onFailure {
+                status.value = status.value.copy(message = "Provider could not be removed.")
+            }
         }
     }
 

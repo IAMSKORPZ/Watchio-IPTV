@@ -295,6 +295,7 @@ class DownloadsViewModelTest {
         }
         override suspend fun findById(downloadId: String) = records.value.firstOrNull { it.downloadId == downloadId }
         override suspend fun completedPlayback(downloadId: String, startPositionMs: Long): PlaybackMedia? = null
+        override suspend fun hasPlayableDownloads(): Boolean = false
         override suspend fun reconcile() = Unit
     }
 }

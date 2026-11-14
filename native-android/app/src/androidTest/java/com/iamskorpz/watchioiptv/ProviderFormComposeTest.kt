@@ -191,13 +191,15 @@ class ProviderFormComposeTest {
             }
         }
 
-        composeRule.onNodeWithTag("xtream-username").performClick()
+        composeRule.onNodeWithTag("xtream-password").performClick()
         composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
-        composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
+        composeRule.onNodeWithTag("xtream-password").assertIsFocused()
         composeRule.runOnIdle { assertEquals(0, backCount) }
 
-        composeRule.onNodeWithContentDescription("SIGN IN").performKeyInput { pressKey(Key.DirectionUp) }
-        composeRule.onNodeWithTag("xtream-password").assertIsFocused()
+        composeRule.onNodeWithTag("xtream-password").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.onNodeWithTag("xtream-username").assertIsFocused()
+        composeRule.onNodeWithTag("xtream-username").performKeyInput { pressKey(Key.DirectionUp) }
+        composeRule.onNodeWithTag("xtream-provider-name").assertIsFocused()
         composeRule.runOnIdle { imeVisible = false }
         composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
         composeRule.runOnIdle { assertEquals(1, backCount) }
@@ -219,7 +221,7 @@ class ProviderFormComposeTest {
 
         composeRule.onNodeWithTag("xtream-username").performKeyInput { pressKey(Key.DirectionCenter) }
         composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
-        composeRule.onNodeWithContentDescription("SIGN IN").assertIsFocused()
+        composeRule.onNodeWithTag("xtream-username").assertIsFocused()
         composeRule.runOnIdle { assertEquals(0, backCount) }
 
         composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }

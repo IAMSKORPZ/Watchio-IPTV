@@ -14,6 +14,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -109,6 +110,24 @@ class CatalogRefreshCoordinator(
     private val coordinatorScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
     private val controls = ConcurrentHashMap<ProviderId, ProviderRefreshControl>()
+
+    suspend fun cancelProviderRefreshes(providerId: ProviderId) {
+        val control = controls[providerId] ?: return
+        val jobs = control.stateMutex.withLock {
+            buildList {
+                control.inFlightFullProvider?.let(::add)
+                addAll(control.inFlightSections.values)
+            }.also {
+                control.inFlightFullProvider = null
+                control.inFlightSections.clear()
+                control.activeCount = 0
+                _activeRefreshes.update { active -> active - providerId }
+            }
+        }
+        jobs.forEach { it.cancel() }
+        jobs.joinAll()
+        controls.remove(providerId, control)
+    }
     private val _updates = MutableSharedFlow<CatalogUpdateEvent>(extraBufferCapacity = 32)
     val updates: SharedFlow<CatalogUpdateEvent> = _updates.asSharedFlow()
 

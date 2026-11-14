@@ -38,6 +38,7 @@ interface OfflineDownloadsRepository {
     fun remove(downloadId: String)
     suspend fun findById(downloadId: String): OfflineDownloadEntity?
     suspend fun completedPlayback(downloadId: String, startPositionMs: Long = 0L): PlaybackMedia?
+    suspend fun hasPlayableDownloads(): Boolean
     suspend fun reconcile()
 }
 
@@ -226,6 +227,15 @@ class OfflineMovieDownloadRepository(
                 mimeType = record.mimeType,
             )
         }
+
+    override suspend fun hasPlayableDownloads(): Boolean = withContext(Dispatchers.IO) {
+        dao.getAll().asSequence()
+            .filter { it.state == OfflineDownloadState.Completed.name }
+            .any { record ->
+                runCatching { downloadManager.downloadIndex.getDownload(record.downloadId) }
+                    .getOrNull()?.state == Download.STATE_COMPLETED
+            }
+    }
 
     override suspend fun reconcile() = withContext(Dispatchers.IO) {
         val indexed = mutableMapOf<String, Download>()

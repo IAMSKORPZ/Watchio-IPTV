@@ -17,6 +17,7 @@ sealed interface BootstrapDestination {
     data object Loading : BootstrapDestination
     data object NeedsDeviceMode : BootstrapDestination
     data object NeedsXtreamLogin : BootstrapDestination
+    data object DownloadsOnly : BootstrapDestination
     data class AccountBlocked(val message: String) : BootstrapDestination
     data class ConnectionRequired(val message: String) : BootstrapDestination
     data object Ready : BootstrapDestination
@@ -27,6 +28,7 @@ class BootstrapViewModel(
     private val settingsRepository: SettingsRepository,
     val detectedInputMode: InputMode = InputMode.Touch,
     private val validateAccount: suspend (ProviderId) -> AccountValidationResult = { AccountValidationResult.Active },
+    private val hasPlayableDownloads: suspend () -> Boolean = { false },
 ) : ViewModel() {
     private val _destination = MutableStateFlow<BootstrapDestination>(BootstrapDestination.Loading)
     val destination: StateFlow<BootstrapDestination> = _destination
@@ -80,6 +82,7 @@ class BootstrapViewModel(
                         is AccountValidationResult.Retryable -> BootstrapDestination.ConnectionRequired(result.message)
                     }
                 }
+                onboardingComplete && hasPlayableDownloads() -> BootstrapDestination.DownloadsOnly
                 onboardingComplete -> BootstrapDestination.NeedsXtreamLogin
                 else -> BootstrapDestination.NeedsDeviceMode
             }

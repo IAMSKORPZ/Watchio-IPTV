@@ -85,6 +85,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.util.UnstableApi
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -173,6 +174,7 @@ import com.iamskorpz.watchioiptv.feature.series.SeriesViewModel
 import com.iamskorpz.watchioiptv.feature.provider.M3uProviderViewModel
 import com.iamskorpz.watchioiptv.feature.provider.ProviderManagementUiState
 import com.iamskorpz.watchioiptv.feature.provider.ProviderManagementViewModel
+import com.iamskorpz.watchioiptv.feature.provider.ProviderRemovalOutcome
 import com.iamskorpz.watchioiptv.feature.provider.ProviderRowUiState
 import com.iamskorpz.watchioiptv.feature.provider.XtreamProviderViewModel
 import com.iamskorpz.watchioiptv.feature.provider.QuickLoginUiState
@@ -376,6 +378,7 @@ internal fun accountBlockedMessage(status: String?, expiryEpochMs: Long?, nowEpo
 }
 
 @Composable
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 fun WatchioNativeApp(
     container: AppContainer,
     navController: NavHostController = rememberNavController(),
@@ -498,6 +501,7 @@ fun WatchioNativeApp(
                                 container.settingsRepository,
                                 detectedDeviceInput.inputMode,
                                 container.xtreamRepository::validateAccount,
+                                container.offlineMovieDownloadRepository::hasPlayableDownloads,
                             ) as T
                         }
                     },
@@ -506,6 +510,7 @@ fun WatchioNativeApp(
                 LaunchedEffect(destination) {
                     when (destination) {
                         BootstrapDestination.Ready -> navigateHomeAsRoot(navController)
+                        BootstrapDestination.DownloadsOnly -> navigateDownloadsAsRoot(navController)
                         BootstrapDestination.NeedsXtreamLogin -> navController.navigate("providers/xtream/add") {
                             popUpTo("bootstrap") { inclusive = true }
                         }
@@ -538,6 +543,7 @@ fun WatchioNativeApp(
                         },
                     )
                     BootstrapDestination.NeedsXtreamLogin,
+                    BootstrapDestination.DownloadsOnly,
                     BootstrapDestination.Ready -> BootstrapLoadingScreen()
                 }
             }
@@ -699,6 +705,7 @@ fun WatchioNativeApp(
             composable("providers") {
                 val providersViewModel: ProviderManagementViewModel = viewModel(factory = providersFactory(container))
                 val state by providersViewModel.state.collectAsStateWithLifecycle()
+                ProviderRemovalNavigation(providersViewModel, navController)
                 ProviderManagementScreen(
                     state = state,
                     onSelect = providersViewModel::select,
@@ -722,6 +729,7 @@ fun WatchioNativeApp(
             composable("providers/home") {
                 val providersViewModel: ProviderManagementViewModel = viewModel(factory = providersFactory(container))
                 val state by providersViewModel.state.collectAsStateWithLifecycle()
+                ProviderRemovalNavigation(providersViewModel, navController)
                 ProviderManagementScreen(
                     state = state,
                     onSelect = providersViewModel::select,
@@ -741,6 +749,7 @@ fun WatchioNativeApp(
             composable("providers/settings") {
                 val providersViewModel: ProviderManagementViewModel = viewModel(factory = providersFactory(container))
                 val state by providersViewModel.state.collectAsStateWithLifecycle()
+                ProviderRemovalNavigation(providersViewModel, navController)
                 ProviderManagementScreen(
                     state = state,
                     onSelect = providersViewModel::select,
@@ -914,12 +923,20 @@ fun WatchioNativeApp(
                     onBack = { navController.popBackStack() },
                 )
             }
-            composable("downloads") {
+            composable(
+                route = "downloads?offlineOnly={offlineOnly}",
+                arguments = listOf(navArgument("offlineOnly") { type = NavType.BoolType; defaultValue = false }),
+            ) { backStackEntry ->
+                val offlineOnly = backStackEntry.arguments?.getBoolean("offlineOnly") == true
                 val downloadsViewModel: DownloadsViewModel = viewModel(factory = downloadsFactory(container))
                 val state by downloadsViewModel.state.collectAsStateWithLifecycle()
                 DownloadsScreen(
                     state = state,
-                    onBack = { if (!downloadsViewModel.navigateBack()) navController.popBackStack() },
+                    onBack = {
+                        if (!downloadsViewModel.navigateBack()) {
+                            if (offlineOnly) navigateLoginAsRoot(navController) else navController.popBackStack()
+                        }
+                    },
                     onCategory = downloadsViewModel::selectCategory,
                     onMovie = downloadsViewModel::openMovie,
                     onShow = downloadsViewModel::openShow,
@@ -1853,6 +1870,23 @@ internal fun HomeScreen(
 }
 
 @Composable
+private fun ProviderRemovalNavigation(
+    viewModel: ProviderManagementViewModel,
+    navController: NavHostController,
+) {
+    LaunchedEffect(viewModel, navController) {
+        viewModel.removalOutcomes.collect { outcome ->
+            when (outcome) {
+                ProviderRemovalOutcome.InactiveProviderRemoved -> Unit
+                is ProviderRemovalOutcome.ActiveProviderSelected -> navigateHomeAsRoot(navController)
+                ProviderRemovalOutcome.DownloadsOnly -> navigateDownloadsAsRoot(navController)
+                ProviderRemovalOutcome.LoginRequired -> navigateLoginAsRoot(navController)
+            }
+        }
+    }
+}
+
+@Composable
 internal fun ProviderManagementScreen(
     state: ProviderManagementUiState,
     onSelect: (com.iamskorpz.watchioiptv.core.model.ProviderId) -> Unit,
@@ -2025,6 +2059,20 @@ private fun com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.toDispl
     com.iamskorpz.watchioiptv.data.xtream.ProviderAuthentication.Rejected -> "Rejected"
 }
 
+internal fun navigateLoginAsRoot(navController: NavHostController) {
+    navController.navigate("providers/xtream/add") {
+        popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+        launchSingleTop = true
+    }
+}
+
+internal fun navigateDownloadsAsRoot(navController: NavHostController) {
+    navController.navigate("downloads?offlineOnly=true") {
+        popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+        launchSingleTop = true
+    }
+}
+
 private fun com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.toDisplayLabel(): String = when (this) {
     com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.NotChecked -> "Not checked"
     com.iamskorpz.watchioiptv.feature.provider.ProviderAccountState.Verified -> "Verified"
@@ -2080,6 +2128,7 @@ internal fun XtreamProviderScreen(
         imeVisibleOverride = imeVisibleOverride,
         keyboardRequested = tvKeyboardRequested,
         onKeyboardDismissed = { tvKeyboardRequested = false },
+        preserveCurrentFocus = true,
     )
     val textFieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = colors.textPrimary,
@@ -2567,6 +2616,7 @@ private fun DismissImeBeforeNavigationBack(
     imeVisibleOverride: Boolean? = null,
     keyboardRequested: Boolean = false,
     onKeyboardDismissed: () -> Unit = {},
+    preserveCurrentFocus: Boolean = false,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -2577,9 +2627,11 @@ private fun DismissImeBeforeNavigationBack(
 
     fun restoreRemoteFocus() {
         keyboardController?.hide()
-        focusManager.clearFocus(force = true)
         onKeyboardDismissed()
-        fallbackFocus.requestFocus()
+        if (!preserveCurrentFocus) {
+            focusManager.clearFocus(force = true)
+            fallbackFocus.requestFocus()
+        }
     }
 
     LaunchedEffect(imeVisible) {
@@ -4149,6 +4201,7 @@ private fun StreamFormat.label(): String = when (this) {
     StreamFormat.Hls -> "HLS"
 }
 
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 private fun providersFactory(container: AppContainer): ViewModelProvider.Factory =
     object : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
@@ -4160,6 +4213,14 @@ private fun providersFactory(container: AppContainer): ViewModelProvider.Factory
                 m3uRepository = container.m3uRepository,
                 endpointManager = container.endpointManager,
                 catalogRefreshCoordinator = container.catalogRefreshCoordinator,
+                hasPlayableDownloads = container.offlineMovieDownloadRepository::hasPlayableDownloads,
+                stopPlayback = container.playerManager::stop,
+                invalidateProviderState = { providerId ->
+                    container.moviesRepository.invalidateCache(providerId)
+                    container.seriesRepository.invalidateCache(providerId)
+                    container.searchRepository.invalidate(providerId)
+                    container.sportsRepository.invalidateProviderChannelCache(providerId)
+                },
             ) as T
         }
     }

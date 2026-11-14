@@ -132,6 +132,22 @@ class BootstrapViewModelTest {
     }
 
     @Test
+    fun noProvidersWithPlayableDownloadsRestoresDownloadsOnlyAccess() = runTest(dispatcher) {
+        val settings = FakeSettingsRepository().apply {
+            deviceModeOnboardingCompleted.value = true
+        }
+        val viewModel = BootstrapViewModel(
+            FakeProviderRepository(),
+            settings,
+            hasPlayableDownloads = { true },
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(BootstrapDestination.DownloadsOnly, viewModel.destination.value)
+    }
+
+    @Test
     fun m3uProviderDoesNotUnlockHome() = runTest(dispatcher) {
         val settings = FakeSettingsRepository().apply {
             deviceModeOnboardingCompleted.value = true
