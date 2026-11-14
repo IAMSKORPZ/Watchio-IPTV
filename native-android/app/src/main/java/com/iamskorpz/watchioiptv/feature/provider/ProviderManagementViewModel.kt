@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -66,6 +67,11 @@ sealed interface ProviderRemovalOutcome {
     data object LoginRequired : ProviderRemovalOutcome
 }
 
+internal fun visibleProviders(
+    providers: List<WatchioProvider>,
+    removedProviderIds: Set<ProviderId>,
+): List<WatchioProvider> = providers.filterNot { it.id in removedProviderIds }
+
 internal suspend fun removeProviderAndResolve(
     providerId: ProviderId,
     providerRepository: ProviderRepository,
@@ -74,12 +80,14 @@ internal suspend fun removeProviderAndResolve(
     hasPlayableDownloads: suspend () -> Boolean,
     onActiveProviderRemoval: suspend () -> Unit,
 ): ProviderRemovalOutcome {
+    check(providerRepository.getProvider(providerId) != null) { "Provider not found." }
     val activeProviderId = settingsRepository.selectedProviderId.first()
     val removingActiveProvider = activeProviderId == providerId
     if (removingActiveProvider) settingsRepository.setSelectedProviderId(null)
     try {
         if (removingActiveProvider) onActiveProviderRemoval()
         providerRepository.deleteProvider(providerId)
+        check(providerRepository.getProvider(providerId) == null) { "Provider removal did not persist." }
     } catch (failure: Throwable) {
         if (removingActiveProvider) settingsRepository.setSelectedProviderId(activeProviderId)
         throw failure
@@ -114,6 +122,7 @@ class ProviderManagementViewModel(
     private val invalidateProviderState: (ProviderId) -> Unit = {},
 ) : ViewModel() {
     private val status = MutableStateFlow(ProviderManagementUiState())
+    private val removedProviderIds = MutableStateFlow<Set<ProviderId>>(emptySet())
     private var refreshJob: Job? = null
     private val accountStates = MutableStateFlow<Map<ProviderId, ProviderAccountState>>(emptyMap())
     private val mutableRemovalOutcomes = MutableSharedFlow<ProviderRemovalOutcome>(extraBufferCapacity = 1)
@@ -126,7 +135,9 @@ class ProviderManagementViewModel(
     ) { endpoints, activeEndpoint, health -> EndpointState(endpoints, activeEndpoint?.url, health) }
 
     val state: StateFlow<ProviderManagementUiState> = combine(
-        providerRepository.observeProviders(),
+        providerRepository.observeProviders().combine(removedProviderIds) { providers, removedIds ->
+            visibleProviders(providers, removedIds)
+        },
         settingsRepository.selectedProviderId,
         status,
         endpointState,
@@ -210,6 +221,7 @@ class ProviderManagementViewModel(
                 )
             }
             result.onSuccess { outcome ->
+                removedProviderIds.update { it + providerId }
                 status.value = status.value.copy(
                     message = if (outcome == ProviderRemovalOutcome.InactiveProviderRemoved) "Provider removed" else null,
                 )

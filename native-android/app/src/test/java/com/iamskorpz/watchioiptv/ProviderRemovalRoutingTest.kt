@@ -11,6 +11,7 @@ import com.iamskorpz.watchioiptv.domain.repository.ProviderRepository
 import com.iamskorpz.watchioiptv.domain.repository.SettingsRepository
 import com.iamskorpz.watchioiptv.feature.provider.ProviderRemovalOutcome
 import com.iamskorpz.watchioiptv.feature.provider.removeProviderAndResolve
+import com.iamskorpz.watchioiptv.feature.provider.visibleProviders
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -115,6 +116,73 @@ class ProviderRemovalRoutingTest {
     }
 
     @Test
+    fun successfulInactiveRemovalImmediatelyExcludesProviderFromVisibleState() = runTest {
+        val active = provider("active")
+        val inactive = provider("inactive")
+        val providers = FakeProviderRepository(listOf(active, inactive))
+        val outcome = removeProviderAndResolve(
+            inactive.id,
+            providers,
+            FakeRemovalSettings(active.id),
+            validateAccount = { AccountValidationResult.Active },
+            hasPlayableDownloads = { false },
+            onActiveProviderRemoval = {},
+        )
+
+        assertEquals(ProviderRemovalOutcome.InactiveProviderRemoved, outcome)
+        assertEquals(listOf(active), visibleProviders(listOf(active, inactive), setOf(inactive.id)))
+    }
+
+    @Test
+    fun removalReportsFailureWhenPersistenceStillContainsProvider() = runTest {
+        val active = provider("active")
+        val providers = FakeProviderRepository(listOf(active), persistDelete = false)
+
+        val result = runCatching {
+            removeProviderAndResolve(
+                active.id,
+                providers,
+                FakeRemovalSettings(active.id),
+                validateAccount = { AccountValidationResult.Active },
+                hasPlayableDownloads = { false },
+                onActiveProviderRemoval = {},
+            )
+        }
+
+        assertTrue(result.isFailure)
+        assertEquals(listOf(active), providers.providers.value)
+    }
+
+    @Test
+    fun repeatedRemovalFailsInsteadOfReportingFalseSuccess() = runTest {
+        val inactive = provider("inactive")
+        val providers = FakeProviderRepository(listOf(inactive))
+        val settings = FakeRemovalSettings(null)
+
+        removeProviderAndResolve(
+            inactive.id,
+            providers,
+            settings,
+            validateAccount = { AccountValidationResult.Active },
+            hasPlayableDownloads = { false },
+            onActiveProviderRemoval = {},
+        )
+
+        val repeated = runCatching {
+            removeProviderAndResolve(
+                inactive.id,
+                providers,
+                settings,
+                validateAccount = { AccountValidationResult.Active },
+                hasPlayableDownloads = { false },
+                onActiveProviderRemoval = {},
+            )
+        }
+
+        assertTrue(repeated.isFailure)
+    }
+
+    @Test
     fun offlineRemovalFailsClosedToDownloadsWhenNoAccountCanBeValidated() = runTest {
         val active = provider("active")
         val alternate = provider("alternate")
@@ -169,6 +237,7 @@ class ProviderRemovalRoutingTest {
     private class FakeProviderRepository(
         initial: List<WatchioProvider>,
         private val failDelete: Boolean = false,
+        private val persistDelete: Boolean = true,
     ) : ProviderRepository {
         val providers = MutableStateFlow(initial)
         override fun observeProviders(): Flow<List<WatchioProvider>> = providers
@@ -177,7 +246,7 @@ class ProviderRemovalRoutingTest {
         override suspend fun saveProvider(provider: WatchioProvider) { providers.value = providers.value + provider }
         override suspend fun deleteProvider(providerId: ProviderId) {
             if (failDelete) error("delete failed")
-            providers.value = providers.value.filterNot { it.id == providerId }
+            if (persistDelete) providers.value = providers.value.filterNot { it.id == providerId }
         }
     }
 
