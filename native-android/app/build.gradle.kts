@@ -165,9 +165,9 @@ android {
             buildConfigField("String", "UPDATE_CHANNEL", "\"syntheticfailovertest\"")
             buildConfigField("String", "UPDATE_CHANNEL_DISPLAY_NAME", "\"Synthetic Failover Test\"")
             buildConfigField("String", "UPDATE_MANIFEST_URL", "\"\"")
-            buildConfigField("String", "FAILOVER_TEST_PROVIDER_NAME", "\"Watchio Synthetic Fixture\"")
-            buildConfigField("String", "FAILOVER_TEST_USERNAME", "\"synthetic_test_user\"")
-            buildConfigField("String", "FAILOVER_TEST_PASSWORD", "\"synthetic_test_password\"")
+            buildConfigField("String", "FAILOVER_TEST_PROVIDER_NAME", "\"Watchio Synthetic A\"")
+            buildConfigField("String", "FAILOVER_TEST_USERNAME", "\"watchio_test_a\"")
+            buildConfigField("String", "FAILOVER_TEST_PASSWORD", "\"synthetic_only_a\"")
         }
         release {
             isMinifyEnabled = true

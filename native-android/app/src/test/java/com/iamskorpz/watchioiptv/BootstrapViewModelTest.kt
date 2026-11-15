@@ -246,6 +246,61 @@ class BootstrapViewModelTest {
     }
 
     @Test
+    fun retryableAccountBecomingBlockedRoutesToAddProviderState() = runTest(dispatcher) {
+        val provider = xtreamProvider()
+        var result: AccountValidationResult = AccountValidationResult.Retryable("Connection unavailable.")
+        val viewModel = BootstrapViewModel(
+            FakeProviderRepository(provider),
+            completedSettings(provider.id),
+            validateAccount = { result },
+        )
+        advanceUntilIdle()
+        assertEquals(BootstrapDestination.ConnectionRequired("Connection unavailable."), viewModel.destination.value)
+
+        result = AccountValidationResult.Blocked("Username or password is incorrect.")
+        viewModel.retry()
+        advanceUntilIdle()
+
+        assertEquals(
+            BootstrapDestination.AccountBlocked("Username or password is incorrect."),
+            viewModel.destination.value,
+        )
+    }
+
+    @Test
+    fun validSelectedProviderAmongMultipleProvidersReachesHome() = runTest(dispatcher) {
+        val selected = xtreamProvider()
+        val alternate = selected.copy(id = ProviderId("provider-b"), displayName = "Provider B")
+        val viewModel = BootstrapViewModel(
+            FakeProviderRepository(selected, alternate),
+            completedSettings(selected.id),
+            validateAccount = { AccountValidationResult.Active },
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(BootstrapDestination.Ready, viewModel.destination.value)
+    }
+
+    @Test
+    fun blockedSelectedProviderAmongMultipleProvidersUsesIntentionalBlockedRouting() = runTest(dispatcher) {
+        val selected = xtreamProvider()
+        val alternate = selected.copy(id = ProviderId("provider-b"), displayName = "Provider B")
+        val viewModel = BootstrapViewModel(
+            FakeProviderRepository(selected, alternate),
+            completedSettings(selected.id),
+            validateAccount = { AccountValidationResult.Blocked("Your account is disabled.") },
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(
+            BootstrapDestination.AccountBlocked("Your account is disabled."),
+            viewModel.destination.value,
+        )
+    }
+
+    @Test
     fun definitiveSessionStatusBlocksAuthenticatedNavigation() {
         assertEquals(
             "Your account has expired. Please renew your subscription or sign in with another account.",

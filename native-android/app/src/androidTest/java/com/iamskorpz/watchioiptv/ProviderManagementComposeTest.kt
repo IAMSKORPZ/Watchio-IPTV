@@ -165,6 +165,26 @@ class ProviderManagementComposeTest {
         assertTrue(composeRule.onAllNodesWithTag("provider-switch-${m3uId.value}").fetchSemanticsNodes().isEmpty())
     }
 
+    @Test
+    fun twoManagedSyntheticProvidersRemainDistinctAndVisible() {
+        val providerA = ProviderId("xtream-managed-watchio-test-a")
+        val providerB = ProviderId("xtream-managed-watchio-test-b")
+        showScreen(
+            state = ProviderManagementUiState(
+                providers = listOf(
+                    providerRow(providerA, name = "Watchio Synthetic A"),
+                    providerRow(providerB, name = "Watchio Synthetic B"),
+                ),
+                selectedProviderId = providerA,
+            ),
+        )
+
+        composeRule.onNodeWithTag("provider-select-${providerA.value}").assertIsDisplayed()
+        composeRule.onNodeWithTag("provider-select-${providerB.value}").assertIsDisplayed()
+        composeRule.onNodeWithText("Watchio Synthetic A").assertIsDisplayed()
+        composeRule.onNodeWithText("Watchio Synthetic B").assertIsDisplayed()
+    }
+
     private fun showScreen(
         state: ProviderManagementUiState,
         onSelect: (ProviderId) -> Unit = {},
