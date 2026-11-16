@@ -20,6 +20,7 @@ class UpdateBuildConfigTest {
             "local" -> Triple("local", "Local", "")
             "uitest" -> Triple("uitest", "Test", "watchio://uitest/update.json")
             "syntheticfailovertest" -> Triple("syntheticfailovertest", "Synthetic Failover Test", "")
+            "providerremovaltest" -> Triple("providerremovaltest", "Provider Removal Test", "")
             else -> throw AssertionError("Unexpected build type: ${BuildConfig.BUILD_TYPE}")
         }
 

@@ -2,6 +2,22 @@
 
 Use only disposable accounts in `com.iamskorpz.watchioiptv.syntheticfailovertest`. Obtain fresh approval before device access. Back up synthetic package data first. Use supervised input and restore the backup after testing.
 
+## Final-four isolated harness
+
+Use a fresh `com.iamskorpz.watchioiptv.providerremovaltest` installation for the
+four remaining scenarios. This package shares no storage with the existing
+`syntheticfailovertest` installation. Installation and S22 access require fresh
+approval. Never clear, uninstall, or open another Watchio package.
+
+- Zero downloads: sign in one synthetic account in the fresh package. Confirm Downloads is empty. Remove the provider and cold-restart. Expect Login as root.
+- Incomplete-only: run a throttled authorised MP4 fixture, enqueue one download, wait for non-zero progress, pause it, and confirm no completed item exists. Remove the provider. Expect Login; the paused item must not become playable.
+- Playback removal: add both synthetic accounts, select A, play authorised A media, leave playback through supported Back navigation, then remove A. Expect playback stopped, B selected, and Home as root.
+- Catalogue race: start A with `--delay-catalogue`, start Refresh, and require `/__watchio_test__/catalogue/status` to report `in_flight=true`. Remove A, then call `/__watchio_test__/catalogue/release`. Expect B active, A absent, and no late A catalogue write after restart.
+
+Each scenario starts from a newly installed or separately backed-up disposable
+`providerremovaltest` state. Do not reuse state across scenarios. Preserve fixture
+logs, UI evidence, crash/ANR checks, and restoration hashes.
+
 ## Common safety stops and evidence
 
 Stop on wrong device/package, production-looking data, guard failure, unexpected app, disconnect, crash, ANR, or data outside the synthetic package. Capture privacy-safe UI state, guarded action audit IDs, fixture request summaries, expected/actual destination, crash/ANR evidence, and backup restoration hashes.

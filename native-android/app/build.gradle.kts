@@ -169,6 +169,20 @@ android {
             buildConfigField("String", "FAILOVER_TEST_USERNAME", "\"watchio_test_a\"")
             buildConfigField("String", "FAILOVER_TEST_PASSWORD", "\"synthetic_only_a\"")
         }
+        create("providerremovaltest") {
+            initWith(getByName("local"))
+            applicationIdSuffix = ".providerremovaltest"
+            versionNameSuffix = "-providerremovaltest"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("debug")
+            resValue("string", "app_name", "Watchio Provider Removal Test")
+            buildConfigField("String", "UPDATE_CHANNEL", "\"providerremovaltest\"")
+            buildConfigField("String", "UPDATE_CHANNEL_DISPLAY_NAME", "\"Provider Removal Test\"")
+            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"\"")
+            buildConfigField("String", "FAILOVER_TEST_PROVIDER_NAME", "\"Watchio Synthetic A\"")
+            buildConfigField("String", "FAILOVER_TEST_USERNAME", "\"watchio_test_a\"")
+            buildConfigField("String", "FAILOVER_TEST_PASSWORD", "\"synthetic_only_a\"")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -181,6 +195,11 @@ android {
             buildConfigField("String", "UPDATE_CHANNEL_DISPLAY_NAME", "\"Stable\"")
             buildConfigField("String", "UPDATE_MANIFEST_URL", "\"https://raw.githubusercontent.com/IAMSKORPZ/Watchio-IPTV/main/native-android/update/stable.json\"")
         }
+    }
+
+    sourceSets.getByName("providerremovaltest").apply {
+        java.srcDir("src/syntheticfailovertest/java")
+        assets.srcDir("src/syntheticfailovertest/assets")
     }
 
     testBuildType = "uitest"

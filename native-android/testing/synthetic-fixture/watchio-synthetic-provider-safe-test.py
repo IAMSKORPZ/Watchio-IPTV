@@ -18,12 +18,20 @@ SPEC.loader.exec_module(FIXTURE)
 
 
 class RunningFixture:
-    def __init__(self, port, mode="healthy"):
+    def __init__(self, port, mode="healthy", delay_catalogue=False):
         self.server = FIXTURE.ThreadingHTTPServer(("127.0.0.1", port), FIXTURE.Handler)
         self.server.media = str(FIXTURE_PATH)
         self.server.mode = mode
         self.server.stream_status = 200
         self.server.throttle_delay = 0.0
+        self.server.delay_catalogue = delay_catalogue
+        self.server.catalogue_delay_timeout = 5.0
+        self.server.catalogue_release = threading.Event()
+        self.server.catalogue_started = threading.Event()
+        self.server.catalogue_gate_lock = threading.Lock()
+        self.server.catalogue_delayed_once = False
+        self.server.catalogue_in_flight = False
+        self.server.catalogue_in_flight_action = None
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
     def __enter__(self):
@@ -120,6 +128,48 @@ class SyntheticFixtureTest(unittest.TestCase):
                 urllib.request.urlopen(f"http://127.0.0.1:{fixture.server.server_port}/unknown", timeout=2)
             self.assertEqual(404, failure.exception.code)
             failure.exception.close()
+
+    def test_catalogue_gate_reports_in_flight_and_releases_exactly_once(self):
+        with RunningFixture(0, delay_catalogue=True) as fixture:
+            port = fixture.server.server_port
+            result = {}
+
+            def load_catalogue():
+                result["response"] = request(
+                    port,
+                    "watchio_test_a",
+                    "synthetic_only_a",
+                    "get_live_streams",
+                )
+
+            worker = threading.Thread(target=load_catalogue)
+            worker.start()
+            self.assertTrue(fixture.server.catalogue_started.wait(timeout=2))
+            self.assertTrue(fixture.server.catalogue_in_flight)
+            self.assertTrue(worker.is_alive())
+
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/__watchio_test__/catalogue/status",
+                timeout=2,
+            ) as response:
+                status = json.loads(response.read())
+            self.assertEqual("get_live_streams", status["action"])
+            self.assertTrue(status["in_flight"])
+            self.assertFalse(status["released"])
+
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/__watchio_test__/catalogue/release",
+                timeout=2,
+            ) as response:
+                self.assertTrue(json.loads(response.read())["released"])
+            worker.join(timeout=2)
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(200, result["response"][0])
+
+            self.assertEqual(
+                200,
+                request(port, "watchio_test_a", "synthetic_only_a", "get_vod_streams")[0],
+            )
 
 
 if __name__ == "__main__":

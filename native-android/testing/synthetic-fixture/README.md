@@ -43,6 +43,11 @@ Both servers bind only to `127.0.0.1`. Default endpoints are:
 - Primary: `http://127.0.0.1:18081`
 - Secondary: `http://127.0.0.1:18082`
 
+For provider-removal acceptance, build `providerremovaltest`. It uses the same
+loopback-only endpoint source under the separate application ID
+`com.iamskorpz.watchioiptv.providerremovaltest`. A fresh installation therefore
+cannot read or change `syntheticfailovertest`, Debug, UITEST, or production data.
+
 Run preflight while both servers are healthy:
 
 ```powershell
@@ -70,6 +75,21 @@ python .\watchio-synthetic-provider-safe.py --port 18081 --media <AUTHORISED_MED
 ```
 
 `--stream-status` can return a chosen media HTTP status. `--throttle-delay` controls local transfer pacing.
+
+Use the one-shot catalogue gate for the refresh/removal race:
+
+```powershell
+python .\watchio-synthetic-provider-safe.py --port 18081 --media <AUTHORISED_MEDIA> --delay-catalogue
+```
+
+The first authenticated catalogue request pauses until released. These loopback-only
+control URLs contain no provider credentials:
+
+- `GET /__watchio_test__/catalogue/status`
+- `GET /__watchio_test__/catalogue/release`
+
+`status` reports the safe action name and `in_flight` state. `release` unblocks the
+single delayed response. Later catalogue requests run normally.
 
 ## Stop and safety
 

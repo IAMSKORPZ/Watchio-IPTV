@@ -14,6 +14,9 @@ import com.iamskorpz.watchioiptv.feature.provider.removeProviderAndResolve
 import com.iamskorpz.watchioiptv.feature.provider.visibleProviders
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -61,6 +64,88 @@ class ProviderRemovalRoutingTest {
 
         assertEquals(ProviderRemovalOutcome.DownloadsOnly, outcome)
         assertNull(settings.current.value)
+    }
+
+    @Test
+    fun incompleteDownloadDoesNotUnlockDownloadsOnlyAndSurvivesProviderRemoval() = runTest {
+        val active = provider("active")
+        val providers = FakeProviderRepository(listOf(active))
+        val settings = FakeRemovalSettings(active.id)
+        val incompleteDownloads = mutableListOf("paused-download")
+
+        val outcome = removeProviderAndResolve(
+            active.id,
+            providers,
+            settings,
+            validateAccount = { AccountValidationResult.Active },
+            hasPlayableDownloads = { false },
+            onActiveProviderRemoval = {},
+        )
+
+        assertEquals(ProviderRemovalOutcome.LoginRequired, outcome)
+        assertEquals(listOf("paused-download"), incompleteDownloads)
+        assertNull(settings.current.value)
+        assertTrue(providers.providers.value.isEmpty())
+    }
+
+    @Test
+    fun activeRemovalStopsPlaybackBeforeDeleteAndSelectsValidAlternate() = runTest {
+        val events = mutableListOf<String>()
+        val active = provider("active")
+        val alternate = provider("alternate")
+        var playing = true
+        val providers = FakeProviderRepository(listOf(active, alternate), onDelete = {
+            assertFalse(playing)
+            events += "delete"
+        })
+        val settings = FakeRemovalSettings(active.id)
+
+        val outcome = removeProviderAndResolve(
+            active.id,
+            providers,
+            settings,
+            validateAccount = { events += "validate"; AccountValidationResult.Active },
+            hasPlayableDownloads = { false },
+            onActiveProviderRemoval = { playing = false; events += "stop-playback" },
+        )
+
+        assertEquals(ProviderRemovalOutcome.ActiveProviderSelected(alternate.id), outcome)
+        assertEquals(listOf("stop-playback", "delete", "validate"), events)
+        assertFalse(playing)
+        assertEquals(alternate.id, settings.current.value)
+    }
+
+    @Test
+    fun cancelledRefreshCannotRestoreProviderAfterLateResponseRelease() = runTest {
+        val active = provider("active")
+        val alternate = provider("alternate")
+        val providers = FakeProviderRepository(listOf(active, alternate))
+        val settings = FakeRemovalSettings(active.id)
+        val refreshStarted = CompletableDeferred<Unit>()
+        val releaseLateResponse = CompletableDeferred<Unit>()
+        var staleWriteCompleted = false
+        val refreshJob = launch {
+            refreshStarted.complete(Unit)
+            releaseLateResponse.await()
+            providers.saveProvider(active)
+            staleWriteCompleted = true
+        }
+        refreshStarted.await()
+
+        val outcome = removeProviderAndResolve(
+            active.id,
+            providers,
+            settings,
+            validateAccount = { AccountValidationResult.Active },
+            hasPlayableDownloads = { false },
+            onActiveProviderRemoval = { refreshJob.cancelAndJoin() },
+        )
+        releaseLateResponse.complete(Unit)
+
+        assertEquals(ProviderRemovalOutcome.ActiveProviderSelected(alternate.id), outcome)
+        assertFalse(staleWriteCompleted)
+        assertNull(providers.getProvider(active.id))
+        assertEquals(alternate.id, settings.current.value)
     }
 
     @Test
@@ -236,6 +321,7 @@ class ProviderRemovalRoutingTest {
 
     private class FakeProviderRepository(
         initial: List<WatchioProvider>,
+        private val onDelete: (ProviderId) -> Unit = {},
         private val failDelete: Boolean = false,
         private val persistDelete: Boolean = true,
     ) : ProviderRepository {
@@ -246,6 +332,7 @@ class ProviderRemovalRoutingTest {
         override suspend fun saveProvider(provider: WatchioProvider) { providers.value = providers.value + provider }
         override suspend fun deleteProvider(providerId: ProviderId) {
             if (failDelete) error("delete failed")
+            onDelete(providerId)
             if (persistDelete) providers.value = providers.value.filterNot { it.id == providerId }
         }
     }

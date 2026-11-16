@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -19,6 +20,16 @@ SYNTHETIC_ACCOUNTS = {
         "password": "synthetic_only_b",
         "account_id": "watchio-synthetic-b",
     },
+}
+
+CATALOGUE_ACTIONS = {
+    "get_live_categories",
+    "get_live_streams",
+    "get_vod_categories",
+    "get_vod_streams",
+    "get_series_categories",
+    "get_series",
+    "get_series_info",
 }
 
 
@@ -84,6 +95,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/__watchio_test__/catalogue/status":
+            with self.server.catalogue_gate_lock:
+                self.send_json({
+                    "in_flight": self.server.catalogue_in_flight,
+                    "action": self.server.catalogue_in_flight_action,
+                    "released": self.server.catalogue_release.is_set(),
+                })
+            return
+        if parsed.path == "/__watchio_test__/catalogue/release":
+            self.server.catalogue_release.set()
+            self.send_json({"released": True})
+            return
         if parsed.path == "/player_api.php":
             query = parse_qs(parsed.query)
             username = query.get("username", [""])[0]
@@ -95,6 +118,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "temporary"}, 500)
                 return
             action = query.get("action", [""])[0]
+            self.delay_catalogue_response(action)
             if not action:
                 self.send_json(auth_payload(self.server.server_port, username, self.server.mode, account_enabled))
             elif not account_enabled:
@@ -141,6 +165,22 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self.send_error(404)
+
+    def delay_catalogue_response(self, action: str):
+        if not self.server.delay_catalogue or action not in CATALOGUE_ACTIONS:
+            return
+        with self.server.catalogue_gate_lock:
+            if self.server.catalogue_delayed_once:
+                return
+            self.server.catalogue_delayed_once = True
+            self.server.catalogue_in_flight = True
+            self.server.catalogue_in_flight_action = action
+            self.server.catalogue_started.set()
+        released = self.server.catalogue_release.wait(self.server.catalogue_delay_timeout)
+        with self.server.catalogue_gate_lock:
+            self.server.catalogue_in_flight = False
+        if not released:
+            raise TimeoutError("Synthetic catalogue gate timed out before release.")
 
     def send_media(self):
         size = os.path.getsize(self.server.media)
@@ -190,12 +230,22 @@ def main():
     )
     parser.add_argument("--stream-status", type=int, default=200)
     parser.add_argument("--throttle-delay", type=float, default=0.1)
+    parser.add_argument("--delay-catalogue", action="store_true")
+    parser.add_argument("--catalogue-delay-timeout", type=float, default=60.0)
     args = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     server.media = os.path.abspath(args.media)
     server.mode = args.mode
     server.stream_status = args.stream_status
     server.throttle_delay = max(0.0, args.throttle_delay)
+    server.delay_catalogue = args.delay_catalogue
+    server.catalogue_delay_timeout = max(1.0, args.catalogue_delay_timeout)
+    server.catalogue_release = threading.Event()
+    server.catalogue_started = threading.Event()
+    server.catalogue_gate_lock = threading.Lock()
+    server.catalogue_delayed_once = False
+    server.catalogue_in_flight = False
+    server.catalogue_in_flight_action = None
     print(f"t={time.monotonic():.6f} READY port={args.port} mode={args.mode} stream_status={args.stream_status}", flush=True)
     server.serve_forever()
 
