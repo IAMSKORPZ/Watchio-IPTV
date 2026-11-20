@@ -489,9 +489,15 @@ class CatalogRefreshPhase1Test {
         clock.set(5_000L)
         val liveJob = async(Dispatchers.IO) { coordinator.refreshLive(providerId) }
         assertTrue(startedLatch.await(5, TimeUnit.SECONDS))
-        val movieJob = async(Dispatchers.IO) { coordinator.refreshMovies(providerId) }
-        val seriesJob = async(Dispatchers.IO) { coordinator.refreshSeries(providerId) }
-        val fullJob = async(Dispatchers.IO) { coordinator.refreshProvider(providerId) }
+        val movieJob = async(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
+            coordinator.refreshMovies(providerId)
+        }
+        val seriesJob = async(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
+            coordinator.refreshSeries(providerId)
+        }
+        val fullJob = async(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
+            coordinator.refreshProvider(providerId)
+        }
         releaseLatch.countDown()
 
         val results = listOf(liveJob.await(), movieJob.await(), seriesJob.await(), fullJob.await())
