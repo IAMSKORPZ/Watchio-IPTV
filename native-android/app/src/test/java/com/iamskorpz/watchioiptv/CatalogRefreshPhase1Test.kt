@@ -90,6 +90,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -440,7 +441,7 @@ class CatalogRefreshPhase1Test {
             coordinator.refreshLive(added.providerId, RefreshTrigger.Manual)
         }
         assertTrue(liveStarted.await(5, TimeUnit.SECONDS))
-        val fullJob = async(Dispatchers.IO) {
+        val fullJob = async(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
             coordinator.refreshProvider(added.providerId, RefreshTrigger.AutomaticStartup)
         }
         releaseLive.countDown()

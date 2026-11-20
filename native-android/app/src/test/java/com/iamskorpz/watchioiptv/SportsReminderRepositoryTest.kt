@@ -1,40 +1,38 @@
 package com.iamskorpz.watchioiptv
 
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import com.iamskorpz.watchioiptv.feature.sports.MatchReminder
 import com.iamskorpz.watchioiptv.feature.sports.MatchReminderState
 import com.iamskorpz.watchioiptv.feature.sports.SportsFixture
 import com.iamskorpz.watchioiptv.feature.sports.SportsFixtureStatus
 import com.iamskorpz.watchioiptv.feature.sports.SportsReminderRepository
 import com.iamskorpz.watchioiptv.feature.sports.SportsReminderScheduler
-import java.io.File
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SportsReminderRepositoryTest {
-    @get:Rule
-    val temporaryFolder = TemporaryFolder()
-
     private val now = Instant.parse("2026-10-04T12:00:00Z")
     private val clock = Clock.fixed(now, ZoneOffset.UTC)
 
     @Test fun reminderPersistsAtFifteenMinutesBeforeKickoffAndTogglePreventsDuplicates() = runTest {
-        val file = reminderFile()
+        val store = InMemoryPreferencesDataStore()
         val scheduler = FakeScheduler()
-        val repository = repository(file, scheduler, this)
+        val repository = repository(store, scheduler)
         val fixture = fixture(now.plusSeconds(3600))
 
         assertTrue(repository.toggle(fixture))
@@ -50,16 +48,17 @@ class SportsReminderRepositoryTest {
     }
 
     @Test fun processReloadReadsPersistedReminder() = runTest {
-        val file = reminderFile()
-        val first = repository(file, FakeScheduler(), this)
+        val store = InMemoryPreferencesDataStore()
+        val first = repository(store, FakeScheduler())
         first.toggle(fixture(now.plusSeconds(7200)))
-        assertEquals("Arsenal", first.reminders.first().single().homeTeam)
+        val reloaded = repository(store, FakeScheduler())
+        assertEquals("Arsenal", reloaded.reminders.first().single().homeTeam)
     }
 
     @Test fun kickoffMoveReschedulesAndCancelledOrFinishedFixturesSuppressReminder() = runTest {
-        val file = reminderFile()
+        val store = InMemoryPreferencesDataStore()
         val scheduler = FakeScheduler()
-        val repository = repository(file, scheduler, this)
+        val repository = repository(store, scheduler)
         repository.toggle(fixture(now.plusSeconds(3600)))
         repository.reconcile(listOf(fixture(now.plusSeconds(7200))))
         assertEquals(now.plusSeconds(7200).minusSeconds(900).toEpochMilli(), repository.reminders.first().single().triggerEpochMs)
@@ -71,18 +70,16 @@ class SportsReminderRepositoryTest {
     }
 
     @Test fun liveAndFinishedFixturesCannotCreateFutureReminder() = runTest {
-        val file = reminderFile()
-        val repository = repository(file, FakeScheduler(), this)
+        val store = InMemoryPreferencesDataStore()
+        val repository = repository(store, FakeScheduler())
         assertFalse(repository.toggle(fixture(now, SportsFixtureStatus.Live)))
         assertFalse(repository.toggle(fixture(now.minusSeconds(60), SportsFixtureStatus.Finished)))
         assertTrue(repository.reminders.first().isEmpty())
     }
 
-    private fun repository(file: File, scheduler: FakeScheduler, scope: TestScope) = SportsReminderRepository(
-        PreferenceDataStoreFactory.create(scope = scope, produceFile = { file }), scheduler, clock,
+    private fun repository(store: DataStore<Preferences>, scheduler: FakeScheduler) = SportsReminderRepository(
+        store, scheduler, clock,
     )
-
-    private fun reminderFile() = File(temporaryFolder.newFolder(), "reminders.preferences_pb")
 
     private fun fixture(kickoff: Instant, status: SportsFixtureStatus = SportsFixtureStatus.Scheduled) = SportsFixture(
         "42", "PL", "Premier League", kickoff, "Arsenal", "Chelsea", status,
@@ -93,5 +90,17 @@ class SportsReminderRepositoryTest {
         val cancelled = mutableListOf<String>()
         override fun schedule(reminder: MatchReminder) { scheduled += reminder }
         override fun cancel(fixtureKey: String) { cancelled += fixtureKey }
+    }
+
+    private class InMemoryPreferencesDataStore : DataStore<Preferences> {
+        private val mutex = Mutex()
+        private val state = MutableStateFlow<Preferences>(emptyPreferences())
+
+        override val data: Flow<Preferences> = state
+
+        override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+            mutex.withLock {
+                transform(state.value).also { state.value = it }
+            }
     }
 }
