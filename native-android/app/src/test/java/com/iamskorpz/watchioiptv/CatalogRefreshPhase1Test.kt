@@ -365,7 +365,7 @@ class CatalogRefreshPhase1Test {
             coordinator.refreshLive(added.providerId, RefreshTrigger.AutomaticStartup)
         }
         assertTrue(startedLatch.await(5, TimeUnit.SECONDS))
-        val manualJob = async(Dispatchers.IO) {
+        val manualJob = async(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
             coordinator.refreshLive(added.providerId, RefreshTrigger.Manual)
         }
         releaseLatch.countDown()
@@ -397,7 +397,7 @@ class CatalogRefreshPhase1Test {
             coordinator.refreshLive(added.providerId, RefreshTrigger.AutomaticPeriodic)
         }
         assertTrue(failStarted.await(5, TimeUnit.SECONDS))
-        val manualFailJob = async(Dispatchers.IO) {
+        val manualFailJob = async(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
             coordinator.refreshLive(added.providerId, RefreshTrigger.Manual)
         }
         failRelease.countDown()
