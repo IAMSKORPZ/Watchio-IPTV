@@ -33,4 +33,14 @@ class AndroidSecretStore(context: Context) : SecretStore {
     override suspend fun removeSecret(key: String) = withContext(Dispatchers.IO) {
         preferences.edit { remove(key) }
     }
+
+    suspend fun exportPortableSecrets(): Map<String, String> = withContext(Dispatchers.IO) {
+        preferences.all.mapNotNull { (key, value) -> (value as? String)?.let { key to it } }.toMap()
+    }
+
+    suspend fun mergePortableSecrets(secrets: Map<String, String>) = withContext(Dispatchers.IO) {
+        preferences.edit {
+            secrets.forEach { (key, value) -> putString(key, value) }
+        }
+    }
 }

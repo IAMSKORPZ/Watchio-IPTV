@@ -1361,7 +1361,12 @@ fun WatchioNativeApp(
                 SettingsPlaceholderScreen("Parental Controls", "Parental controls are not configured yet.", onBack = { navController.popBackStack() })
             }
             composable("settings/backup") {
-                SettingsPlaceholderScreen("Backup & Restore", "Backup and restore is not configured yet.", onBack = { navController.popBackStack() })
+                val backupViewModel: com.iamskorpz.watchioiptv.feature.backup.BackupRestoreViewModel = viewModel(
+                    factory = com.iamskorpz.watchioiptv.feature.backup.backupRestoreFactory(container.backupRepository),
+                )
+                SettingsDetailScreen("Backup & Restore", onBack = { navController.popBackStack() }) {
+                    com.iamskorpz.watchioiptv.feature.backup.BackupRestoreScreen(backupViewModel)
+                }
             }
             composable("settings/updates") {
                 UpdatesScreen(

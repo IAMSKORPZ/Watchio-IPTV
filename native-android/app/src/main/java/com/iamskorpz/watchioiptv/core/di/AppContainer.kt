@@ -79,6 +79,7 @@ import com.iamskorpz.watchioiptv.feature.sports.v2.SportsSourceResult
 import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastApi
 import com.iamskorpz.watchioiptv.feature.sports.v2.TheSportsDbBroadcastSource
 import com.iamskorpz.watchioiptv.feature.sports.v2.enabledSources
+import com.iamskorpz.watchioiptv.feature.backup.WatchioBackupRepository
 import com.iamskorpz.watchioiptv.feature.tvguide.TvGuideRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -105,7 +106,8 @@ class AppContainer(context: Context) {
         .build()
 
     val settingsRepository = WatchioSettingsRepository(appContext.watchioDataStore)
-    val secretStore: SecretStore = AndroidSecretStore(appContext)
+    val secretStore = AndroidSecretStore(appContext)
+    val backupRepository = WatchioBackupRepository(appContext, database, appContext.watchioDataStore, secretStore)
     val providerCredentialStore = ProviderCredentialStore(secretStore)
     val networkModule = NetworkModule()
     val endpointManager = WatchioEndpointManager(
