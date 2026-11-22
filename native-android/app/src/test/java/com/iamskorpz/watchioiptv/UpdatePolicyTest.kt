@@ -41,6 +41,26 @@ class UpdatePolicyTest {
     }
 
     @Test(expected = UpdateException::class)
+    fun untrustedHttpsApkUrlFails() {
+        UpdatePolicy.validateManifest(manifest(apk = apk().copy(downloadUrl = "https://example.invalid/Watchio-IPTV.apk")), expectedChannel = "dev")
+    }
+
+    @Test(expected = UpdateException::class)
+    fun deceptiveGitHubHostFails() {
+        UpdatePolicy.validateManifest(manifest(apk = apk().copy(downloadUrl = "https://github.com.example.invalid/IAMSKORPZ/Watchio-IPTV/releases/download/v1/app.apk")), expectedChannel = "dev")
+    }
+
+    @Test(expected = UpdateException::class)
+    fun mismatchedDownloadFilenameFails() {
+        UpdatePolicy.validateManifest(manifest(apk = apk().copy(fileName = "different.apk")), expectedChannel = "dev")
+    }
+
+    @Test(expected = UpdateException::class)
+    fun untrustedReleasePageFails() {
+        UpdatePolicy.validateManifest(manifest().copy(githubRelease = "https://example.invalid/releases/tag/v1"), expectedChannel = "dev")
+    }
+
+    @Test(expected = UpdateException::class)
     fun channelMismatchFails() {
         UpdatePolicy.validateManifest(manifest(channel = "stable"), expectedChannel = "dev")
     }
@@ -48,6 +68,14 @@ class UpdatePolicyTest {
     @Test(expected = UpdateException::class)
     fun pathTraversalFilenameFails() {
         UpdatePolicy.validateManifest(manifest(apk = apk().copy(fileName = "../app.apk")), expectedChannel = "dev")
+    }
+
+    @Test(expected = UpdateException::class)
+    fun stableManifestRequiresCanonicalFilename() {
+        UpdatePolicy.validateManifest(
+            manifest(channel = "stable", apk = apk().copy(fileName = "app-release.apk")),
+            expectedChannel = "stable",
+        )
     }
 
     @Test

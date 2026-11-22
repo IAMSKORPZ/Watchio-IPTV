@@ -1,6 +1,7 @@
 package com.iamskorpz.watchioiptv.core.diagnostics
 
 import android.os.SystemClock
+import com.iamskorpz.watchioiptv.core.logging.WatchioLogger
 
 object QuickLoginBootstrapTrace {
     private var applyStartedAtMs: Long? = null
@@ -19,7 +20,7 @@ object QuickLoginBootstrapTrace {
         val now = SystemClock.elapsedRealtime()
         val duration = stageStartedAtMs?.let { " stage_duration_ms=${now - it}" }.orEmpty()
         val safeMetadata = metadata.takeIf { it.isNotBlank() }?.let { " $it" }.orEmpty()
-        println("QuickLoginTiming:$name elapsed_ms_since_apply_start=${now - start}$duration$safeMetadata")
+        WatchioLogger.debug("QuickLoginTiming", "$name elapsed_ms_since_apply_start=${now - start}$duration$safeMetadata")
     }
 
     @Synchronized

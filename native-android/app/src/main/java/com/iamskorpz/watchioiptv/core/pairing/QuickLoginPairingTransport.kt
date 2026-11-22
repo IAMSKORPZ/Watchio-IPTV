@@ -1,5 +1,6 @@
 package com.iamskorpz.watchioiptv.core.pairing
 
+import com.iamskorpz.watchioiptv.core.logging.WatchioLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -189,7 +190,7 @@ private fun Socket.respond(code: Int) {
 }
 
 private fun stage(name: String) {
-    println("$QuickLoginLogTag:$name")
+    WatchioLogger.debug(QuickLoginLogTag, name)
 }
 
 private fun localIpv4Address(): String? {

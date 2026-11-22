@@ -3,6 +3,7 @@ package com.iamskorpz.watchioiptv.feature.provider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.iamskorpz.watchioiptv.core.diagnostics.QuickLoginBootstrapTrace
+import com.iamskorpz.watchioiptv.core.logging.WatchioLogger
 import com.iamskorpz.watchioiptv.core.pairing.QuickLoginCredentials
 import com.iamskorpz.watchioiptv.core.pairing.QuickLoginReceiver
 import com.iamskorpz.watchioiptv.core.pairing.QuickLoginScanParser
@@ -156,7 +157,7 @@ class QuickLoginViewModel(
     }
 
     private fun stage(name: String) {
-        println("QuickLogin:$name")
+        WatchioLogger.debug("QuickLogin", name)
     }
 
 }

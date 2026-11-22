@@ -9,6 +9,7 @@ import com.iamskorpz.watchioiptv.core.player.PlaybackSourceType
 import com.iamskorpz.watchioiptv.core.model.ProviderId
 import com.iamskorpz.watchioiptv.domain.playback.PlaybackUrlRequest
 import com.iamskorpz.watchioiptv.data.refresh.NetworkConnectivityChecker
+import com.iamskorpz.watchioiptv.core.logging.WatchioLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -74,7 +75,7 @@ class PlaybackEndpointRecoveryCoordinator(
 
     private fun acceptanceTrace(message: String) {
         if (com.iamskorpz.watchioiptv.BuildConfig.UPDATE_CHANNEL == "syntheticfailovertest") {
-            println("WatchioFailoverTrace t=${System.nanoTime() / 1_000_000L} $message")
+            WatchioLogger.debug("WatchioFailoverTrace", "t=${System.nanoTime() / 1_000_000L} $message")
         }
     }
 }

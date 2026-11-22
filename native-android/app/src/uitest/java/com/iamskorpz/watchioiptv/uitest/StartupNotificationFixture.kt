@@ -152,10 +152,10 @@ internal fun manifestFor(selected: StartupFixtureState, installed: InstalledVers
             mandatory = mandatory,
             publishedAt = "2026-09-18T12:00:00Z",
             releaseNotes = listOf("UITEST startup notification fixture."),
-            githubRelease = "https://example.invalid/watchio-uitest",
+            githubRelease = "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/uitest-fixture",
             apk = UpdateApk(
                 fileName = "watchio-uitest-fixture.apk",
-                downloadUrl = "https://example.invalid/watchio-uitest-fixture.apk",
+                downloadUrl = "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/uitest-fixture/watchio-uitest-fixture.apk",
                 sha256 = "0".repeat(64),
             ),
     )

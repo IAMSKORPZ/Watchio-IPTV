@@ -7,7 +7,7 @@ import com.iamskorpz.watchioiptv.core.security.SensitiveUrlMasker
 object WatchioLogger {
     fun debug(tag: String, message: String, throwable: Throwable? = null) {
         if (!BuildConfig.DEBUG) return
-        Log.d(tag, SensitiveUrlMasker.mask(message), throwable)
+        runCatching { Log.d(tag, SensitiveUrlMasker.mask(message), throwable) }
     }
 
     fun warning(tag: String, message: String, throwable: Throwable? = null) {
