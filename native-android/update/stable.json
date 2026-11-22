@@ -18,7 +18,7 @@
   "githubRelease": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/tag/v0.1.7",
   "apk": {
     "fileName": "Watchio-IPTV.apk",
-    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/latest/download/Watchio-IPTV.apk",
+    "downloadUrl": "https://github.com/IAMSKORPZ/Watchio-IPTV/releases/download/v0.1.7/Watchio-IPTV.apk",
     "sha256": "89D086CCACF9230FC26AD7AF001F0C8A392B3D6CA17B3BD1D707C391BC7521B9"
   }
 }

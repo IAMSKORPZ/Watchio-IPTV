@@ -43,8 +43,13 @@ android {
         applicationId = "com.iamskorpz.watchioiptv"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20
-        versionName = "0.1.7"
+        versionCode = providers.environmentVariable("WATCHIO_VERSION_CODE")
+            .map { value -> value.toIntOrNull() ?: throw GradleException("WATCHIO_VERSION_CODE must be a positive integer") }
+            .getOrElse(20)
+            .also { value -> require(value > 0) { "WATCHIO_VERSION_CODE must be a positive integer" } }
+        versionName = providers.environmentVariable("WATCHIO_VERSION_NAME")
+            .getOrElse("0.1.7")
+            .also { value -> require(Regex("^[0-9]+\\.[0-9]+\\.[0-9]+$").matches(value)) { "WATCHIO_VERSION_NAME must use X.Y.Z" } }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val tmdbApiKey = providers.gradleProperty("WATCHIO_TMDB_API_KEY")
             .orElse(providers.environmentVariable("WATCHIO_TMDB_API_KEY"))

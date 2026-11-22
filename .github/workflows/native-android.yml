@@ -26,6 +26,10 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Validate public release tooling
+        working-directory: native-android/testing/release
+        run: python -m unittest -v test_prepare_release.py
+
       - name: Prepare DEV signing when available
         id: dev-signing
         shell: pwsh
