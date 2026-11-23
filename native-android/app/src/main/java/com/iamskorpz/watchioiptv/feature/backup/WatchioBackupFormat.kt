@@ -31,10 +31,27 @@ data class WatchioBackupEnvelope(
     }
 }
 
-@Serializable data class BackupProvider(val id: String, val displayName: String, val type: String, val serverUrl: String?, val createdAt: Long, val updatedAt: Long, val enabled: Boolean)
+@Serializable data class BackupProvider(val id: String, val displayName: String, val type: String, val serverUrl: String?, val createdAt: Long, val updatedAt: Long, val enabled: Boolean, val lastRefreshAt: Long? = null)
 @Serializable data class BackupFavorite(val providerId: String, val contentType: String, val contentId: String, val subContentId: String, val title: String, val imageUrl: String?, val createdAt: Long)
 @Serializable data class BackupHistory(val providerId: String, val contentType: String, val contentId: String, val subContentId: String, val title: String, val imageUrl: String?, val positionMs: Long?, val durationMs: Long?, val watchedAt: Long)
-@Serializable data class BackupEpgSource(val providerId: String, val sourceId: String, val sourceType: String, val url: String?, val enabled: Boolean, val priority: Int)
+@Serializable data class BackupEpgSource(
+    val providerId: String,
+    val sourceId: String,
+    val sourceType: String,
+    val url: String?,
+    val enabled: Boolean,
+    val priority: Int,
+    val lastRefreshAt: Long? = null,
+    val lastSuccessAt: Long? = null,
+    val lastErrorAt: Long? = null,
+    val lastError: String? = null,
+    val etag: String? = null,
+    val lastModified: String? = null,
+    val channelCount: Int = 0,
+    val programmeCount: Int = 0,
+    val createdAt: Long = 0,
+    val updatedAt: Long = 0,
+)
 @Serializable data class BackupValue(val type: String, val value: String? = null, val values: List<String> = emptyList())
 
 @Serializable

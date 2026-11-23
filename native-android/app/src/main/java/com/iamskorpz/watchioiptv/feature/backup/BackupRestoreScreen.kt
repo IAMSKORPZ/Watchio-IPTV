@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,7 +27,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -147,6 +158,13 @@ fun BackupRestoreScreen(viewModel: BackupRestoreViewModel) {
     val resolver = LocalContext.current.contentResolver
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { viewModel.writeBackup(resolver, it) }
     val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { viewModel.readBackup(resolver, it) }
+    val passwordFocusRequester = remember { FocusRequester() }
+    val confirmPasswordFocusRequester = remember { FocusRequester() }
+    val credentialsFocusRequester = remember { FocusRequester() }
+    val createFocusRequester = remember { FocusRequester() }
+    val restoreFocusRequester = remember { FocusRequester() }
+    val confirmRestoreFocusRequester = remember { FocusRequester() }
+    val inputModeManager = LocalInputModeManager.current
     var handledExportId by remember { mutableIntStateOf(0) }
     LaunchedEffect(state.exportRequestId) {
         if (state.pendingExport != null && state.exportRequestId != handledExportId) {
@@ -154,28 +172,62 @@ fun BackupRestoreScreen(viewModel: BackupRestoreViewModel) {
             export.launch("Watchio-${System.currentTimeMillis()}.watchio")
         }
     }
+    LaunchedEffect(Unit) {
+        if (inputModeManager.inputMode == InputMode.Keyboard) passwordFocusRequester.requestFocus()
+    }
 
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Encrypted, user-controlled backup")
         Text("Includes providers, favourites, history, settings and EPG sources. Offline videos and caches are excluded.")
         OutlinedTextField(
             value = state.password, onValueChange = viewModel::setPassword, label = { Text("Backup password") },
-            visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !state.busy, modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !state.busy,
+            modifier = Modifier.fillMaxWidth()
+                .focusRequester(passwordFocusRequester)
+                .backupFocusNavigation(down = confirmPasswordFocusRequester)
+                .testTag("backup-password"),
         )
         OutlinedTextField(
             value = state.confirmPassword, onValueChange = viewModel::setConfirmPassword, label = { Text("Confirm password for export") },
-            visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !state.busy, modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation(), singleLine = true, enabled = !state.busy,
+            modifier = Modifier.fillMaxWidth()
+                .focusRequester(confirmPasswordFocusRequester)
+                .backupFocusNavigation(up = passwordFocusRequester, down = credentialsFocusRequester)
+                .testTag("backup-password-confirm"),
         )
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {
                 Text("Include credentials")
                 Text("Credentials are protected by backup password encryption. Disable to require sign-in after restore.")
             }
-            Switch(checked = state.includeCredentials, onCheckedChange = viewModel::setIncludeCredentials, enabled = !state.busy)
+            Switch(
+                checked = state.includeCredentials,
+                onCheckedChange = viewModel::setIncludeCredentials,
+                enabled = !state.busy,
+                modifier = Modifier.focusRequester(credentialsFocusRequester)
+                    .backupFocusNavigation(up = confirmPasswordFocusRequester, down = createFocusRequester)
+                    .testTag("backup-credentials"),
+            )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = viewModel::createBackup, enabled = !state.busy) { Text("Create Backup") }
-            OutlinedButton(onClick = { restore.launch(arrayOf("application/octet-stream", "application/json", "*/*")) }, enabled = !state.busy) { Text("Restore Backup") }
+            Button(
+                onClick = viewModel::createBackup,
+                enabled = !state.busy,
+                modifier = Modifier.focusRequester(createFocusRequester)
+                    .backupFocusNavigation(up = credentialsFocusRequester, right = restoreFocusRequester)
+                    .testTag("backup-create"),
+            ) { Text("Create Backup") }
+            OutlinedButton(
+                onClick = { restore.launch(arrayOf("application/octet-stream", "application/json", "*/*")) },
+                enabled = !state.busy,
+                modifier = Modifier.focusRequester(restoreFocusRequester)
+                    .backupFocusNavigation(
+                        up = credentialsFocusRequester,
+                        down = confirmRestoreFocusRequester.takeIf { state.preview != null },
+                        left = createFocusRequester,
+                    )
+                    .testTag("backup-restore"),
+            ) { Text("Restore Backup") }
         }
         if (state.busy) CircularProgressIndicator()
         state.error?.let { Text(it) }
@@ -187,10 +239,53 @@ fun BackupRestoreScreen(viewModel: BackupRestoreViewModel) {
             Text("${preview.providers} providers, ${preview.favorites} favourites, ${preview.history} history items, ${preview.epgSources} EPG sources")
             Text(if (preview.includesCredentials) "Encrypted credentials included" else "Credentials excluded; sign-in will be required")
             Text("Existing records are merged. Nothing is silently deleted.")
-            Button(onClick = viewModel::confirmRestore, enabled = !state.busy) { Text("Confirm Restore") }
+            Button(
+                onClick = viewModel::confirmRestore,
+                enabled = !state.busy,
+                modifier = Modifier.focusRequester(confirmRestoreFocusRequester)
+                    .backupFocusNavigation(up = restoreFocusRequester)
+                    .testTag("backup-confirm-restore"),
+            ) { Text("Confirm Restore") }
         }
         HorizontalDivider()
         Text("Keep your password safe. Watchio cannot recover it. TV file pickers vary by device and may require an installed file manager.")
+    }
+}
+
+private fun Modifier.backupFocusNavigation(
+    up: FocusRequester? = null,
+    down: FocusRequester? = null,
+    left: FocusRequester? = null,
+    right: FocusRequester? = null,
+): Modifier = onPreviewKeyEvent { event ->
+    if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+    val target = when (event.key) {
+        Key.DirectionUp -> up
+        Key.DirectionDown -> down
+        Key.DirectionLeft -> left
+        Key.DirectionRight -> right
+        else -> null
+    } ?: return@onPreviewKeyEvent false
+    target.requestFocus()
+    true
+}
+
+@Composable
+fun BackupRecoveryGate(status: BackupRecoveryStatus) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (status == BackupRecoveryStatus.RECOVERING) CircularProgressIndicator()
+        Text(if (status == BackupRecoveryStatus.RECOVERING) "Recovering interrupted restore" else "Backup restore recovery required")
+        Text(
+            if (status == BackupRecoveryStatus.RECOVERING) {
+                "Watchio is restoring a consistent application state."
+            } else {
+                "Watchio preserved the recovery point but could not finish safely. Do not clear app data. Retry after restarting Watchio."
+            },
+        )
     }
 }
 

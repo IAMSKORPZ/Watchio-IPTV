@@ -385,8 +385,15 @@ fun WatchioNativeApp(
     openSportsRequest: String? = null,
     onSportsRequestConsumed: () -> Unit = {},
 ) {
+    val backupRecoveryStatus by container.backupRepository.recoveryStatus.collectAsStateWithLifecycle()
     val themeState by container.settingsRepository.theme.collectAsStateWithLifecycle(initialValue = com.iamskorpz.watchioiptv.ui.theme.WatchioThemeState())
     val activeAppearance by container.settingsRepository.activeAppearance.collectAsStateWithLifecycle(initialValue = WatchioThemeDefinition.WatchioDefault)
+    if (backupRecoveryStatus != com.iamskorpz.watchioiptv.feature.backup.BackupRecoveryStatus.READY) {
+        WatchioTheme(themeState = themeState, appearance = activeAppearance) {
+            com.iamskorpz.watchioiptv.feature.backup.BackupRecoveryGate(backupRecoveryStatus)
+        }
+        return
+    }
     val inputMode by container.settingsRepository.inputMode.collectAsStateWithLifecycle(initialValue = InputMode.Auto)
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val selectedProviderId by container.settingsRepository.selectedProviderId.collectAsStateWithLifecycle(initialValue = null)

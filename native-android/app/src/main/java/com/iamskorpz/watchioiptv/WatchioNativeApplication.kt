@@ -7,12 +7,14 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.iamskorpz.watchioiptv.core.di.AppContainer
+import com.iamskorpz.watchioiptv.feature.backup.BackupRecoveryStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 @SuppressLint("UnsafeOptInUsageError")
 class WatchioNativeApplication : Application(), ImageLoaderFactory {
@@ -23,6 +25,10 @@ class WatchioNativeApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        runBlocking(Dispatchers.IO) {
+            container.backupRepository.recoverInterruptedRestore()
+        }
+        if (container.backupRepository.recoveryStatus.value != BackupRecoveryStatus.READY) return
         appScope.launch(Dispatchers.IO) {
             container.offlineMovieDownloadRepository.reconcile()
         }
@@ -30,10 +36,11 @@ class WatchioNativeApplication : Application(), ImageLoaderFactory {
             combine(
                 container.settingsRepository.epgAutoRefreshEnabled,
                 container.settingsRepository.epgRefreshInterval,
-            ) { enabled, interval -> enabled to interval }
+                container.backupRepository.recoveryStatus,
+            ) { enabled, interval, recoveryStatus -> Triple(enabled, interval, recoveryStatus) }
                 .distinctUntilChanged()
-                .collect { (enabled, interval) ->
-                    container.epgAutoRefreshScheduler.apply(enabled, interval)
+                .collect { (enabled, interval, recoveryStatus) ->
+                    container.epgAutoRefreshScheduler.apply(enabled && recoveryStatus == BackupRecoveryStatus.READY, interval)
                 }
         }
     }

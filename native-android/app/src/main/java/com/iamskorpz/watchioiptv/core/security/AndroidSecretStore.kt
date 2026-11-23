@@ -43,4 +43,11 @@ class AndroidSecretStore(context: Context) : SecretStore {
             secrets.forEach { (key, value) -> putString(key, value) }
         }
     }
+
+    suspend fun replacePortableSecrets(secrets: Map<String, String>) = withContext(Dispatchers.IO) {
+        preferences.edit(commit = true) {
+            clear()
+            secrets.forEach { (key, value) -> putString(key, value) }
+        }
+    }
 }

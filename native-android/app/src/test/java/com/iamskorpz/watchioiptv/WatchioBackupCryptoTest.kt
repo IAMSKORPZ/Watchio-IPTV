@@ -3,9 +3,13 @@ package com.iamskorpz.watchioiptv
 import com.iamskorpz.watchioiptv.feature.backup.BackupFavorite
 import com.iamskorpz.watchioiptv.feature.backup.BackupProvider
 import com.iamskorpz.watchioiptv.feature.backup.WatchioBackupCrypto
+import com.iamskorpz.watchioiptv.feature.backup.WatchioBackupEnvelope
 import com.iamskorpz.watchioiptv.feature.backup.WatchioBackupPayload
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -41,6 +45,25 @@ class WatchioBackupCryptoTest {
         assertEquals(CharArray(rejectedPassword.size).toList(), rejectedPassword.toList())
         assertThrows(IllegalArgumentException::class.java) {
             crypto.decrypt(ByteArray(WatchioBackupCrypto.MAX_BACKUP_BYTES + 1), "correct horse battery".toCharArray())
+        }
+    }
+
+    @Test fun envelopesUseUniqueParametersAndRejectUnsupportedOrExcessiveValues() {
+        val first = crypto.encrypt(fixture(), "correct horse battery".toCharArray())
+        val second = crypto.encrypt(fixture(), "correct horse battery".toCharArray())
+        val json = Json { encodeDefaults = true }
+        val firstEnvelope = json.decodeFromString<WatchioBackupEnvelope>(first.decodeToString())
+        val secondEnvelope = json.decodeFromString<WatchioBackupEnvelope>(second.decodeToString())
+        assertNotEquals(firstEnvelope.salt, secondEnvelope.salt)
+        assertNotEquals(firstEnvelope.nonce, secondEnvelope.nonce)
+
+        val unsupported = json.encodeToString(firstEnvelope.copy(formatVersion = 2)).encodeToByteArray()
+        assertThrows(IllegalArgumentException::class.java) {
+            crypto.decrypt(unsupported, "correct horse battery".toCharArray())
+        }
+        val excessive = json.encodeToString(firstEnvelope.copy(iterations = WatchioBackupCrypto.MAX_KDF_ITERATIONS + 1)).encodeToByteArray()
+        assertThrows(IllegalArgumentException::class.java) {
+            crypto.decrypt(excessive, "correct horse battery".toCharArray())
         }
     }
 

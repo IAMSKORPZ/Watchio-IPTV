@@ -2,9 +2,21 @@ package com.iamskorpz.watchioiptv
 
 import android.content.Context
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.requestFocus
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -33,11 +45,20 @@ class BackupRestoreComposeTest {
             File(context.cacheDir, "backup-compose-${UUID.randomUUID()}.preferences_pb")
         }
         val viewModel = BackupRestoreViewModel(WatchioBackupRepository(context, database, dataStore, AndroidSecretStore(context)))
-        compose.setContent { WatchioTheme { BackupRestoreScreen(viewModel) } }
+        lateinit var inputModeManager: InputModeManager
+        compose.setContent {
+            inputModeManager = LocalInputModeManager.current
+            WatchioTheme { BackupRestoreScreen(viewModel) }
+        }
 
         compose.onNodeWithText("Encrypted, user-controlled backup").assertIsDisplayed()
         compose.onNodeWithText("Create Backup").assertIsDisplayed()
         compose.onNodeWithText("Restore Backup").assertIsDisplayed()
         compose.onNodeWithText("Offline videos and caches are excluded.", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("backup-credentials").assertIsOff().performClick().assertIsOn()
+        compose.runOnIdle { inputModeManager.requestInputMode(InputMode.Keyboard) }
+        compose.onNodeWithTag("backup-password").requestFocus().assertIsFocused()
+        compose.onNodeWithTag("backup-password").performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithTag("backup-password-confirm").assertIsFocused()
     }
 }
