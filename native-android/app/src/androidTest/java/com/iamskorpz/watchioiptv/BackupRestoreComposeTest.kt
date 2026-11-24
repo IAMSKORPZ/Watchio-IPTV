@@ -2,6 +2,10 @@ package com.iamskorpz.watchioiptv
 
 import android.content.Context
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.test.assertIsDisplayed
@@ -48,7 +52,11 @@ class BackupRestoreComposeTest {
         lateinit var inputModeManager: InputModeManager
         compose.setContent {
             inputModeManager = LocalInputModeManager.current
-            WatchioTheme { BackupRestoreScreen(viewModel) }
+            WatchioTheme {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    BackupRestoreScreen(viewModel)
+                }
+            }
         }
 
         compose.onNodeWithText("Encrypted, user-controlled backup").assertIsDisplayed()

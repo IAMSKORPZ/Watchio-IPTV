@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -176,7 +174,7 @@ fun BackupRestoreScreen(viewModel: BackupRestoreViewModel) {
         if (inputModeManager.inputMode == InputMode.Keyboard) passwordFocusRequester.requestFocus()
     }
 
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Encrypted, user-controlled backup")
         Text("Includes providers, favourites, history, settings and EPG sources. Offline videos and caches are excluded.")
         OutlinedTextField(
