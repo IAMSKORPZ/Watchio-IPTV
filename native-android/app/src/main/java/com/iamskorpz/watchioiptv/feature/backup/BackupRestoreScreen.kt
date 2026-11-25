@@ -1,10 +1,12 @@
 package com.iamskorpz.watchioiptv.feature.backup
 
 import android.content.ContentResolver
+import android.content.ActivityNotFoundException
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -111,9 +113,24 @@ class BackupRestoreViewModel(private val repository: WatchioBackupRepository) : 
         }
     }
 
+    fun exportPickerUnavailable(error: Throwable) {
+        mutableState.value.pendingExport?.fill(0)
+        mutableState.value = mutableState.value.copy(
+            pendingExport = null,
+            password = "",
+            confirmPassword = "",
+            busy = false,
+            error = error.safeMessage("No compatible document picker is available to save this backup."),
+        )
+    }
+
+    fun restorePickerUnavailable(error: Throwable) {
+        fail(error.safeMessage("No compatible document picker is available to select a backup."))
+    }
+
     fun readBackup(resolver: ContentResolver, uri: Uri?) {
         val current = mutableState.value
-        if (uri == null) return
+        if (uri == null) return fail("Backup selection cancelled.")
         if (current.password.length < 10) return fail("Enter the backup password before selecting a file.")
         viewModelScope.launch {
             mutableState.value = current.copy(busy = true, error = null, message = null, preview = null, restorePayload = null)
@@ -151,23 +168,42 @@ class BackupRestoreViewModel(private val repository: WatchioBackupRepository) : 
 }
 
 @Composable
-fun BackupRestoreScreen(viewModel: BackupRestoreViewModel) {
+fun BackupRestoreScreen(
+    viewModel: BackupRestoreViewModel,
+    launchCreateDocument: ((String) -> Unit)? = null,
+    launchOpenDocument: ((Array<String>) -> Unit)? = null,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val resolver = LocalContext.current.contentResolver
-    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { viewModel.writeBackup(resolver, it) }
-    val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { viewModel.readBackup(resolver, it) }
     val passwordFocusRequester = remember { FocusRequester() }
     val confirmPasswordFocusRequester = remember { FocusRequester() }
     val credentialsFocusRequester = remember { FocusRequester() }
     val createFocusRequester = remember { FocusRequester() }
     val restoreFocusRequester = remember { FocusRequester() }
     val confirmRestoreFocusRequester = remember { FocusRequester() }
+    val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) {
+        viewModel.writeBackup(resolver, it)
+        createFocusRequester.requestFocus()
+    }
+    val restore = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        viewModel.readBackup(resolver, it)
+        restoreFocusRequester.requestFocus()
+    }
     val inputModeManager = LocalInputModeManager.current
     var handledExportId by remember { mutableIntStateOf(0) }
     LaunchedEffect(state.exportRequestId) {
         if (state.pendingExport != null && state.exportRequestId != handledExportId) {
             handledExportId = state.exportRequestId
-            export.launch("Watchio-${System.currentTimeMillis()}.watchio")
+            runCatching {
+                (launchCreateDocument ?: export::launch)("Watchio-${System.currentTimeMillis()}.watchio")
+            }.onFailure { error ->
+                if (error is ActivityNotFoundException || error is SecurityException) {
+                    viewModel.exportPickerUnavailable(error)
+                    createFocusRequester.requestFocus()
+                } else {
+                    throw error
+                }
+            }
         }
     }
     LaunchedEffect(Unit) {
@@ -207,25 +243,57 @@ fun BackupRestoreScreen(viewModel: BackupRestoreViewModel) {
                     .testTag("backup-credentials"),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-                onClick = viewModel::createBackup,
-                enabled = !state.busy,
-                modifier = Modifier.focusRequester(createFocusRequester)
-                    .backupFocusNavigation(up = credentialsFocusRequester, right = restoreFocusRequester)
-                    .testTag("backup-create"),
-            ) { Text("Create Backup") }
-            OutlinedButton(
-                onClick = { restore.launch(arrayOf("application/octet-stream", "application/json", "*/*")) },
-                enabled = !state.busy,
-                modifier = Modifier.focusRequester(restoreFocusRequester)
-                    .backupFocusNavigation(
-                        up = credentialsFocusRequester,
-                        down = confirmRestoreFocusRequester.takeIf { state.preview != null },
-                        left = createFocusRequester,
-                    )
-                    .testTag("backup-restore"),
-            ) { Text("Restore Backup") }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val compact = maxWidth < 420.dp
+            val actionModifier = if (compact) Modifier.fillMaxWidth() else Modifier
+            @Composable fun CreateAction() {
+                Button(
+                    onClick = viewModel::createBackup,
+                    enabled = !state.busy,
+                    modifier = actionModifier.focusRequester(createFocusRequester)
+                        .backupFocusNavigation(
+                            up = credentialsFocusRequester,
+                            down = restoreFocusRequester.takeIf { compact },
+                            right = restoreFocusRequester.takeIf { !compact },
+                        )
+                        .testTag("backup-create"),
+                ) { Text("Create Backup") }
+            }
+            @Composable fun RestoreAction() {
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            (launchOpenDocument ?: restore::launch)(arrayOf("application/octet-stream", "application/json", "*/*"))
+                        }.onFailure { error ->
+                            if (error is ActivityNotFoundException || error is SecurityException) {
+                                viewModel.restorePickerUnavailable(error)
+                                restoreFocusRequester.requestFocus()
+                            } else {
+                                throw error
+                            }
+                        }
+                    },
+                    enabled = !state.busy,
+                    modifier = actionModifier.focusRequester(restoreFocusRequester)
+                        .backupFocusNavigation(
+                            up = if (compact) createFocusRequester else credentialsFocusRequester,
+                            down = confirmRestoreFocusRequester.takeIf { state.preview != null },
+                            left = createFocusRequester.takeIf { !compact },
+                        )
+                        .testTag("backup-restore"),
+                ) { Text("Restore Backup") }
+            }
+            if (compact) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CreateAction()
+                    RestoreAction()
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CreateAction()
+                    RestoreAction()
+                }
+            }
         }
         if (state.busy) CircularProgressIndicator()
         state.error?.let { Text(it) }

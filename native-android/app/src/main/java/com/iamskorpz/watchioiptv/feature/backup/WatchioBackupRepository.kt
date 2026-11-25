@@ -216,7 +216,9 @@ class WatchioBackupRepository(
             favorites = databaseSnapshot.favorites.map { BackupFavorite(it.providerId, it.contentType, it.contentId, it.subContentId, it.title, it.imageUrl, it.createdAtEpochMs) },
             history = databaseSnapshot.history.map { BackupHistory(it.providerId, it.contentType, it.contentId, it.subContentId, it.title, it.imageUrl, it.positionMs, it.durationMs, it.lastWatchedAtEpochMs) },
             epgSources = databaseSnapshot.epg.map { it.toBackup() },
-            dataStore = dataStore.data.first().asMap().entries.associate { it.key.name to it.value.toBackupValue() },
+            dataStore = dataStore.data.first().asMap().entries
+                .filterNot { it.key.name in DEVICE_SPECIFIC_DATASTORE_KEYS }
+                .associate { it.key.name to it.value.toBackupValue() },
             sharedPreferences = PORTABLE_PREFERENCES.associateWith(::snapshotPreferences),
             encryptedCredentials = if (includeCredentials) secretStore.exportPortableSecrets().filterKeys { !it.startsWith(RECOVERY_KEY_PREFIX) } else emptyMap(),
         )
@@ -265,13 +267,13 @@ class WatchioBackupRepository(
     }
 
     private suspend fun mergePreferences(payload: WatchioBackupPayload) {
-        dataStore.edit { prefs -> payload.dataStore.forEach { (name, value) -> prefs.putBackup(name, value) } }
+        dataStore.edit { prefs -> portableDataStore(payload).forEach { (name, value) -> prefs.putBackup(name, value) } }
         failureInjector.check(RestoreBoundary.DURING_PREFERENCES)
         payload.sharedPreferences.forEach { (name, values) -> restorePreferences(name, values, replace = false) }
     }
 
     private suspend fun replacePreferences(payload: WatchioBackupPayload) {
-        dataStore.edit { prefs -> prefs.clear(); payload.dataStore.forEach { (name, value) -> prefs.putBackup(name, value) } }
+        dataStore.edit { prefs -> prefs.clear(); portableDataStore(payload).forEach { (name, value) -> prefs.putBackup(name, value) } }
         PORTABLE_PREFERENCES.forEach { name -> restorePreferences(name, payload.sharedPreferences[name].orEmpty(), replace = true) }
     }
 
@@ -282,7 +284,7 @@ class WatchioBackupRepository(
         require(payload.history.all { database.watchHistoryDao().find(it.providerId, it.contentType, it.contentId, it.subContentId) == it.toEntity() }) { "Restored history could not be verified." }
         require(payload.epgSources.all { source -> database.epgDao().getSources(source.providerId).any { it == source.toEntity() } }) { "Restored EPG sources could not be verified." }
         val settings = dataStore.data.first().asMap().entries.associate { it.key.name to it.value.toBackupValue() }
-        require(payload.dataStore.all { settings[it.key] == it.value }) { "Restored settings could not be verified." }
+        require(portableDataStore(payload).all { settings[it.key] == it.value }) { "Restored settings could not be verified." }
         if (payload.encryptedCredentials.isNotEmpty()) {
             val secrets = secretStore.exportPortableSecrets()
             require(payload.encryptedCredentials.all { secrets[it.key] == it.value }) { "Restored credentials could not be verified." }
@@ -352,6 +354,9 @@ class WatchioBackupRepository(
     private fun snapshotPreferences(name: String): Map<String, BackupValue> =
         context.getSharedPreferences(name, Context.MODE_PRIVATE).all.mapValues { it.value.toBackupValue() }
 
+    private fun portableDataStore(payload: WatchioBackupPayload): Map<String, BackupValue> =
+        payload.dataStore.filterKeys { it !in DEVICE_SPECIFIC_DATASTORE_KEYS }
+
     private fun Any?.toBackupValue(): BackupValue = when (this) {
         is String -> BackupValue("string", this)
         is Boolean -> BackupValue("boolean", toString())
@@ -407,5 +412,6 @@ class WatchioBackupRepository(
         const val MAX_VALUE = 65_536
         const val MAX_TIMESTAMP = 253_402_300_799_000L
         val PORTABLE_PREFERENCES = listOf("watchio_endpoint_config", "watchio_search_history", "watchio_sports_v3", "sports_match_cache_v1", "sports_broadcast_cache_v1")
+        val DEVICE_SPECIFIC_DATASTORE_KEYS = setOf("input_mode")
     }
 }

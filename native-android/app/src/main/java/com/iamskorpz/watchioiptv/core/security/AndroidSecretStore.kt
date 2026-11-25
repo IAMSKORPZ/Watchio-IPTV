@@ -7,7 +7,10 @@ import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class AndroidSecretStore(context: Context) : SecretStore {
+class AndroidSecretStore(
+    context: Context,
+    private val preferencesFileName: String = "watchio_native_secrets",
+) : SecretStore {
     private val preferences by lazy {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -15,7 +18,7 @@ class AndroidSecretStore(context: Context) : SecretStore {
 
         EncryptedSharedPreferences.create(
             context,
-            "watchio_native_secrets",
+            preferencesFileName,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,

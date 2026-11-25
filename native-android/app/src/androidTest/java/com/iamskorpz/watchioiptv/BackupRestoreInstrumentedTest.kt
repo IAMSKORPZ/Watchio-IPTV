@@ -12,6 +12,7 @@ import com.iamskorpz.watchioiptv.core.database.ProviderEntity
 import com.iamskorpz.watchioiptv.core.database.WatchHistoryEntity
 import com.iamskorpz.watchioiptv.core.database.WatchioDatabase
 import com.iamskorpz.watchioiptv.core.security.AndroidSecretStore
+import com.iamskorpz.watchioiptv.feature.backup.BackupValue
 import com.iamskorpz.watchioiptv.feature.backup.WatchioBackupRepository
 import java.io.File
 import java.util.UUID
@@ -34,13 +35,17 @@ class BackupRestoreInstrumentedTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         val dataStoreFile = File(context.cacheDir, "backup-test-${UUID.randomUUID()}.preferences_pb")
         val dataStore = PreferenceDataStoreFactory.create(scope = scope, produceFile = { dataStoreFile })
-        val secrets = AndroidSecretStore(context)
+        val secretPreferencesName = "backup-test-secrets-${UUID.randomUUID()}"
+        val secrets = AndroidSecretStore(context, secretPreferencesName)
         val repository = WatchioBackupRepository(context, database, dataStore, secrets, now = { 1234L })
         val provider = ProviderEntity("backup-test-provider", "Synthetic", "Xtream", "https://synthetic.invalid", 1, 1, null, true)
         database.providerDao().upsert(provider)
         database.favoriteDao().upsert(FavoriteEntity(provider.id, "Movie", "movie-1", "", "Movie", null, 1))
         database.watchHistoryDao().upsert(WatchHistoryEntity(provider.id, "Movie", "movie-1", "", "Movie", null, 10, 100, 2))
-        dataStore.edit { it[stringPreferencesKey("theme_json")] = "synthetic-theme" }
+        dataStore.edit {
+            it[stringPreferencesKey("theme_json")] = "synthetic-theme"
+            it[stringPreferencesKey("input_mode")] = "touch"
+        }
         secrets.putSecret("provider.${provider.id}.xtream_password", "synthetic-secret")
 
         val bytes = repository.create("correct horse battery".toCharArray(), includeCredentials = true)
@@ -48,16 +53,21 @@ class BackupRestoreInstrumentedTest {
         assertEquals(1, preview.providers)
         assertTrue(preview.includesCredentials)
         assertTrue(payload.excludedCategories.contains("offline-media"))
+        assertTrue("input_mode" !in payload.dataStore)
 
         database.clearAllTables()
-        dataStore.edit { it.clear() }
+        dataStore.edit {
+            it.clear()
+            it[stringPreferencesKey("input_mode")] = "tv_remote"
+        }
         secrets.removeSecret("provider.${provider.id}.xtream_password")
-        repository.restore(payload)
+        repository.restore(payload.copy(dataStore = payload.dataStore + ("input_mode" to BackupValue("string", "touch"))))
 
         assertEquals("Synthetic", database.providerDao().findById(provider.id)?.displayName)
         assertEquals(1, database.favoriteDao().getByProvider(provider.id).size)
         assertEquals(10L, database.watchHistoryDao().getRecent(provider.id).single().positionMs)
         assertEquals("synthetic-theme", dataStore.data.first()[stringPreferencesKey("theme_json")])
+        assertEquals("tv_remote", dataStore.data.first()[stringPreferencesKey("input_mode")])
         assertEquals("synthetic-secret", secrets.getSecret("provider.${provider.id}.xtream_password"))
 
         bytes.fill(0)
@@ -65,5 +75,7 @@ class BackupRestoreInstrumentedTest {
         scope.cancel()
         dataStoreFile.delete()
         secrets.removeSecret("provider.${provider.id}.xtream_password")
+        context.deleteSharedPreferences(secretPreferencesName)
+        Unit
     }
 }
