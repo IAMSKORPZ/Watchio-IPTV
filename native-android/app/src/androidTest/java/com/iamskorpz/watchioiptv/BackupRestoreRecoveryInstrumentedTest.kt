@@ -161,7 +161,8 @@ class BackupRestoreRecoveryInstrumentedTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val dataStoreFile = File(context.cacheDir, "backup-recovery-$suffix-${UUID.randomUUID()}.preferences_pb")
         val dataStore = PreferenceDataStoreFactory.create(scope = scope, produceFile = { dataStoreFile })
-        val secrets = AndroidSecretStore(context)
+        private val secretPreferencesName = "backup-recovery-secrets-$suffix-${UUID.randomUUID()}"
+        val secrets = AndroidSecretStore(context, secretPreferencesName)
         val journal = RestoreJournalStore(context)
         val injector = OneShotInjector()
         val originalProviderId = "backup-original-$suffix"
@@ -183,7 +184,10 @@ class BackupRestoreRecoveryInstrumentedTest {
         suspend fun seedOriginal() {
             check(journal.read() == null)
             database.providerDao().upsert(ProviderEntity(originalProviderId, "Original", "Xtream", "https://synthetic.invalid", 1, 1, 1, true))
-            dataStore.edit { it[stringPreferencesKey("theme_json")] = "original-setting" }
+            dataStore.edit {
+                it[stringPreferencesKey("theme_json")] = "original-setting"
+                it[stringPreferencesKey("input_mode")] = "tv_remote"
+            }
             secrets.putSecret(originalSecretKey, "original-secret")
             secrets.removeSecret(targetSecretKey)
         }
@@ -207,6 +211,7 @@ class BackupRestoreRecoveryInstrumentedTest {
             assertEquals("Original", database.providerDao().findById(originalProviderId)?.displayName)
             assertNull(database.providerDao().findById(targetProviderId))
             assertEquals("original-setting", dataStore.data.first()[stringPreferencesKey("theme_json")])
+            assertEquals("tv_remote", dataStore.data.first()[stringPreferencesKey("input_mode")])
             assertEquals("original-secret", secrets.getSecret(originalSecretKey))
             assertNull(secrets.getSecret(targetSecretKey))
         }
@@ -224,6 +229,7 @@ class BackupRestoreRecoveryInstrumentedTest {
             database.close()
             scope.cancel()
             dataStoreFile.delete()
+            context.deleteSharedPreferences(secretPreferencesName)
             assertFalse(dataStoreFile.exists())
         }
     }

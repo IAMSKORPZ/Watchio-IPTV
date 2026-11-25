@@ -3,6 +3,8 @@ package com.iamskorpz.watchioiptv.feature.backup
 import android.content.ContentResolver
 import android.content.ActivityNotFoundException
 import android.net.Uri
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -137,9 +139,7 @@ class BackupRestoreViewModel(private val repository: WatchioBackupRepository) : 
             runCatching {
                 val bytes = withContext(Dispatchers.IO) {
                     resolver.openInputStream(uri)?.use { input ->
-                        val result = input.readBytes()
-                        require(result.size <= WatchioBackupCrypto.MAX_BACKUP_BYTES) { "Backup file is too large." }
-                        result
+                        input.readBackupBytes()
                     } ?: error("Selected backup is unavailable.")
                 }
                 try {
@@ -165,6 +165,21 @@ class BackupRestoreViewModel(private val repository: WatchioBackupRepository) : 
 
     private fun fail(message: String) { mutableState.value = mutableState.value.copy(busy = false, error = message) }
     private fun Throwable.safeMessage(fallback: String) = message?.takeIf { it.length <= 160 && !it.contains("http", true) } ?: fallback
+}
+
+internal fun InputStream.readBackupBytes(maxBytes: Int = WatchioBackupCrypto.MAX_BACKUP_BYTES): ByteArray {
+    require(maxBytes > 0) { "Backup size limit is invalid." }
+    val output = ByteArrayOutputStream(minOf(DEFAULT_BUFFER_SIZE, maxBytes))
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var total = 0
+    while (true) {
+        val count = read(buffer)
+        if (count < 0) break
+        total += count
+        require(total <= maxBytes) { "Backup file is too large." }
+        output.write(buffer, 0, count)
+    }
+    return output.toByteArray()
 }
 
 @Composable

@@ -5,8 +5,11 @@ import com.iamskorpz.watchioiptv.feature.backup.BackupProvider
 import com.iamskorpz.watchioiptv.feature.backup.WatchioBackupCrypto
 import com.iamskorpz.watchioiptv.feature.backup.WatchioBackupEnvelope
 import com.iamskorpz.watchioiptv.feature.backup.WatchioBackupPayload
+import com.iamskorpz.watchioiptv.feature.backup.readBackupBytes
+import java.io.ByteArrayInputStream
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -15,6 +18,20 @@ import org.junit.Test
 
 class WatchioBackupCryptoTest {
     private val crypto = WatchioBackupCrypto()
+
+    @Test fun backupInputIsRejectedBeforeReadingPastConfiguredLimit() {
+        val input = ByteArrayInputStream(byteArrayOf(1, 2, 3, 4, 5))
+
+        val error = runCatching { input.readBackupBytes(maxBytes = 4) }.exceptionOrNull()
+
+        assertEquals("Backup file is too large.", error?.message)
+    }
+
+    @Test fun backupInputWithinConfiguredLimitIsReturnedExactly() {
+        val expected = byteArrayOf(1, 2, 3, 4)
+
+        assertArrayEquals(expected, ByteArrayInputStream(expected).readBackupBytes(maxBytes = 4))
+    }
 
     @Test fun encryptedBackupRoundTripsWithoutPlaintextSecretLeakage() {
         val payload = fixture()

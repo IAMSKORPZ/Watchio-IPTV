@@ -108,7 +108,10 @@ class WatchioBackupRepository(
             failureInjector.check(RestoreBoundary.BEFORE_RECOVERY_POINT)
             failureInjector.check(RestoreBoundary.AFTER_JOURNAL)
             val recoveryPassword = randomRecoveryPassword()
-            val recoveryBytes = crypto.encrypt(snapshot(includeCredentials = true), recoveryPassword.toCharArray())
+            val recoveryBytes = crypto.encrypt(
+                snapshot(includeCredentials = true, includeDeviceSpecificSettings = true),
+                recoveryPassword.toCharArray(),
+            )
             try {
                 journalStore.writeRecovery(journal.recoveryFileName, recoveryBytes)
             } finally {
@@ -193,7 +196,10 @@ class WatchioBackupRepository(
         cleanup(current)
     }
 
-    private suspend fun snapshot(includeCredentials: Boolean): WatchioBackupPayload {
+    private suspend fun snapshot(
+        includeCredentials: Boolean,
+        includeDeviceSpecificSettings: Boolean = false,
+    ): WatchioBackupPayload {
         val databaseSnapshot = database.withTransaction {
             val providers = database.providerDao().getAll()
             DatabaseSnapshot(
@@ -217,7 +223,7 @@ class WatchioBackupRepository(
             history = databaseSnapshot.history.map { BackupHistory(it.providerId, it.contentType, it.contentId, it.subContentId, it.title, it.imageUrl, it.positionMs, it.durationMs, it.lastWatchedAtEpochMs) },
             epgSources = databaseSnapshot.epg.map { it.toBackup() },
             dataStore = dataStore.data.first().asMap().entries
-                .filterNot { it.key.name in DEVICE_SPECIFIC_DATASTORE_KEYS }
+                .filter { includeDeviceSpecificSettings || it.key.name !in DEVICE_SPECIFIC_DATASTORE_KEYS }
                 .associate { it.key.name to it.value.toBackupValue() },
             sharedPreferences = PORTABLE_PREFERENCES.associateWith(::snapshotPreferences),
             encryptedCredentials = if (includeCredentials) secretStore.exportPortableSecrets().filterKeys { !it.startsWith(RECOVERY_KEY_PREFIX) } else emptyMap(),
@@ -273,7 +279,7 @@ class WatchioBackupRepository(
     }
 
     private suspend fun replacePreferences(payload: WatchioBackupPayload) {
-        dataStore.edit { prefs -> prefs.clear(); portableDataStore(payload).forEach { (name, value) -> prefs.putBackup(name, value) } }
+        dataStore.edit { prefs -> prefs.clear(); payload.dataStore.forEach { (name, value) -> prefs.putBackup(name, value) } }
         PORTABLE_PREFERENCES.forEach { name -> restorePreferences(name, payload.sharedPreferences[name].orEmpty(), replace = true) }
     }
 
