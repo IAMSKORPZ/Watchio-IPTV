@@ -90,4 +90,61 @@ class OfflineDownloadsMigrationTest {
             }
         }
     }
+
+    @Test fun migrationSevenToTenRunsCompleteChainAndPreservesExistingData() {
+        helper.createDatabase("offline-download-migration-seven-to-ten", 7).use { db ->
+            db.execSQL("INSERT INTO app_metadata(`key`, value) VALUES('full-chain-proof', 'preserved')")
+        }
+
+        helper.runMigrationsAndValidate(
+            "offline-download-migration-seven-to-ten",
+            10,
+            true,
+            WatchioMigrations.MIGRATION_7_8,
+            WatchioMigrations.MIGRATION_8_9,
+            WatchioMigrations.MIGRATION_9_10,
+        ).use { db ->
+            db.query("SELECT value FROM app_metadata WHERE `key` = 'full-chain-proof'").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("preserved", cursor.getString(0))
+            }
+
+            db.execSQL(
+                """INSERT INTO offline_downloads(
+                    downloadId,providerId,contentId,title,localPosterPath,containerExtension,mimeType,
+                    state,bytesDownloaded,contentLength,percentDownloaded,failureReason,createdAtEpochMs,
+                    updatedAtEpochMs,completedAtEpochMs,contentType,showId,showTitle,seasonNumber,
+                    episodeNumber,localBackdropPath,localThumbnailPath,synopsis,releaseYear,genre,rating,
+                    runtime,episodeTitle
+                ) VALUES(
+                    'episode','removed-provider','episode-1','Episode','/poster','mp4','video/mp4',
+                    'Completed',10,10,100,NULL,1,1,1,'Episode','show-1','Show',2,3,
+                    '/backdrop','/thumbnail','Synopsis','2026','Drama','8.5','45 min','Episode 3'
+                )"""
+            )
+            db.query(
+                """SELECT contentType,showId,showTitle,seasonNumber,episodeNumber,localBackdropPath,
+                    localThumbnailPath,synopsis,releaseYear,genre,rating,runtime,episodeTitle
+                    FROM offline_downloads WHERE downloadId='episode'"""
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("Episode", cursor.getString(0))
+                assertEquals("show-1", cursor.getString(1))
+                assertEquals("Show", cursor.getString(2))
+                assertEquals(2, cursor.getInt(3))
+                assertEquals(3, cursor.getInt(4))
+                assertEquals("/backdrop", cursor.getString(5))
+                assertEquals("/thumbnail", cursor.getString(6))
+                assertEquals("Synopsis", cursor.getString(7))
+                assertEquals("2026", cursor.getString(8))
+                assertEquals("Drama", cursor.getString(9))
+                assertEquals("8.5", cursor.getString(10))
+                assertEquals("45 min", cursor.getString(11))
+                assertEquals("Episode 3", cursor.getString(12))
+            }
+            db.query("PRAGMA foreign_key_check").use { cursor ->
+                assertEquals(0, cursor.count)
+            }
+        }
+    }
 }
